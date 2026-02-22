@@ -521,6 +521,12 @@ addMainIslandTerrain();
 
 const PLAYER_COLLISION_RADIUS = 0.46;
 const worldColliders = [];
+let cliffWaterfallRoot = null;
+let cliffWaterfallFoam = null;
+const waterfallWorldPos = new THREE.Vector3();
+const waterfallToCamera = new THREE.Vector3();
+const waterfallForward = new THREE.Vector3();
+const waterfallWorldQuat = new THREE.Quaternion();
 
 function addWorldCollider(x, z, radius, tag = 'solid') {
   worldColliders.push({ x, z, radius, tag });
@@ -556,6 +562,22 @@ function addWallCollisionFromMesh(mesh, tag = 'house') {
       addWorldCollider(cx, z, radius, tag);
     }
   }
+}
+
+function addSphereCollisionFromMesh(mesh, tag = 'solid', extraRadius = 0.12) {
+  if (!mesh?.geometry) return;
+  if (!mesh.geometry.boundingSphere) {
+    mesh.geometry.computeBoundingSphere();
+  }
+  const sphere = mesh.geometry.boundingSphere;
+  if (!sphere) return;
+  mesh.updateWorldMatrix(true, false);
+  const center = sphere.center.clone().applyMatrix4(mesh.matrixWorld);
+  const worldScale = new THREE.Vector3();
+  mesh.getWorldScale(worldScale);
+  const scale = Math.max(Math.abs(worldScale.x), Math.abs(worldScale.y), Math.abs(worldScale.z), 0.01);
+  const radius = sphere.radius * scale + extraRadius;
+  addWorldCollider(center.x, center.z, radius, tag);
 }
 
 function resolveWorldCollisions(x, z, y = GROUND_Y) {
@@ -1458,15 +1480,72 @@ function addCliffAndWaterfall(x, z) {
     cliff.add(foam);
   };
 
-  // Two visible faces so at least one waterfall is always seen from common camera angles.
-  makeWaterfallFace(-2.25, 4.4, -1.25, Math.PI * 0.12, 3.8, 9.2);
-  makeWaterfallFace(2.0, 4.2, 1.05, -Math.PI * 0.85, 2.8, 7.1);
+  // Main waterfall: one-sided and only visible from the requested front angle.
+  const guaranteedFall = new THREE.Group();
+  // Centered on the target rock face, with face-matching yaw.
+  const guaranteedYaw = -0.62;
+  guaranteedFall.position.set(2.45, 4.28, 2.25);
+  guaranteedFall.rotation.y = guaranteedYaw + Math.PI;
+  const guaranteedSheet = new THREE.Mesh(
+    new THREE.PlaneGeometry(6.2, 9.3),
+    new THREE.MeshBasicMaterial({
+      color: 0x35b8ff,
+      transparent: true,
+      opacity: 0.9,
+      side: THREE.FrontSide,
+      depthTest: false,
+      depthWrite: false
+    })
+  );
+  // Keep waterfall attached just outside the cliff face (not inside).
+  guaranteedSheet.position.z = 6;
+  guaranteedSheet.renderOrder = 40;
+  guaranteedFall.add(guaranteedSheet);
+
+  const guaranteedStreakMat = new THREE.MeshBasicMaterial({
+    color: 0xeaf7ff,
+    transparent: true,
+    opacity: 0.92,
+    side: THREE.FrontSide,
+    depthTest: false,
+    depthWrite: false
+  });
+  for (let i = 0; i < 24; i += 1) {
+    const streak = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.12, 1.7 + Math.random() * 1.2),
+      guaranteedStreakMat
+    );
+    streak.position.set((Math.random() - 0.5) * 5.4, (Math.random() - 0.5) * 8.2, 6.05);
+    streak.renderOrder = 41;
+    guaranteedFall.add(streak);
+  }
+  cliff.add(guaranteedFall);
+
+  const guaranteedFoam = new THREE.Mesh(
+    new THREE.CircleGeometry(3.1, 24, Math.PI, Math.PI),
+    new THREE.MeshBasicMaterial({
+      color: 0xe9f8ff,
+      transparent: true,
+      opacity: 0.8,
+      side: THREE.FrontSide,
+      depthTest: false,
+      depthWrite: false
+    })
+  );
+  guaranteedFoam.rotation.x = -Math.PI / 2;
+  guaranteedFoam.rotation.z = 0;
+  // Put foam at the middle/base of the waterfall and match its width.
+  guaranteedFoam.position.set(0, -4.55, 6);
+  guaranteedFoam.renderOrder = 42;
+  guaranteedFall.add(guaranteedFoam);
+  cliffWaterfallRoot = guaranteedFall;
+  cliffWaterfallFoam = guaranteedFoam;
 
   scene.add(cliff);
   cliff.updateWorldMatrix(true, true);
-  // Rock collision should follow the real cliff mesh footprint, not a single wide radius.
+  // Cliff collision should tightly follow each rock chunk without creating long invisible strips.
   for (const rockMesh of cliffRockMeshes) {
-    addWallCollisionFromMesh(rockMesh, 'cliff');
+    addSphereCollisionFromMesh(rockMesh, 'cliff', 0.08);
   }
 }
 
@@ -3087,6 +3166,15 @@ function updateVoiceVolumes() {
   });
 }
 
+function updateCliffWaterfallVisibility() {
+  if (!cliffWaterfallRoot || !cliffWaterfallFoam) return;
+  cliffWaterfallRoot.getWorldPosition(waterfallWorldPos);
+  cliffWaterfallRoot.getWorldQuaternion(waterfallWorldQuat);
+  waterfallForward.set(0, 0, 1).applyQuaternion(waterfallWorldQuat).normalize();
+  waterfallToCamera.copy(camera.position).sub(waterfallWorldPos).normalize();
+  cliffWaterfallFoam.visible = waterfallForward.dot(waterfallToCamera) > 0;
+}
+
 function updatePlayerEmotes(now, delta) {
   players.forEach((player) => {
     const body = player.mesh.userData.body;
@@ -4622,6 +4710,7 @@ function animate(nowMs) {
   updateInteractionHint();
   updatePlayerEmotes(Date.now(), delta);
   updateVoiceVolumes();
+  updateCliffWaterfallVisibility();
 
   const local = players.get(localPlayerId);
   if (local) {
