@@ -15,39 +15,6 @@ let emoteWheelOpen = false;
 let menuOpen = false;
 let isAuthenticated = false;
 const CHAT_BUBBLE_MS = 4500;
-let lastMineAt = 0;
-
-const questState = {
-  coins: 0,
-  pickaxe: 'wood',
-  inventory: { stone: 0, iron: 0, gold: 0, diamond: 0 },
-  quest: null,
-  shop: {
-    order: ['wood', 'stone', 'iron', 'diamond'],
-    price: { stone: 120, iron: 280, diamond: 620 }
-  }
-};
-
-const MINE_POS = new THREE.Vector3(160, 1.35, 30);
-const MINE_RADIUS = 23;
-const HOUSE_POS = new THREE.Vector3(-worldLimit * 0.33, 1.35, worldLimit * 0.12);
-const MINE_ENTRY_POS = new THREE.Vector3(HOUSE_POS.x + 21.5, 1.35, HOUSE_POS.z + 0.5);
-const MINE_EXIT_POS = new THREE.Vector3(MINE_POS.x + 1.4, 1.35, MINE_POS.z + 5.8);
-const QUEST_NPC_POS = new THREE.Vector3(MINE_POS.x + 7.0, 1.35, MINE_POS.z + 2.4);
-const MINE_SHOP_NPC_POS = new THREE.Vector3(MINE_POS.x - 6.6, 1.35, MINE_POS.z - 3.4);
-const MINE_ENTRY_YAW = Math.atan2(HOUSE_POS.x - MINE_ENTRY_POS.x, HOUSE_POS.z - MINE_ENTRY_POS.z);
-
-let inMine = false;
-let questNpcMesh = null;
-let mineShopNpcMesh = null;
-let mineEntranceMesh = null;
-let mineExitMesh = null;
-let mineGroup = null;
-let minePortalPulse = 0;
-const oreNodes = [];
-let npcDialogueOpen = false;
-let npcDialoguePrimaryAction = null;
-let npcDialogueSecondaryAction = null;
 
 const statusEl = document.getElementById('status');
 const playerCountEl = document.getElementById('player-count');
@@ -101,46 +68,6 @@ const emoteButtons = Array.from(document.querySelectorAll('[data-emote]'));
 const gameplayPanels = ['hud', 'mini-panel', 'chat-panel', 'world-state', 'top-left-toolbar']
   .map((id) => document.getElementById(id))
   .filter(Boolean);
-
-const questTrackerEl = document.createElement('section');
-questTrackerEl.className = 'panel';
-questTrackerEl.style.marginTop = '8px';
-questTrackerEl.style.padding = '8px 10px';
-questTrackerEl.style.display = 'none';
-questTrackerEl.style.gap = '4px';
-questTrackerEl.innerHTML = `
-  <div id="quest-title" style="font-weight:700;font-size:12px;letter-spacing:.2px;color:#fde68a;">Current Quest</div>
-  <div id="quest-progress" style="font-size:11px;color:#f8fafc;">Progress: 0/0</div>
-  <div id="quest-status-msg" style="min-height:14px;font-size:11px;color:#cbd5e1;"></div>
-`;
-document.getElementById('hud')?.appendChild(questTrackerEl);
-const questTitleEl = document.getElementById('quest-title');
-const questProgressEl = document.getElementById('quest-progress');
-const questStatusMsgEl = document.getElementById('quest-status-msg');
-
-const npcDialogueEl = document.createElement('div');
-npcDialogueEl.className = 'panel';
-npcDialogueEl.style.position = 'fixed';
-npcDialogueEl.style.left = '50%';
-npcDialogueEl.style.bottom = '24px';
-npcDialogueEl.style.transform = 'translateX(-50%)';
-npcDialogueEl.style.width = 'min(620px, calc(100vw - 24px))';
-npcDialogueEl.style.padding = '12px';
-npcDialogueEl.style.display = 'none';
-npcDialogueEl.style.zIndex = '70';
-npcDialogueEl.innerHTML = `
-  <div id="npc-dialogue-name" style="font-size:12px;font-weight:700;color:#fde68a;margin-bottom:6px;">NPC</div>
-  <div id="npc-dialogue-text" style="font-size:13px;line-height:1.4;color:#f8fafc;min-height:36px;">...</div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">
-    <button id="npc-dialogue-primary" type="button" style="height:34px;font-size:13px;">Talk</button>
-    <button id="npc-dialogue-secondary" type="button" style="height:34px;font-size:13px;">Close</button>
-  </div>
-`;
-document.body.appendChild(npcDialogueEl);
-const npcDialogueNameEl = document.getElementById('npc-dialogue-name');
-const npcDialogueTextEl = document.getElementById('npc-dialogue-text');
-const npcDialoguePrimaryEl = document.getElementById('npc-dialogue-primary');
-const npcDialogueSecondaryEl = document.getElementById('npc-dialogue-secondary');
 
 const cachedAuthUsername = localStorage.getItem('island_auth_username') || '';
 const cachedAuthPassword = localStorage.getItem('island_auth_password') || '';
@@ -379,7 +306,6 @@ function clearSessionWorld() {
   players.forEach((_, id) => removePlayer(id));
   interactables.clear();
   boatState.onboard = false;
-  inMine = false;
 }
 
 function setAuthModalOpen(open, statusText = '') {
@@ -437,7 +363,6 @@ const VOICE_ICE_SERVERS = [
   { urls: 'stun:stun2.l.google.com:19302' }
 ];
 const VOICE_RADIUS = 180;
-const MAX_PENDING_VOICE_ICE = 64;
 
 const scene = new THREE.Scene();
 scene.fog = new THREE.Fog(0xb7d7e6, 45, 160);
@@ -513,55 +438,6 @@ sun.position.set(14, 32, 22);
 sun.castShadow = true;
 sun.shadow.mapSize.set(1024, 1024);
 scene.add(sun);
-
-const beaconIslandLights = [];
-
-function addBeaconIslandLights() {
-  const count = 10;
-  const ringRadius = worldLimit * 0.86;
-  const poleScale = 1.28;
-  const postMat = new THREE.MeshStandardMaterial({ color: 0x433222, roughness: 0.88, metalness: 0.02 });
-  for (let i = 0; i < count; i += 1) {
-    const angle = (i / count) * Math.PI * 2 + 0.18;
-    const x = Math.cos(angle) * ringRadius;
-    const z = Math.sin(angle) * ringRadius;
-
-    const post = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.1 * poleScale, 0.1 * poleScale, 2.35 * poleScale, 8),
-      postMat
-    );
-    post.position.set(x, 2.35 * poleScale, z);
-    post.castShadow = true;
-    post.receiveShadow = true;
-    scene.add(post);
-
-    const bulbMat = new THREE.MeshStandardMaterial({
-      color: 0xffdf8f,
-      emissive: 0x2a220f,
-      emissiveIntensity: 0.1,
-      roughness: 0.45
-    });
-    const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.18 * poleScale, 12, 10), bulbMat);
-    bulb.position.set(x, 3.62 * poleScale, z);
-    scene.add(bulb);
-
-    const light = new THREE.PointLight(0xffd27a, 0, 24, 1.6);
-    light.position.set(x, 3.62 * poleScale, z);
-    scene.add(light);
-
-    beaconIslandLights.push({ light, bulb });
-  }
-}
-
-function updateBeaconIslandLights(active, delta) {
-  const targetIntensity = active ? 4.8 : 0;
-  const blend = Math.min(1, delta * 4.6);
-  for (const entry of beaconIslandLights) {
-    entry.light.intensity = THREE.MathUtils.lerp(entry.light.intensity, targetIntensity, blend);
-    const glow = entry.light.intensity / 4.8;
-    entry.bulb.material.emissiveIntensity = 0.12 + glow * 2.6;
-  }
-}
 
 const water = new THREE.Mesh(
   new THREE.CircleGeometry(170, 80),
@@ -1413,19 +1289,18 @@ function addDecorBoat(x, z, yaw = 0, scale = 1.9, y = 1.06) {
 
 function addWoodHouse(x, z, yaw = 0) {
   const house = new THREE.Group();
-  house.position.set(x, 1.35, z);
+  house.position.set(x, 1.36, z);
   house.rotation.y = yaw;
   const wallMat = new THREE.MeshStandardMaterial({ color: 0x7b4f2d, roughness: 0.88 });
   const trimMat = new THREE.MeshStandardMaterial({ color: 0x5b3a24, roughness: 0.9 });
   const roofMat = new THREE.MeshStandardMaterial({ color: 0x4e3423, roughness: 0.9 });
 
-  const houseScale = 1.18;
-  const houseW = 9.4 * houseScale;
-  const houseD = 8.0 * houseScale;
-  const wallH = 3.2 * houseScale;
+  const houseW = 9.4;
+  const houseD = 8.0;
+  const wallH = 3.2;
   const wallT = 0.22;
-  const doorW = 1.9 * houseScale;
-  const doorH = 2.45 * houseScale;
+  const doorW = 1.9;
+  const doorH = 2.45;
   const floor = new THREE.Mesh(new THREE.BoxGeometry(houseW, 0.2, houseD), wallMat);
   floor.position.y = 0.08;
   floor.receiveShadow = true;
@@ -1465,19 +1340,19 @@ function addWoodHouse(x, z, yaw = 0) {
   eave.receiveShadow = true;
 
   const roof = new THREE.Mesh(
-    new THREE.ConeGeometry(Math.max(houseW, houseD) * 0.68, 2.45 * houseScale, 4),
+    new THREE.ConeGeometry(Math.max(houseW, houseD) * 0.68, 2.45, 4),
     roofMat
   );
-  roof.position.set(0, wallH + 1.34 * houseScale, 0);
+  roof.position.set(0, wallH + 1.34, 0);
   roof.rotation.y = Math.PI * 0.25;
   roof.castShadow = true;
   roof.receiveShadow = true;
 
   const roofPeak = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.1 * houseScale, 0.14 * houseScale, 0.46 * houseScale, 8),
+    new THREE.CylinderGeometry(0.1, 0.14, 0.46, 8),
     trimMat
   );
-  roofPeak.position.set(0, wallH + 2.74 * houseScale, 0);
+  roofPeak.position.set(0, wallH + 2.74, 0);
   roofPeak.castShadow = true;
   roofPeak.receiveShadow = true;
 
@@ -1676,11 +1551,11 @@ function addCliffAndWaterfall(x, z) {
 
 function populateMainIslandNature() {
   const palmSpots = [
-    [worldLimit * 0.62, worldLimit * 0.2, 1.24],
-    [worldLimit * 0.34, -worldLimit * 0.42, 1.14],
-    [-worldLimit * 0.72, worldLimit * 0.3, 1.28],
-    [-worldLimit * 0.16, -worldLimit * 0.56, 1.1],
-    [worldLimit * 0.04, worldLimit * 0.61, 1.05]
+    [worldLimit * 0.62, worldLimit * 0.2, 1.06],
+    [worldLimit * 0.34, -worldLimit * 0.42, 0.96],
+    [-worldLimit * 0.72, worldLimit * 0.3, 1.1],
+    [-worldLimit * 0.16, -worldLimit * 0.56, 0.92],
+    [worldLimit * 0.04, worldLimit * 0.61, 0.87]
   ];
   palmSpots.forEach(([x, z, s]) => addPalm(x, z, s));
   addBush(worldLimit * 0.44, worldLimit * 0.28, 0.74);
@@ -1700,251 +1575,13 @@ function populateMainIslandNature() {
   addFlowerPatch(-worldLimit * 0.12, -worldLimit * 0.46, 13, 4.6);
 }
 
-function addQuestNpc(parentGroup = scene, localPosition = null) {
-  const npc = new THREE.Group();
-  if (localPosition) {
-    npc.position.copy(localPosition);
-  } else {
-    npc.position.copy(QUEST_NPC_POS);
-  }
-  const npcScale = 1.34;
-  const body = new THREE.Mesh(
-    new THREE.BoxGeometry(0.72 * npcScale, 1.05 * npcScale, 0.46 * npcScale),
-    new THREE.MeshStandardMaterial({ color: 0x7c3aed, roughness: 0.82 })
-  );
-  body.position.y = 0.95 * npcScale;
-  const head = new THREE.Mesh(
-    new THREE.BoxGeometry(0.46 * npcScale, 0.46 * npcScale, 0.46 * npcScale),
-    new THREE.MeshStandardMaterial({ color: 0xe0b18f, roughness: 0.74 })
-  );
-  head.position.y = 1.73 * npcScale;
-  const hair = new THREE.Mesh(
-    new THREE.BoxGeometry(0.5 * npcScale, 0.2 * npcScale, 0.5 * npcScale),
-    new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.78 })
-  );
-  hair.position.y = 1.98 * npcScale;
-  const armL = new THREE.Mesh(
-    new THREE.BoxGeometry(0.18 * npcScale, 0.74 * npcScale, 0.18 * npcScale),
-    new THREE.MeshStandardMaterial({ color: 0xe0b18f, roughness: 0.76 })
-  );
-  armL.position.set(-0.48 * npcScale, 1.0 * npcScale, 0);
-  const armR = armL.clone();
-  armR.position.x = 0.48 * npcScale;
-  npc.add(body, head, hair, armL, armR);
-  npc.rotation.y = -0.55;
-  npc.traverse((obj) => {
-    if (obj.isMesh) obj.castShadow = true;
-  });
-  parentGroup.add(npc);
-  addWorldCollider(QUEST_NPC_POS.x, QUEST_NPC_POS.z, 0.78, 'npc');
-  questNpcMesh = npc;
-}
-
-function addMineArea() {
-  const mine = new THREE.Group();
-  mine.position.set(MINE_POS.x, 0, MINE_POS.z);
-
-  const floor = new THREE.Mesh(
-    new THREE.CircleGeometry(MINE_RADIUS, 42),
-    new THREE.MeshStandardMaterial({ color: 0x3b3b3b, roughness: 0.95 })
-  );
-  floor.rotation.x = -Math.PI / 2;
-  floor.position.y = 1.34;
-  floor.receiveShadow = true;
-  mine.add(floor);
-
-  const ring = new THREE.Mesh(
-    new THREE.RingGeometry(MINE_RADIUS - 1.4, MINE_RADIUS, 42),
-    new THREE.MeshStandardMaterial({ color: 0x2f241a, roughness: 0.95 })
-  );
-  ring.rotation.x = -Math.PI / 2;
-  ring.position.y = 1.335;
-  mine.add(ring);
-
-  const rockMat = new THREE.MeshStandardMaterial({ color: 0x4b5563, roughness: 0.9 });
-  for (let i = 0; i < 18; i += 1) {
-    const angle = (i / 18) * Math.PI * 2;
-    const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(1.7 + Math.random() * 0.7, 0), rockMat);
-    const radius = MINE_RADIUS - 2.6 + Math.random() * 2.2;
-    rock.position.set(Math.cos(angle) * radius, 2.0 + Math.random() * 1.5, Math.sin(angle) * radius);
-    rock.scale.set(1.1 + Math.random() * 0.6, 1.2 + Math.random() * 0.8, 1.1 + Math.random() * 0.6);
-    rock.castShadow = true;
-    rock.receiveShadow = true;
-    mine.add(rock);
-  }
-
-  const exitPortal = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.84, 0.84, 0.12, 24),
-    new THREE.MeshStandardMaterial({
-      color: 0x67e8f9,
-      emissive: 0x0891b2,
-      emissiveIntensity: 1.2,
-      roughness: 0.32
-    })
-  );
-  exitPortal.rotation.x = -Math.PI / 2;
-  exitPortal.position.set(MINE_EXIT_POS.x - MINE_POS.x, 1.42, MINE_EXIT_POS.z - MINE_POS.z);
-  mine.add(exitPortal);
-  mineExitMesh = exitPortal;
-
-  const oreDefs = [
-    { resource: 'stone', color: 0x9ca3af, reward: 1, cooldownMs: 2400, positions: [[-7, -5], [-4, -2], [3, -4], [6, -1], [-2, 6], [5, 7]] },
-    { resource: 'iron', color: 0xb45309, reward: 2, cooldownMs: 4200, positions: [[-6, 2], [-1, -7], [4, 4], [8, 1]] },
-    { resource: 'gold', color: 0xf59e0b, reward: 3, cooldownMs: 6200, positions: [[-8, 7], [1, 8], [7, -7]] },
-    { resource: 'diamond', color: 0x22d3ee, reward: 1, cooldownMs: 9800, positions: [[-9, -1], [9, 5]] }
-  ];
-
-  oreDefs.forEach((def) => {
-    def.positions.forEach(([x, z], idx) => {
-      const mesh = new THREE.Mesh(
-        new THREE.DodecahedronGeometry(def.resource === 'diamond' ? 0.95 : 0.85, 0),
-        new THREE.MeshStandardMaterial({
-          color: def.color,
-          emissive: def.resource === 'diamond' ? 0x0891b2 : 0x000000,
-          emissiveIntensity: def.resource === 'diamond' ? 0.8 : 0
-        })
-      );
-      mesh.position.set(x, 1.86, z);
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      mine.add(mesh);
-      oreNodes.push({
-        id: `${def.resource}-${idx}`,
-        resource: def.resource,
-        reward: def.reward,
-        cooldownMs: def.cooldownMs,
-        mesh,
-        readyAt: 0
-      });
-    });
-  });
-
-  scene.add(mine);
-  mineGroup = mine;
-  mineGroup.visible = false;
-
-  const mineEntrance = new THREE.Group();
-  mineEntrance.position.copy(MINE_ENTRY_POS);
-  const rockMatOuter = new THREE.MeshStandardMaterial({ color: 0xb9a79a, roughness: 0.96 });
-  const rockMatMid = new THREE.MeshStandardMaterial({ color: 0x8f7f74, roughness: 0.95 });
-  const caveDarkMat = new THREE.MeshStandardMaterial({ color: 0x2b2f3a, roughness: 0.98 });
-  const woodMat = new THREE.MeshStandardMaterial({ color: 0xbb6f3b, roughness: 0.86 });
-  const railMat = new THREE.MeshStandardMaterial({ color: 0x7c838f, roughness: 0.62, metalness: 0.38 });
-  const tieMat = new THREE.MeshStandardMaterial({ color: 0x8d5a34, roughness: 0.9 });
-
-  const rockBase = new THREE.Mesh(new THREE.DodecahedronGeometry(2.6, 0), rockMatOuter);
-  rockBase.position.set(0, 3.8, 1.15);
-  rockBase.scale.set(2.8, 2.4, 2.25);
-  mineEntrance.add(rockBase);
-
-  const rockLeft = new THREE.Mesh(new THREE.DodecahedronGeometry(1.45, 0), rockMatMid);
-  rockLeft.position.set(-2.45, 2.85, 2.45);
-  rockLeft.scale.set(1.55, 1.2, 1.15);
-  mineEntrance.add(rockLeft);
-  const rockRight = rockLeft.clone();
-  rockRight.position.x = 2.45;
-  mineEntrance.add(rockRight);
-
-  const rockBottom = new THREE.Mesh(new THREE.DodecahedronGeometry(1.55, 0), rockMatOuter);
-  rockBottom.position.set(0, 1.42, 2.95);
-  rockBottom.scale.set(2.1, 0.7, 1.35);
-  mineEntrance.add(rockBottom);
-
-  const caveOuter = new THREE.Mesh(new THREE.CylinderGeometry(1.45, 1.7, 3.6, 16, 1, false, 0, Math.PI), caveDarkMat);
-  caveOuter.rotation.y = Math.PI * 0.5;
-  caveOuter.position.set(0, 3.0, 3.1);
-  mineEntrance.add(caveOuter);
-
-  const caveVoid = new THREE.Mesh(
-    new THREE.PlaneGeometry(2.4, 2.8),
-    new THREE.MeshBasicMaterial({ color: 0x0b0f17, side: THREE.DoubleSide })
-  );
-  caveVoid.position.set(0, 2.95, 3.9);
-  mineEntrance.add(caveVoid);
-
-  const postL = new THREE.Mesh(new THREE.BoxGeometry(0.27, 3.25, 0.22), woodMat);
-  postL.position.set(-1.14, 3.05, 4.02);
-  const postR = postL.clone();
-  postR.position.x = 1.14;
-  const beam = new THREE.Mesh(new THREE.BoxGeometry(2.68, 0.3, 0.24), woodMat);
-  beam.position.set(0, 4.62, 4.02);
-  const signText = makeTextSign('MINE', 2.25, 0.48, '#c27a45', '#4a1d12');
-  signText.position.set(0, 4.62, 4.18);
-  mineEntrance.add(postL, postR, beam, signText);
-
-  const leftRail = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.08, 8.6), railMat);
-  leftRail.position.set(-0.57, 1.28, 7.4);
-  const rightRail = leftRail.clone();
-  rightRail.position.x = 0.57;
-  mineEntrance.add(leftRail, rightRail);
-  for (let i = 0; i < 12; i += 1) {
-    const tie = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.08, 0.2), tieMat);
-    tie.position.set(0, 1.24, 3.95 + i * 0.72);
-    mineEntrance.add(tie);
-  }
-
-  mineEntrance.traverse((obj) => {
-    if (obj.isMesh) {
-      obj.castShadow = true;
-      obj.receiveShadow = true;
-    }
-  });
-  mineEntrance.rotation.y = MINE_ENTRY_YAW;
-  scene.add(mineEntrance);
-  mineEntranceMesh = mineEntrance;
-
-  const merchant = new THREE.Group();
-  merchant.position.set(MINE_SHOP_NPC_POS.x - MINE_POS.x, 0, MINE_SHOP_NPC_POS.z - MINE_POS.z);
-  const merchBody = new THREE.Mesh(
-    new THREE.BoxGeometry(0.74, 1.05, 0.46),
-    new THREE.MeshStandardMaterial({ color: 0xb45309, roughness: 0.8 })
-  );
-  merchBody.position.y = 0.95;
-  const merchHead = new THREE.Mesh(
-    new THREE.BoxGeometry(0.46, 0.46, 0.46),
-    new THREE.MeshStandardMaterial({ color: 0xd6a581, roughness: 0.75 })
-  );
-  merchHead.position.y = 1.73;
-  const merchHat = new THREE.Mesh(
-    new THREE.BoxGeometry(0.56, 0.18, 0.56),
-    new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.8 })
-  );
-  merchHat.position.y = 1.99;
-  const stand = new THREE.Mesh(
-    new THREE.BoxGeometry(2.8, 1.05, 1.15),
-    new THREE.MeshStandardMaterial({ color: 0x6b4423, roughness: 0.92 })
-  );
-  stand.position.set(0, 0.56, 0.82);
-  const standTop = new THREE.Mesh(
-    new THREE.BoxGeometry(3.0, 0.12, 1.35),
-    new THREE.MeshStandardMaterial({ color: 0x3f2a1a, roughness: 0.9 })
-  );
-  standTop.position.set(0, 1.08, 0.82);
-  const standSign = makeTextSign('Quests & Picks', 2.6, 0.62, '#7b4f2d', '#fef3c7');
-  standSign.position.set(0, 1.95, 1.42);
-  standSign.rotation.x = -0.24;
-  merchant.add(merchBody, merchHead, merchHat, stand, standTop, standSign);
-  merchant.rotation.y = 0.5;
-  merchant.traverse((obj) => {
-    if (obj.isMesh) {
-      obj.castShadow = true;
-      obj.receiveShadow = true;
-    }
-  });
-  mine.add(merchant);
-  mineShopNpcMesh = merchant;
-
-  addQuestNpc(mine, new THREE.Vector3(QUEST_NPC_POS.x - MINE_POS.x, 0, QUEST_NPC_POS.z - MINE_POS.z));
-}
-
 function addLandmarks() {
   addDock(ISLAND_DOCK_POS, ISLAND_DOCK_YAW, { segments: 17, plankLength: 3.2, plankWidth: 3.2, spacing: 1.2 });
   addLighthouseIsland();
   addDock(LIGHTHOUSE_DOCK_POS, LIGHTHOUSE_DOCK_YAW, { segments: 12, plankLength: 2.8, plankWidth: 2.2, spacing: 1.1 });
   addLighthouseInterior();
   populateMainIslandNature();
-  addBeaconIslandLights();
-  addWoodHouse(HOUSE_POS.x, HOUSE_POS.z, 0);
+  addWoodHouse(-worldLimit * 0.33, worldLimit * 0.12, 0);
   const cliffAngle = Math.atan2(-ISLAND_DOCK_POS.z, -ISLAND_DOCK_POS.x);
   addCliffAndWaterfall(Math.cos(cliffAngle) * worldLimit * 0.7, Math.sin(cliffAngle) * worldLimit * 0.7);
   const decorPos = findWaterSideSlot(ISLAND_DOCK_POS, ISLAND_DOCK_YAW, -1, 6.0, 3.2);
@@ -1955,7 +1592,6 @@ function addLandmarks() {
     0.58,
     1.08
   );
-  addMineArea();
   addBoat();
 }
 
@@ -2224,7 +1860,6 @@ function clampToPlayableGround(x, z) {
   const MAIN_RADIUS = worldLimit * 1.14;
   const LIGHTHOUSE_RADIUS = 10.9;
   const INTERIOR_RADIUS = INTERIOR_PLAY_RADIUS;
-  const MINE_PLAY_RADIUS = MINE_RADIUS + 2.2;
   const inSwim = isSwimZone(x, z);
 
   const inMain = Math.hypot(x, z) <= MAIN_RADIUS;
@@ -2234,10 +1869,7 @@ function clampToPlayableGround(x, z) {
   const dxI = x - LIGHTHOUSE_INTERIOR_BASE.x;
   const dzI = z - LIGHTHOUSE_INTERIOR_BASE.z;
   const inInterior = Math.hypot(dxI, dzI) <= INTERIOR_RADIUS;
-  const dxM = x - MINE_POS.x;
-  const dzM = z - MINE_POS.z;
-  const inMine = Math.hypot(dxM, dzM) <= MINE_PLAY_RADIUS;
-  if (inMain || inLighthouse || inInterior || inMine || inSwim) {
+  if (inMain || inLighthouse || inInterior || inSwim) {
     return { x, z };
   }
 
@@ -2255,25 +1887,17 @@ function clampToPlayableGround(x, z) {
     z: LIGHTHOUSE_INTERIOR_BASE.z + (dzI / lenI) * INTERIOR_RADIUS
   };
   const distInterior = Math.hypot(x - toInterior.x, z - toInterior.z);
-  const lenM = Math.hypot(dxM, dzM) || 1;
-  const toMine = {
-    x: MINE_POS.x + (dxM / lenM) * MINE_PLAY_RADIUS,
-    z: MINE_POS.z + (dzM / lenM) * MINE_PLAY_RADIUS
-  };
-  const distMine = Math.hypot(x - toMine.x, z - toMine.z);
   const toSwim = clampToRing(x, z, SWIM_MIN_RADIUS, SWIM_MAX_RADIUS);
   const distSwim = Math.hypot(x - toSwim.x, z - toSwim.z);
-  if (distMain <= distLight && distMain <= distInterior && distMain <= distMine && distMain <= distSwim) return toMain;
-  if (distLight <= distInterior && distLight <= distMine && distLight <= distSwim) return toLight;
-  if (distInterior <= distMine && distInterior <= distSwim) return toInterior;
-  if (distMine <= distSwim) return toMine;
+  if (distMain <= distLight && distMain <= distInterior && distMain <= distSwim) return toMain;
+  if (distLight <= distInterior && distLight <= distSwim) return toLight;
+  if (distInterior <= distSwim) return toInterior;
   return toSwim;
 }
 
 function isWaterAt(x, z) {
   const radius = Math.hypot(x, z);
   if (radius > SWIM_MAX_RADIUS) return false;
-  if (Math.hypot(x - MINE_POS.x, z - MINE_POS.z) <= MINE_RADIUS + 1.8) return false;
 
   // Brute-force dock safety: never treat areas around docks as water.
   if (Math.hypot(x - ISLAND_DOCK_POS.x, z - ISLAND_DOCK_POS.z) <= 16) return false;
@@ -2705,13 +2329,11 @@ function isWithinPlayableWorld(x, z) {
   const MAIN_RADIUS = worldLimit * 1.14;
   const LIGHTHOUSE_RADIUS = 11.7;
   const INTERIOR_RADIUS = INTERIOR_PLAY_RADIUS;
-  const MINE_PLAY_RADIUS = MINE_RADIUS + 2.2;
   const onMain = Math.hypot(x, z) <= MAIN_RADIUS;
   const onLighthouse = Math.hypot(x - LIGHTHOUSE_POS.x, z - LIGHTHOUSE_POS.z) <= LIGHTHOUSE_RADIUS;
   const inInterior = Math.hypot(x - LIGHTHOUSE_INTERIOR_BASE.x, z - LIGHTHOUSE_INTERIOR_BASE.z) <= INTERIOR_RADIUS;
-  const inMine = Math.hypot(x - MINE_POS.x, z - MINE_POS.z) <= MINE_PLAY_RADIUS;
   const inSwim = isSwimZone(x, z);
-  return onMain || onLighthouse || inInterior || inMine || inSwim;
+  return onMain || onLighthouse || inInterior || inSwim;
 }
 
 function setBeaconVisual(active) {
@@ -3357,98 +2979,8 @@ function showChatBubble(id, text) {
   player.bubbleUntil = Date.now() + CHAT_BUBBLE_MS;
 }
 
-function capitalizeWord(value) {
-  const text = String(value || '');
-  if (!text) return '';
-  return text.charAt(0).toUpperCase() + text.slice(1);
-}
-
-function makeTextSign(text, width = 2.2, height = 0.7, bg = '#8b5a2b', fg = '#fef3c7') {
-  const canvas = document.createElement('canvas');
-  canvas.width = 512;
-  canvas.height = 192;
-  const ctx = canvas.getContext('2d');
-  ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.strokeStyle = '#3f2a1a';
-  ctx.lineWidth = 10;
-  ctx.strokeRect(8, 8, canvas.width - 16, canvas.height - 16);
-  ctx.fillStyle = fg;
-  ctx.font = 'bold 64px Arial';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(text, canvas.width * 0.5, canvas.height * 0.52);
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.needsUpdate = true;
-  const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9, metalness: 0.02 });
-  return new THREE.Mesh(new THREE.PlaneGeometry(width, height), mat);
-}
-
-function closeNpcDialogue() {
-  npcDialogueOpen = false;
-  npcDialoguePrimaryAction = null;
-  npcDialogueSecondaryAction = null;
-  if (npcDialogueEl) npcDialogueEl.style.display = 'none';
-}
-
-function openNpcDialogue({ name, text, primaryLabel = 'Okay', secondaryLabel = 'Close', onPrimary, onSecondary }) {
-  if (!npcDialogueEl || !npcDialogueNameEl || !npcDialogueTextEl || !npcDialoguePrimaryEl || !npcDialogueSecondaryEl) return;
-  npcDialogueOpen = true;
-  npcDialogueNameEl.textContent = name;
-  npcDialogueTextEl.textContent = text;
-  npcDialoguePrimaryEl.textContent = primaryLabel;
-  npcDialogueSecondaryEl.textContent = secondaryLabel;
-  npcDialoguePrimaryAction = typeof onPrimary === 'function' ? onPrimary : closeNpcDialogue;
-  npcDialogueSecondaryAction = typeof onSecondary === 'function' ? onSecondary : closeNpcDialogue;
-  npcDialogueEl.style.display = 'block';
-}
-
-function nextPickaxeTier() {
-  const order = questState.shop.order;
-  const currentIdx = order.indexOf(questState.pickaxe);
-  if (currentIdx < 0 || currentIdx >= order.length - 1) return null;
-  return order[currentIdx + 1];
-}
-
-function applyProgressState(progress) {
-  if (!progress || typeof progress !== 'object') return;
-  questState.coins = Math.max(0, Math.floor(Number(progress.coins) || 0));
-  questState.pickaxe = typeof progress.pickaxe === 'string' ? progress.pickaxe : 'wood';
-  const inv = progress.inventory || {};
-  questState.inventory.stone = Math.max(0, Math.floor(Number(inv.stone) || 0));
-  questState.inventory.iron = Math.max(0, Math.floor(Number(inv.iron) || 0));
-  questState.inventory.gold = Math.max(0, Math.floor(Number(inv.gold) || 0));
-  questState.inventory.diamond = Math.max(0, Math.floor(Number(inv.diamond) || 0));
-  questState.quest = progress.quest ? { ...progress.quest } : null;
-  updateQuestPanel();
-}
-
-function updateQuestPanel(message = '') {
-  const quest = questState.quest;
-  const showTracker = Boolean(quest && (quest.status === 'active' || quest.status === 'ready'));
-  if (questTrackerEl) {
-    questTrackerEl.style.display = showTracker ? 'grid' : 'none';
-  }
-  if (questTitleEl) questTitleEl.textContent = `Current Quest: ${quest?.title || 'none'}`;
-  if (questProgressEl) {
-    const progress = quest ? `${quest.progress || 0}/${quest.targetCount || 0}` : '0/0';
-    const status = quest ? ` (${capitalizeWord(quest.status || 'new')})` : '';
-    questProgressEl.textContent = `Progress: ${progress}${status}`;
-  }
-
-  if (questStatusMsgEl) questStatusMsgEl.textContent = message || '';
-}
-
-function getPickaxePower() {
-  if (questState.pickaxe === 'diamond') return 4;
-  if (questState.pickaxe === 'iron') return 3;
-  if (questState.pickaxe === 'stone') return 2;
-  return 1;
-}
-
 function updateHud() {
   playerCountEl.textContent = String(players.size || 1);
-  updateQuestPanel();
 }
 
 function appendChatLine({ fromName, text, sentAt, isSystem = false }) {
@@ -3512,9 +3044,6 @@ function queueVoiceIce(peerId, candidate) {
   if (!peerId || !candidate) return;
   const list = pendingVoiceIce.get(peerId) || [];
   list.push(candidate);
-  if (list.length > MAX_PENDING_VOICE_ICE) {
-    list.splice(0, list.length - MAX_PENDING_VOICE_ICE);
-  }
   pendingVoiceIce.set(peerId, list);
 }
 
@@ -3822,159 +3351,8 @@ function exitBoat(local, forceAnywhere = false) {
   local.isSwimming = isWaterAt(outX, outZ);
 }
 
-function questInteract(local) {
-  if (!local) return false;
-  if (distance2D(local, QUEST_NPC_POS) > 3.2) return false;
-  const quest = questState.quest;
-  if (!quest) {
-    openNpcDialogue({
-      name: 'Quest Giver',
-      text: 'Hold on... your quest book is still loading.',
-      primaryLabel: 'Okay',
-      secondaryLabel: 'Close'
-    });
-    return true;
-  }
-  if (quest.status === 'ready') {
-    openNpcDialogue({
-      name: 'Quest Giver',
-      text: `Great work. Reward: ${quest.rewardCoins || 0} coins${quest.rewardDiamonds ? ` + ${quest.rewardDiamonds} diamonds` : ''}.`,
-      primaryLabel: 'Claim Reward',
-      secondaryLabel: 'Later',
-      onPrimary: () => {
-        socket.emit('quest:claim', {}, (resp) => {
-          if (!resp?.ok) {
-            updateQuestPanel(resp?.error || 'Could not claim quest.');
-            return;
-          }
-          closeNpcDialogue();
-          updateQuestPanel('Quest reward claimed.');
-        });
-      },
-      onSecondary: closeNpcDialogue
-    });
-    return true;
-  }
-  if (quest.status === 'new') {
-    openNpcDialogue({
-      name: 'Quest Giver',
-      text: `${quest.description} Return here when you are done.`,
-      primaryLabel: 'Accept Quest',
-      secondaryLabel: 'Not Now',
-      onPrimary: () => {
-        socket.emit('quest:accept', {}, (resp) => {
-          if (!resp?.ok) {
-            updateQuestPanel(resp?.error || 'Could not accept quest.');
-            return;
-          }
-          if (resp.quest) questState.quest = { ...resp.quest };
-          closeNpcDialogue();
-          updateQuestPanel('Quest accepted.');
-        });
-      },
-      onSecondary: closeNpcDialogue
-    });
-    return true;
-  }
-  openNpcDialogue({
-    name: 'Quest Giver',
-    text: `Current task: ${quest.title}. Progress ${quest.progress || 0}/${quest.targetCount || 0}.`,
-    primaryLabel: 'Okay',
-    secondaryLabel: 'Close'
-  });
-  return true;
-}
-
-function mineShopInteract(local) {
-  if (!local || !inMine) return false;
-  if (distance2D(local, MINE_SHOP_NPC_POS) > 3.2) return false;
-  const nextTier = nextPickaxeTier();
-  if (!nextTier) {
-    openNpcDialogue({
-      name: 'Mine Merchant',
-      text: 'You already own the best pickaxe I sell.',
-      primaryLabel: 'Okay',
-      secondaryLabel: 'Close'
-    });
-    return true;
-  }
-  const price = questState.shop.price[nextTier] || 0;
-  openNpcDialogue({
-    name: 'Mine Merchant',
-    text: `I can sell you a ${capitalizeWord(nextTier)} pickaxe for ${price} coins. You currently have ${questState.coins} coins.`,
-    primaryLabel: `Buy ${capitalizeWord(nextTier)} Pickaxe`,
-    secondaryLabel: 'Cancel',
-    onPrimary: () => {
-      socket.emit('shop:buyPickaxe', { tier: nextTier }, (resp) => {
-        if (!resp?.ok) {
-          updateQuestPanel(resp?.error || 'Could not buy pickaxe.');
-          return;
-        }
-        closeNpcDialogue();
-        updateQuestPanel(`Bought ${capitalizeWord(resp.tier)} pickaxe.`);
-      });
-    },
-    onSecondary: closeNpcDialogue
-  });
-  return true;
-}
-
-function getNearbyOreNode(local) {
-  let best = null;
-  for (const node of oreNodes) {
-    if (!node.mesh.visible) continue;
-    const pos = node.mesh.getWorldPosition(new THREE.Vector3());
-    const dist = Math.hypot(local.x - pos.x, local.z - pos.z);
-    if (dist <= 3.2 && (!best || dist < best.dist)) {
-      best = { node, dist };
-    }
-  }
-  return best?.node || null;
-}
-
-function canMineResource(resource) {
-  if (resource === 'diamond') return questState.pickaxe === 'iron' || questState.pickaxe === 'diamond';
-  if (resource === 'gold') return questState.pickaxe !== 'wood';
-  return true;
-}
-
-function mineAmountForPickaxe(resource) {
-  const power = getPickaxePower();
-  if (resource === 'diamond') return power >= 4 ? 2 : 1;
-  if (resource === 'gold') return Math.max(1, power - 1);
-  return power;
-}
-
-function tryMineNode(local) {
-  if (!local || !inMine) return false;
-  const node = getNearbyOreNode(local);
-  if (!node) return false;
-  if (!canMineResource(node.resource)) {
-    updateQuestPanel(`Need a better pickaxe for ${node.resource}.`);
-    return true;
-  }
-  const now = performance.now();
-  if (now - lastMineAt < 260) return true;
-  lastMineAt = now;
-  const amount = mineAmountForPickaxe(node.resource);
-  socket.emit('mine:collect', { resource: node.resource, amount }, (resp) => {
-    if (!resp?.ok) {
-      updateQuestPanel(resp?.error || 'Could not mine ore.');
-      return;
-    }
-    node.readyAt = now + node.cooldownMs;
-    node.mesh.visible = false;
-    updateQuestPanel(`Mined ${amount} ${node.resource}.`);
-  });
-  return true;
-}
-
 function tryInteract() {
   if (!isAuthenticated || menuOpen || !customizeModalEl.classList.contains('hidden')) return;
-  if (npcDialogueOpen) {
-    if (typeof npcDialoguePrimaryAction === 'function') npcDialoguePrimaryAction();
-    return;
-  }
   const now = performance.now();
   if (now - lastInteractAt < 220) return;
   const local = players.get(localPlayerId);
@@ -3985,47 +3363,6 @@ function tryInteract() {
     (distance2D(local, LIGHTHOUSE_POS) < 8.6 && local.y <= GROUND_Y + 1.7);
   const nearInteriorPortal = inLighthouseInterior && distance2D(local, INTERIOR_EXIT_PORTAL_POS) < 3.1;
   const nearTopPortal = !inLighthouseInterior && !local.onBoat && distance2D(local, LIGHTHOUSE_TOP_POS) < 2.9 && local.y > 11.6;
-  const nearMineEntrance = !inMine && !inLighthouseInterior && distance2D(local, MINE_ENTRY_POS) < 6.8;
-  const nearMineExit = inMine && distance2D(local, MINE_EXIT_POS) < 3.1;
-
-  if (nearMineEntrance) {
-    runTeleportTransition('enter-lighthouse', () => {
-      inMine = true;
-      teleportLocal(local, { x: MINE_POS.x + 0.8, y: GROUND_Y, z: MINE_POS.z + 8.8 }, Math.PI);
-    });
-    lastInteractAt = now;
-    return;
-  }
-
-  if (nearMineExit) {
-    runTeleportTransition('exit-lighthouse', () => {
-      inMine = false;
-      const outDX = Math.sin(MINE_ENTRY_YAW) * 5.2;
-      const outDZ = Math.cos(MINE_ENTRY_YAW) * 5.2;
-      teleportLocal(
-        local,
-        { x: MINE_ENTRY_POS.x + outDX, y: GROUND_Y, z: MINE_ENTRY_POS.z + outDZ },
-        MINE_ENTRY_YAW + Math.PI
-      );
-    });
-    lastInteractAt = now;
-    return;
-  }
-
-  if (tryMineNode(local)) {
-    lastInteractAt = now;
-    return;
-  }
-
-  if (mineShopInteract(local)) {
-    lastInteractAt = now;
-    return;
-  }
-
-  if (questInteract(local)) {
-    lastInteractAt = now;
-    return;
-  }
 
   if (!local.onBoat && nearLighthouseEntry && !inLighthouseInterior) {
     runTeleportTransition('enter-lighthouse', () => {
@@ -4120,7 +3457,6 @@ socket.on('init', (payload) => {
     applyPlayerCustomization(local.id, local.name, local.color, local.appearance);
     customizeStatusEl.textContent = `Loaded account avatar for ${local.name || 'Player'}.`;
   }
-  applyProgressState(payload.progress || null);
 
   statusEl.textContent = 'Connected';
   appendChatLine({
@@ -4130,10 +3466,6 @@ socket.on('init', (payload) => {
   if (voiceEnabled) {
     socket.emit('voice:join');
   }
-});
-
-socket.on('progress:update', (payload) => {
-  applyProgressState(payload || null);
 });
 
 socket.on('playerJoined', (payload) => {
@@ -4255,10 +3587,6 @@ window.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') {
     event.preventDefault();
     if (!authModalEl.classList.contains('hidden')) return;
-    if (npcDialogueOpen) {
-      closeNpcDialogue();
-      return;
-    }
     if (!customizeModalEl.classList.contains('hidden')) {
       setCustomizeModal(false);
       return;
@@ -4755,12 +4083,6 @@ wheelButtons.forEach((button) => {
 voiceToggleEl?.addEventListener('click', async () => {
   await toggleVoiceQuick();
 });
-npcDialoguePrimaryEl?.addEventListener('click', () => {
-  if (typeof npcDialoguePrimaryAction === 'function') npcDialoguePrimaryAction();
-});
-npcDialogueSecondaryEl?.addEventListener('click', () => {
-  if (typeof npcDialogueSecondaryAction === 'function') npcDialogueSecondaryAction();
-});
 
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -4939,19 +4261,15 @@ const _fogColor = new THREE.Color();
 function updateDayAndWeather(delta, nowSeconds) {
   dayTime = (dayTime + delta / 240) % 1;
   const sunAngle = dayTime * Math.PI * 2;
-  // Center daylight at noon and keep midnight consistently darkest.
-  const solarCurve = Math.cos((dayTime - 0.5) * Math.PI * 2);
-  const dayFactor = THREE.MathUtils.clamp((solarCurve + 0.2) / 1.2, 0, 1);
+  const dayFactor = Math.max(0.08, Math.sin(sunAngle) * 0.65 + 0.5);
 
-  sun.intensity = 0.03 + dayFactor * 1.07;
-  hemi.intensity = 0.06 + dayFactor * 0.92;
+  sun.intensity = 0.25 + dayFactor * 1.0;
+  hemi.intensity = 0.32 + dayFactor * 0.8;
   sun.position.set(Math.cos(sunAngle) * 40, 16 + dayFactor * 26, Math.sin(sunAngle) * 40);
 
-  _skyColor.setHSL(0.58, 0.5, 0.035 + dayFactor * 0.52);
-  _fogColor.setHSL(0.58, 0.36, 0.02 + dayFactor * 0.35);
+  _skyColor.setHSL(0.56, 0.45, 0.14 + dayFactor * 0.53);
+  _fogColor.setHSL(0.56, 0.35, 0.11 + dayFactor * 0.42);
   scene.fog.color.copy(_fogColor);
-  scene.fog.near = 34 + dayFactor * 14;
-  scene.fog.far = 88 + dayFactor * 84;
   renderer.setClearColor(_skyColor);
 
   if (nowSeconds > nextWeatherToggleAt) {
@@ -4975,11 +4293,11 @@ function updateDayAndWeather(delta, nowSeconds) {
     attr.needsUpdate = true;
   }
 
-  if (dayTime < 0.18 || dayTime > 0.82) {
+  if (dayTime < 0.2 || dayTime > 0.85) {
     timeLabelEl.textContent = 'Night';
-  } else if (dayTime < 0.34) {
+  } else if (dayTime < 0.32) {
     timeLabelEl.textContent = 'Morning';
-  } else if (dayTime < 0.64) {
+  } else if (dayTime < 0.62) {
     timeLabelEl.textContent = 'Day';
   } else {
     timeLabelEl.textContent = 'Evening';
@@ -5259,49 +4577,9 @@ function updateInteractionHint() {
     interactHintEl.textContent = 'Boat controls: W/S move, A/D steer, E to get off anywhere';
     return;
   }
-  if (inMine) {
-    if (distance2D(local, MINE_EXIT_POS) < 3.1) {
-      interactHintEl.textContent = 'Press E to exit mine';
-      return;
-    }
-    if (distance2D(local, QUEST_NPC_POS) < 3.4) {
-      const quest = questState.quest;
-      if (quest?.status === 'ready') {
-        interactHintEl.textContent = 'Press E to talk to Quest Giver (reward ready)';
-      } else {
-        interactHintEl.textContent = 'Press E to talk to Quest Giver';
-      }
-      return;
-    }
-    if (distance2D(local, MINE_SHOP_NPC_POS) < 3.2) {
-      interactHintEl.textContent = 'Press E to talk to Mine Merchant';
-      return;
-    }
-    if (getNearbyOreNode(local)) {
-      interactHintEl.textContent = 'Press E to mine ore';
-      return;
-    }
-    interactHintEl.textContent = 'Mine ore and return to the quest giver';
-    return;
-  }
   const swimHint = surfaceHintOverride(local);
   if (swimHint) {
     interactHintEl.textContent = swimHint;
-    return;
-  }
-  if (distance2D(local, MINE_ENTRY_POS) < 6.8) {
-    interactHintEl.textContent = 'Press E to enter mine';
-    return;
-  }
-  if (distance2D(local, QUEST_NPC_POS) < 3.4) {
-    const quest = questState.quest;
-    if (quest?.status === 'ready') {
-      interactHintEl.textContent = 'Press E to talk to Quest Giver (reward ready)';
-    } else if (quest?.status === 'active') {
-      interactHintEl.textContent = 'Press E to talk to Quest Giver';
-    } else {
-      interactHintEl.textContent = 'Press E to talk to Quest Giver';
-    }
     return;
   }
   if (inLighthouseInterior) {
@@ -5384,16 +4662,6 @@ function drawMinimap() {
   minimapCtx.arc(center + LIGHTHOUSE_POS.x * scale, center + LIGHTHOUSE_POS.z * scale, 4, 0, Math.PI * 2);
   minimapCtx.fill();
 
-  minimapCtx.fillStyle = '#a855f7';
-  minimapCtx.beginPath();
-  minimapCtx.arc(center + QUEST_NPC_POS.x * scale, center + QUEST_NPC_POS.z * scale, 3, 0, Math.PI * 2);
-  minimapCtx.fill();
-
-  minimapCtx.fillStyle = '#60a5fa';
-  minimapCtx.beginPath();
-  minimapCtx.arc(center + MINE_ENTRY_POS.x * scale, center + MINE_ENTRY_POS.z * scale, 3, 0, Math.PI * 2);
-  minimapCtx.fill();
-
   if (boatState.mesh) {
     minimapCtx.fillStyle = '#a16207';
     minimapCtx.beginPath();
@@ -5409,34 +4677,6 @@ function drawMinimap() {
   });
 
   compassEl.textContent = `Heading: ${headingText()}`;
-}
-
-function updateMineVisuals(nowMs, delta) {
-  const local = players.get(localPlayerId);
-  const inMineView = Boolean(local) && Math.hypot(local.x - MINE_POS.x, local.z - MINE_POS.z) <= MINE_RADIUS + 6;
-  if (mineGroup) mineGroup.visible = inMineView || inMine;
-  if (mineExitMesh) {
-    minePortalPulse += delta * 2.2;
-    mineExitMesh.position.y = (MINE_EXIT_POS.y - MINE_POS.y) + 0.08 + Math.sin(minePortalPulse) * 0.06;
-  }
-  if (questNpcMesh) {
-    questNpcMesh.rotation.y = -0.55;
-  }
-  if (mineShopNpcMesh) {
-    mineShopNpcMesh.rotation.y = 0.5;
-  }
-  if (mineEntranceMesh) {
-    mineEntranceMesh.rotation.y = MINE_ENTRY_YAW;
-  }
-  oreNodes.forEach((node) => {
-    if (!node.mesh.visible && nowMs >= node.readyAt) {
-      node.mesh.visible = true;
-    }
-    if (node.mesh.visible) {
-      node.mesh.rotation.y += delta * 0.9;
-      node.mesh.position.y = 1.86 + Math.sin(nowMs * 0.002 + node.mesh.position.x) * 0.06;
-    }
-  });
 }
 
 const clock = new THREE.Clock();
@@ -5456,7 +4696,6 @@ function animate(nowMs) {
   } else {
     beaconCore.position.y += (3.0 - beaconCore.position.y) * Math.min(1, delta * 8);
   }
-  updateBeaconIslandLights(Boolean(beacon?.active), delta);
   if (lighthouseInteriorPortal) {
     lighthouseInteriorPortal.rotation.y += delta * 0.7;
     lighthouseInteriorPortal.position.y = INTERIOR_EXIT_PORTAL_POS.y + Math.sin(nowMs * 0.0042) * 0.08;
@@ -5472,7 +4711,6 @@ function animate(nowMs) {
   updatePlayerEmotes(Date.now(), delta);
   updateVoiceVolumes();
   updateCliffWaterfallVisibility();
-  updateMineVisuals(nowMs, delta);
 
   const local = players.get(localPlayerId);
   if (local) {
