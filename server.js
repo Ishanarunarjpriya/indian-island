@@ -24,6 +24,8 @@ const SWIM_MIN_RADIUS = WORLD_LIMIT + 0.6;
 const SWIM_MAX_RADIUS = WORLD_LIMIT * 3.9;
 const SWIM_MIN_Y = -0.15;
 const PLAYABLE_BOUND = WORLD_LIMIT * 4.1;
+const MINE_POS = { x: 160, z: 30 };
+const MINE_RADIUS = 23;
 const INTERACT_RANGE = 4;
 const CHAT_MAX_LEN = 220;
 const NAME_MAX_LEN = 18;
@@ -47,6 +49,13 @@ const CHAT_FILTER_WORDS = [
 const HAIR_STYLES = new Set(['none', 'short', 'sidepart', 'spiky', 'long', 'ponytail', 'bob', 'wavy']);
 const FACE_STYLES = new Set(['smile', 'serious', 'grin', 'wink', 'lashessmile', 'soft']);
 const ACCESSORY_TYPES = new Set(['hat', 'glasses', 'backpack']);
+const ORE_TYPES = new Set(['stone', 'iron', 'gold', 'diamond']);
+const PICKAXE_ORDER = ['wood', 'stone', 'iron', 'diamond'];
+const PICKAXE_PRICE = {
+  stone: 120,
+  iron: 280,
+  diamond: 620
+};
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -93,9 +102,10 @@ function clampToPlayableGround(x, z) {
   const onMain = Math.hypot(x, z) <= MAIN_RADIUS;
   const onLighthouse = Math.hypot(x - LIGHTHOUSE_POS.x, z - LIGHTHOUSE_POS.z) <= LIGHTHOUSE_RADIUS;
   const onInterior = Math.hypot(x - INTERIOR_POS.x, z - INTERIOR_POS.z) <= INTERIOR_RADIUS;
+  const onMine = Math.hypot(x - MINE_POS.x, z - MINE_POS.z) <= MINE_RADIUS;
   const radius = Math.hypot(x, z);
   const onSwimRing = radius >= SWIM_MIN_RADIUS && radius <= SWIM_MAX_RADIUS;
-  if (onMain || onLighthouse || onInterior || onSwimRing) {
+  if (onMain || onLighthouse || onInterior || onMine || onSwimRing) {
     return { x, z };
   }
 
@@ -119,6 +129,14 @@ function clampToPlayableGround(x, z) {
     z: INTERIOR_POS.z + (dzI / lenI) * INTERIOR_RADIUS
   };
   const distInterior = Math.hypot(x - toInterior.x, z - toInterior.z);
+  const dxM = x - MINE_POS.x;
+  const dzM = z - MINE_POS.z;
+  const lenM = Math.hypot(dxM, dzM) || 1;
+  const toMine = {
+    x: MINE_POS.x + (dxM / lenM) * MINE_RADIUS,
+    z: MINE_POS.z + (dzM / lenM) * MINE_RADIUS
+  };
+  const distMine = Math.hypot(x - toMine.x, z - toMine.z);
   const toSwim = (() => {
     const len = Math.hypot(x, z) || 1;
     const target = len < SWIM_MIN_RADIUS ? SWIM_MIN_RADIUS : SWIM_MAX_RADIUS;
@@ -127,9 +145,10 @@ function clampToPlayableGround(x, z) {
   })();
   const distSwim = Math.hypot(x - toSwim.x, z - toSwim.z);
 
-  if (distMain <= distLighthouse && distMain <= distInterior && distMain <= distSwim) return toMain;
-  if (distLighthouse <= distInterior && distLighthouse <= distSwim) return toLighthouse;
-  if (distInterior <= distSwim) return toInterior;
+  if (distMain <= distLighthouse && distMain <= distInterior && distMain <= distSwim && distMain <= distMine) return toMain;
+  if (distLighthouse <= distInterior && distLighthouse <= distSwim && distLighthouse <= distMine) return toLighthouse;
+  if (distInterior <= distSwim && distInterior <= distMine) return toInterior;
+  if (distMine <= distSwim) return toMine;
   return toSwim;
 }
 
@@ -170,6 +189,121 @@ function defaultAppearance() {
     hairColor: '#2b211c',
     faceStyle: 'smile',
     accessories: []
+  };
+}
+
+function defaultInventory() {
+  return {
+    stone: 0,
+    iron: 0,
+    gold: 0,
+    diamond: 0
+  };
+}
+
+function defaultQuest(seed = 1) {
+  const pool = [
+    { resource: 'stone', min: 14, max: 28, rewardPerItem: 3, diamondBonusChance: 0.08 },
+    { resource: 'iron', min: 8, max: 18, rewardPerItem: 7, diamondBonusChance: 0.12 },
+    { resource: 'gold', min: 6, max: 14, rewardPerItem: 11, diamondBonusChance: 0.16 },
+    { resource: 'diamond', min: 2, max: 7, rewardPerItem: 32, diamondBonusChance: 0.2 }
+  ];
+  const entry = pool[seed % pool.length];
+  const span = entry.max - entry.min + 1;
+  const targetCount = entry.min + ((seed * 7) % span);
+  const rewardCoins = Math.round(targetCount * entry.rewardPerItem + 24 + Math.min(160, seed * 2.8));
+  const rewardDiamonds = Math.random() < entry.diamondBonusChance ? 1 : 0;
+  return {
+    id: `q-${Date.now()}-${seed}`,
+    type: 'mine',
+    resource: entry.resource,
+    targetCount,
+    progress: 0,
+    rewardCoins,
+    rewardDiamonds,
+    title: `Mine ${targetCount} ${entry.resource}`,
+    description: `Collect ${targetCount} ${entry.resource} ore chunks in the mine.`,
+    status: 'available'
+  };
+}
+
+function defaultProgress() {
+  return {
+    coins: 0,
+    pickaxe: 'wood',
+    inventory: defaultInventory(),
+    questSeed: 1,
+    quest: defaultQuest(1)
+  };
+}
+
+function sanitizePickaxe(value, fallback = 'wood') {
+  return PICKAXE_ORDER.includes(value) ? value : fallback;
+}
+
+function sanitizeInventory(value) {
+  const base = defaultInventory();
+  if (!value || typeof value !== 'object') return base;
+  for (const key of Object.keys(base)) {
+    const n = Number(value[key]);
+    base[key] = Number.isFinite(n) ? clamp(Math.floor(n), 0, 1_000_000) : 0;
+  }
+  return base;
+}
+
+function sanitizeQuest(value, fallbackSeed = 1) {
+  const fallback = defaultQuest(fallbackSeed);
+  if (!value || typeof value !== 'object') return fallback;
+  const resource = ORE_TYPES.has(value.resource) ? value.resource : fallback.resource;
+  const targetCount = clamp(Math.floor(Number(value.targetCount) || fallback.targetCount), 1, 2000);
+  const progress = clamp(Math.floor(Number(value.progress) || 0), 0, targetCount);
+  const rewardCoins = clamp(Math.floor(Number(value.rewardCoins) || fallback.rewardCoins), 5, 50_000);
+  const rewardDiamonds = clamp(Math.floor(Number(value.rewardDiamonds) || 0), 0, 50);
+  const status = ['available', 'active', 'ready'].includes(value.status) ? value.status : fallback.status;
+  return {
+    id: typeof value.id === 'string' && value.id ? value.id.slice(0, 80) : fallback.id,
+    type: 'mine',
+    resource,
+    targetCount,
+    progress,
+    rewardCoins,
+    rewardDiamonds,
+    title: typeof value.title === 'string' && value.title ? value.title.slice(0, 80) : `Mine ${targetCount} ${resource}`,
+    description: typeof value.description === 'string' && value.description ? value.description.slice(0, 180) : `Collect ${targetCount} ${resource} ore chunks in the mine.`,
+    status: progress >= targetCount && status === 'active' ? 'ready' : status
+  };
+}
+
+function sanitizeProgress(value) {
+  const base = defaultProgress();
+  if (!value || typeof value !== 'object') return base;
+  const questSeed = clamp(Math.floor(Number(value.questSeed) || 1), 1, 1_000_000);
+  const quest = sanitizeQuest(value.quest, questSeed);
+  return {
+    coins: clamp(Math.floor(Number(value.coins) || 0), 0, 100_000_000),
+    pickaxe: sanitizePickaxe(value.pickaxe, 'wood'),
+    inventory: sanitizeInventory(value.inventory),
+    questSeed,
+    quest
+  };
+}
+
+function nextQuest(progress) {
+  progress.questSeed = clamp((progress.questSeed || 1) + 1, 1, 1_000_000);
+  progress.quest = defaultQuest(progress.questSeed);
+}
+
+function progressSnapshot(progress) {
+  return {
+    coins: progress.coins,
+    pickaxe: progress.pickaxe,
+    inventory: { ...progress.inventory },
+    questSeed: progress.questSeed,
+    quest: { ...progress.quest },
+    shop: {
+      order: [...PICKAXE_ORDER],
+      price: { ...PICKAXE_PRICE }
+    }
   };
 }
 
@@ -260,7 +394,8 @@ function readProfiles() {
         appearance,
         x: Number.isFinite(x) ? x : null,
         y: Number.isFinite(y) ? y : null,
-        z: Number.isFinite(z) ? z : null
+        z: Number.isFinite(z) ? z : null,
+        progress: sanitizeProgress(profile?.progress)
       });
     }
   } catch {
@@ -294,6 +429,7 @@ function scheduleProfileSave() {
     clearTimeout(saveTimer);
   }
   saveTimer = setTimeout(() => {
+    saveTimer = null;
     const serialized = {};
     for (const [profileId, profile] of profiles.entries()) {
       serialized[profileId] = {
@@ -302,7 +438,8 @@ function scheduleProfileSave() {
         appearance: profile.appearance,
         x: Number.isFinite(profile.x) ? profile.x : null,
         y: Number.isFinite(profile.y) ? profile.y : null,
-        z: Number.isFinite(profile.z) ? profile.z : null
+        z: Number.isFinite(profile.z) ? profile.z : null,
+        progress: sanitizeProgress(profile.progress)
       };
     }
     fs.writeFile(PROFILE_FILE, JSON.stringify(serialized, null, 2), () => {});
@@ -314,6 +451,7 @@ function scheduleAccountSave() {
     clearTimeout(accountSaveTimer);
   }
   accountSaveTimer = setTimeout(() => {
+    accountSaveTimer = null;
     const serialized = {};
     for (const [username, account] of accounts.entries()) {
       serialized[username] = {
@@ -338,7 +476,8 @@ function ensureProfileExists(profileId, username) {
     appearance: sanitizeAppearance(null, { ...defaultAppearance(), shirt }),
     x: null,
     y: null,
-    z: null
+    z: null,
+    progress: defaultProgress()
   });
   scheduleProfileSave();
 }
@@ -367,7 +506,8 @@ function spawnPlayer(socket, profileId, username) {
     appearance: sanitizeAppearance(profile?.appearance, {
       ...defaultAppearance(),
       shirt: profile?.color || randomHexColor()
-    })
+    }),
+    progress: sanitizeProgress(profile?.progress)
   };
   spawn.color = spawn.appearance.shirt;
   players.set(socket.id, spawn);
@@ -375,7 +515,8 @@ function spawnPlayer(socket, profileId, username) {
     id: socket.id,
     players: [...players.values()],
     worldLimit: WORLD_LIMIT,
-    interactables: [...interactables.values()]
+    interactables: [...interactables.values()],
+    progress: progressSnapshot(spawn.progress)
   });
   socket.broadcast.emit('playerJoined', spawn);
 }
@@ -388,9 +529,15 @@ function persistPlayerProgress(player) {
     appearance: player.appearance,
     x: player.x,
     y: player.y,
-    z: player.z
+    z: player.z,
+    progress: sanitizeProgress(player.progress)
   });
   scheduleProfileSave();
+}
+
+function emitProgress(socket, player) {
+  if (!socket || !player?.progress) return;
+  socket.emit('progress:update', progressSnapshot(player.progress));
 }
 
 function removeAuthenticatedPlayer(socket) {
@@ -476,6 +623,114 @@ io.on('connection', (socket) => {
       color: current.color,
       appearance: current.appearance
     });
+  });
+
+  socket.on('quest:accept', (payload, ack) => {
+    const actor = players.get(socket.id);
+    if (!actor?.progress?.quest) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Quest system unavailable.' });
+      return;
+    }
+    const quest = actor.progress.quest;
+    if (quest.status === 'ready') {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Claim your current quest reward first.' });
+      return;
+    }
+    if (quest.status === 'active') {
+      if (typeof ack === 'function') ack({ ok: true, quest, alreadyActive: true });
+      return;
+    }
+    quest.status = 'active';
+    persistPlayerProgress(actor);
+    emitProgress(socket, actor);
+    if (typeof ack === 'function') ack({ ok: true, quest });
+  });
+
+  socket.on('quest:claim', (payload, ack) => {
+    const actor = players.get(socket.id);
+    const progress = actor?.progress;
+    const quest = progress?.quest;
+    if (!actor || !progress || !quest || quest.status !== 'ready') {
+      if (typeof ack === 'function') ack({ ok: false, error: 'No completed quest to claim.' });
+      return;
+    }
+    progress.coins += quest.rewardCoins;
+    if (quest.rewardDiamonds > 0) {
+      progress.inventory.diamond += quest.rewardDiamonds;
+    }
+    const title = quest.title;
+    const coins = quest.rewardCoins;
+    const bonus = quest.rewardDiamonds;
+    nextQuest(progress);
+    persistPlayerProgress(actor);
+    emitProgress(socket, actor);
+    io.emit('chat', {
+      fromName: 'System',
+      text: `${actor.name} completed "${title}" for ${coins} coins${bonus ? ` and ${bonus} diamond` : ''}.`,
+      sentAt: Date.now()
+    });
+    if (typeof ack === 'function') ack({ ok: true });
+  });
+
+  socket.on('mine:collect', (payload, ack) => {
+    const actor = players.get(socket.id);
+    const progress = actor?.progress;
+    if (!actor || !progress) {
+      if (typeof ack === 'function') ack({ ok: false });
+      return;
+    }
+    const nearMine = Math.hypot(actor.x - MINE_POS.x, actor.z - MINE_POS.z) <= MINE_RADIUS + 4.5;
+    if (!nearMine) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Go to the mine to collect ore.' });
+      return;
+    }
+    const resource = ORE_TYPES.has(payload?.resource) ? payload.resource : null;
+    const amount = clamp(Math.floor(Number(payload?.amount) || 0), 1, 20);
+    if (!resource) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Invalid ore type.' });
+      return;
+    }
+    progress.inventory[resource] = clamp((progress.inventory[resource] || 0) + amount, 0, 1_000_000);
+    const quest = progress.quest;
+    if (quest?.status === 'active' && quest.resource === resource) {
+      quest.progress = clamp(quest.progress + amount, 0, quest.targetCount);
+      if (quest.progress >= quest.targetCount) {
+        quest.status = 'ready';
+      }
+    }
+    persistPlayerProgress(actor);
+    emitProgress(socket, actor);
+    if (typeof ack === 'function') ack({ ok: true });
+  });
+
+  socket.on('shop:buyPickaxe', (payload, ack) => {
+    const actor = players.get(socket.id);
+    const progress = actor?.progress;
+    if (!actor || !progress) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Not authenticated.' });
+      return;
+    }
+    const requested = sanitizePickaxe(payload?.tier, '');
+    if (!requested || requested === 'wood') {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Invalid pickaxe tier.' });
+      return;
+    }
+    const currentIdx = PICKAXE_ORDER.indexOf(progress.pickaxe);
+    const requestedIdx = PICKAXE_ORDER.indexOf(requested);
+    if (requestedIdx !== currentIdx + 1) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Buy pickaxes in order.' });
+      return;
+    }
+    const price = PICKAXE_PRICE[requested] || 0;
+    if (progress.coins < price) {
+      if (typeof ack === 'function') ack({ ok: false, error: `Need ${price} coins.` });
+      return;
+    }
+    progress.coins -= price;
+    progress.pickaxe = requested;
+    persistPlayerProgress(actor);
+    emitProgress(socket, actor);
+    if (typeof ack === 'function') ack({ ok: true, tier: requested });
   });
 
   socket.on('interact', (payload) => {
@@ -572,28 +827,42 @@ io.on('connection', (socket) => {
 
   socket.on('voice:join', () => {
     if (!players.has(socket.id)) return;
+    if (voiceParticipants.has(socket.id)) {
+      socket.emit('voice:participants', [...voiceParticipants].filter((id) => id !== socket.id));
+      return;
+    }
     voiceParticipants.add(socket.id);
     socket.emit('voice:participants', [...voiceParticipants].filter((id) => id !== socket.id));
     socket.broadcast.emit('voice:user-joined', socket.id);
   });
 
   socket.on('voice:leave', () => {
-    voiceParticipants.delete(socket.id);
+    const deleted = voiceParticipants.delete(socket.id);
+    if (!deleted) return;
     socket.broadcast.emit('voice:user-left', socket.id);
   });
 
-  socket.on('voice:offer', ({ to, offer }) => {
-    if (!to || !offer) return;
+  socket.on('voice:offer', (payload) => {
+    if (!voiceParticipants.has(socket.id)) return;
+    const to = typeof payload?.to === 'string' ? payload.to : '';
+    const offer = payload?.offer;
+    if (!to || !offer || !voiceParticipants.has(to)) return;
     io.to(to).emit('voice:offer', { from: socket.id, offer });
   });
 
-  socket.on('voice:answer', ({ to, answer }) => {
-    if (!to || !answer) return;
+  socket.on('voice:answer', (payload) => {
+    if (!voiceParticipants.has(socket.id)) return;
+    const to = typeof payload?.to === 'string' ? payload.to : '';
+    const answer = payload?.answer;
+    if (!to || !answer || !voiceParticipants.has(to)) return;
     io.to(to).emit('voice:answer', { from: socket.id, answer });
   });
 
-  socket.on('voice:ice', ({ to, candidate }) => {
-    if (!to || !candidate) return;
+  socket.on('voice:ice', (payload) => {
+    if (!voiceParticipants.has(socket.id)) return;
+    const to = typeof payload?.to === 'string' ? payload.to : '';
+    const candidate = payload?.candidate;
+    if (!to || !candidate || !voiceParticipants.has(to)) return;
     io.to(to).emit('voice:ice', { from: socket.id, candidate });
   });
 
