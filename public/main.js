@@ -30,6 +30,9 @@ const questState = {
 
 const MINE_POS = new THREE.Vector3(160, 1.35, 30);
 const MINE_RADIUS = 23;
+const MINE_PLAY_RADIUS = MINE_RADIUS + 2.2;
+const MINE_ROCK_WALL_RADIUS = MINE_RADIUS - 1.25;
+const MINE_SWIM_BLOCK_RADIUS = MINE_RADIUS + 34;
 const HOUSE_POS = new THREE.Vector3(-worldLimit * 0.33, 1.35, worldLimit * 0.12);
 const MINE_ENTRY_POS = new THREE.Vector3(HOUSE_POS.x + 21.5, 1.35, HOUSE_POS.z + 0.5);
 const MINE_EXIT_POS = new THREE.Vector3(MINE_POS.x + 1.4, 1.35, MINE_POS.z + 5.8);
@@ -1910,6 +1913,16 @@ function addMineArea() {
     rock.receiveShadow = true;
     mine.add(rock);
   }
+  const wallColliderCount = 30;
+  for (let i = 0; i < wallColliderCount; i += 1) {
+    const angle = (i / wallColliderCount) * Math.PI * 2;
+    addWorldCollider(
+      MINE_POS.x + Math.cos(angle) * MINE_ROCK_WALL_RADIUS,
+      MINE_POS.z + Math.sin(angle) * MINE_ROCK_WALL_RADIUS,
+      1.2,
+      'mine-wall'
+    );
+  }
 
   const exitPortal = new THREE.Mesh(
     new THREE.CylinderGeometry(0.84, 0.84, 0.12, 24),
@@ -2341,6 +2354,14 @@ function clampToRing(x, z, minRadius, maxRadius) {
   return { x: x * scale, z: z * scale };
 }
 
+function mineDistance(x, z) {
+  return Math.hypot(x - MINE_POS.x, z - MINE_POS.z);
+}
+
+function blocksMineEscapeSwim(x, z) {
+  return mineDistance(x, z) <= MINE_SWIM_BLOCK_RADIUS;
+}
+
 function isSwimZone(x, z) {
   const radius = Math.hypot(x, z);
   return radius >= SWIM_MIN_RADIUS && radius <= SWIM_MAX_RADIUS;
@@ -2384,8 +2405,7 @@ function clampToPlayableGround(x, z) {
   const MAIN_RADIUS = worldLimit * 1.14;
   const LIGHTHOUSE_RADIUS = 10.9;
   const INTERIOR_RADIUS = INTERIOR_PLAY_RADIUS;
-  const MINE_PLAY_RADIUS = MINE_RADIUS + 2.2;
-  const inSwim = isSwimZone(x, z);
+  const inSwim = isSwimZone(x, z) && !blocksMineEscapeSwim(x, z);
 
   const inMain = Math.hypot(x, z) <= MAIN_RADIUS;
   const dxL = x - LIGHTHOUSE_POS.x;
@@ -2396,7 +2416,7 @@ function clampToPlayableGround(x, z) {
   const inInterior = Math.hypot(dxI, dzI) <= INTERIOR_RADIUS;
   const dxM = x - MINE_POS.x;
   const dzM = z - MINE_POS.z;
-  const inMine = Math.hypot(dxM, dzM) <= MINE_PLAY_RADIUS;
+  const inMine = mineDistance(x, z) <= MINE_PLAY_RADIUS;
   if (inMain || inLighthouse || inInterior || inMine || inSwim) {
     return { x, z };
   }
@@ -2422,7 +2442,7 @@ function clampToPlayableGround(x, z) {
   };
   const distMine = Math.hypot(x - toMine.x, z - toMine.z);
   const toSwim = clampToRing(x, z, SWIM_MIN_RADIUS, SWIM_MAX_RADIUS);
-  const distSwim = Math.hypot(x - toSwim.x, z - toSwim.z);
+  const distSwim = blocksMineEscapeSwim(x, z) ? Number.POSITIVE_INFINITY : Math.hypot(x - toSwim.x, z - toSwim.z);
   if (distMain <= distLight && distMain <= distInterior && distMain <= distMine && distMain <= distSwim) return toMain;
   if (distLight <= distInterior && distLight <= distMine && distLight <= distSwim) return toLight;
   if (distInterior <= distMine && distInterior <= distSwim) return toInterior;
@@ -2433,7 +2453,7 @@ function clampToPlayableGround(x, z) {
 function isWaterAt(x, z) {
   const radius = Math.hypot(x, z);
   if (radius > SWIM_MAX_RADIUS) return false;
-  if (Math.hypot(x - MINE_POS.x, z - MINE_POS.z) <= MINE_RADIUS + 1.8) return false;
+  if (blocksMineEscapeSwim(x, z)) return false;
 
   // Brute-force dock safety: never treat areas around docks as water.
   if (Math.hypot(x - ISLAND_DOCK_POS.x, z - ISLAND_DOCK_POS.z) <= 16) return false;
@@ -2865,12 +2885,11 @@ function isWithinPlayableWorld(x, z) {
   const MAIN_RADIUS = worldLimit * 1.14;
   const LIGHTHOUSE_RADIUS = 11.7;
   const INTERIOR_RADIUS = INTERIOR_PLAY_RADIUS;
-  const MINE_PLAY_RADIUS = MINE_RADIUS + 2.2;
   const onMain = Math.hypot(x, z) <= MAIN_RADIUS;
   const onLighthouse = Math.hypot(x - LIGHTHOUSE_POS.x, z - LIGHTHOUSE_POS.z) <= LIGHTHOUSE_RADIUS;
   const inInterior = Math.hypot(x - LIGHTHOUSE_INTERIOR_BASE.x, z - LIGHTHOUSE_INTERIOR_BASE.z) <= INTERIOR_RADIUS;
-  const inMine = Math.hypot(x - MINE_POS.x, z - MINE_POS.z) <= MINE_PLAY_RADIUS;
-  const inSwim = isSwimZone(x, z);
+  const inMine = mineDistance(x, z) <= MINE_PLAY_RADIUS;
+  const inSwim = isSwimZone(x, z) && !blocksMineEscapeSwim(x, z);
   return onMain || onLighthouse || inInterior || inMine || inSwim;
 }
 

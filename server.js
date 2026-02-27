@@ -26,6 +26,8 @@ const SWIM_MIN_Y = -0.15;
 const PLAYABLE_BOUND = WORLD_LIMIT * 4.1;
 const MINE_POS = { x: 160, z: 30 };
 const MINE_RADIUS = 23;
+const MINE_PLAY_RADIUS = MINE_RADIUS + 2.2;
+const MINE_SWIM_BLOCK_RADIUS = MINE_RADIUS + 34;
 const INTERACT_RANGE = 4;
 const CHAT_MAX_LEN = 220;
 const NAME_MAX_LEN = 18;
@@ -99,12 +101,13 @@ function clampToIsland(x, z, limit) {
 
 function clampToPlayableGround(x, z) {
   const MAIN_RADIUS = WORLD_LIMIT * 1.14;
+  const mineDist = Math.hypot(x - MINE_POS.x, z - MINE_POS.z);
   const onMain = Math.hypot(x, z) <= MAIN_RADIUS;
   const onLighthouse = Math.hypot(x - LIGHTHOUSE_POS.x, z - LIGHTHOUSE_POS.z) <= LIGHTHOUSE_RADIUS;
   const onInterior = Math.hypot(x - INTERIOR_POS.x, z - INTERIOR_POS.z) <= INTERIOR_RADIUS;
-  const onMine = Math.hypot(x - MINE_POS.x, z - MINE_POS.z) <= MINE_RADIUS;
+  const onMine = mineDist <= MINE_PLAY_RADIUS;
   const radius = Math.hypot(x, z);
-  const onSwimRing = radius >= SWIM_MIN_RADIUS && radius <= SWIM_MAX_RADIUS;
+  const onSwimRing = radius >= SWIM_MIN_RADIUS && radius <= SWIM_MAX_RADIUS && mineDist > MINE_SWIM_BLOCK_RADIUS;
   if (onMain || onLighthouse || onInterior || onMine || onSwimRing) {
     return { x, z };
   }
@@ -133,8 +136,8 @@ function clampToPlayableGround(x, z) {
   const dzM = z - MINE_POS.z;
   const lenM = Math.hypot(dxM, dzM) || 1;
   const toMine = {
-    x: MINE_POS.x + (dxM / lenM) * MINE_RADIUS,
-    z: MINE_POS.z + (dzM / lenM) * MINE_RADIUS
+    x: MINE_POS.x + (dxM / lenM) * MINE_PLAY_RADIUS,
+    z: MINE_POS.z + (dzM / lenM) * MINE_PLAY_RADIUS
   };
   const distMine = Math.hypot(x - toMine.x, z - toMine.z);
   const toSwim = (() => {
@@ -143,7 +146,7 @@ function clampToPlayableGround(x, z) {
     const scale = target / len;
     return { x: x * scale, z: z * scale };
   })();
-  const distSwim = Math.hypot(x - toSwim.x, z - toSwim.z);
+  const distSwim = mineDist <= MINE_SWIM_BLOCK_RADIUS ? Number.POSITIVE_INFINITY : Math.hypot(x - toSwim.x, z - toSwim.z);
 
   if (distMain <= distLighthouse && distMain <= distInterior && distMain <= distSwim && distMain <= distMine) return toMain;
   if (distLighthouse <= distInterior && distLighthouse <= distSwim && distLighthouse <= distMine) return toLighthouse;
