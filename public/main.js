@@ -1155,34 +1155,61 @@ function addLighthouseIsland() {
   const doorFrameMat = new THREE.MeshStandardMaterial({ color: 0x8b5a2b, roughness: 0.88 });
   const doorWoodMat = new THREE.MeshStandardMaterial({ color: 0x6b4226, roughness: 0.9 });
   const doorMetalMat = new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.58, metalness: 0.3 });
+  const doorCenterAngle = Math.PI * 0.5;
+
+  const frameArc = 1.42;
+  const frameStart = doorCenterAngle - frameArc * 0.5;
+  const doorFrame = new THREE.Mesh(
+    new THREE.CylinderGeometry(2.08, 2.24, 3.98, 28, 1, true, frameStart, frameArc),
+    doorFrameMat
+  );
+  doorFrame.position.y = 3.0;
+  doorFrame.castShadow = true;
+  doorFrame.receiveShadow = true;
+
+  const doorVoidArc = 1.2;
+  const doorVoidStart = doorCenterAngle - doorVoidArc * 0.5;
   const doorVoid = new THREE.Mesh(
-    new THREE.PlaneGeometry(2.9, 3.8),
+    new THREE.CylinderGeometry(1.86, 2.0, 3.82, 24, 1, true, doorVoidStart, doorVoidArc),
     new THREE.MeshBasicMaterial({ color: 0x0b0f17, side: THREE.DoubleSide })
   );
-  doorVoid.position.set(0, 3.0, 1.97);
-
-  const doorFrameL = new THREE.Mesh(new THREE.BoxGeometry(0.2, 3.9, 0.2), doorFrameMat);
-  doorFrameL.position.set(-1.45, 3.0, 2.0);
-  const doorFrameR = doorFrameL.clone();
-  doorFrameR.position.x = 1.45;
-  const doorFrameTop = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.2, 0.2), doorFrameMat);
-  doorFrameTop.position.set(0, 4.95, 2.0);
+  doorVoid.position.y = 3.0;
 
   function makeLighthouseDoor(side = 1) {
     const door = new THREE.Group();
-    const panel = new THREE.Mesh(new THREE.BoxGeometry(1.38, 3.55, 0.1), doorWoodMat);
+    const panelArc = 0.53;
+    const centerGap = 0.08;
+    const panelStart = side < 0
+      ? doorCenterAngle - centerGap * 0.5 - panelArc
+      : doorCenterAngle + centerGap * 0.5;
+    const panel = new THREE.Mesh(
+      new THREE.CylinderGeometry(1.96, 2.1, 3.56, 18, 1, true, panelStart, panelArc),
+      doorWoodMat
+    );
+    panel.position.y = 3.0;
+    panel.castShadow = true;
+    panel.receiveShadow = true;
     door.add(panel);
-    for (const y of [1.05, 0, -1.05]) {
-      const strap = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.09, 0.11), doorMetalMat);
-      strap.position.set(0, y, 0.01);
+
+    for (const yOffset of [1.05, 0, -1.05]) {
+      const strap = new THREE.Mesh(
+        new THREE.CylinderGeometry(1.985, 2.125, 0.09, 18, 1, true, panelStart, panelArc),
+        doorMetalMat
+      );
+      strap.position.y = 3.0 + yOffset;
+      strap.castShadow = true;
+      strap.receiveShadow = true;
       door.add(strap);
     }
-    const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.024, 0.12, 10), doorMetalMat);
-    handle.rotation.z = Math.PI / 2;
-    handle.position.set(-side * 0.36, 0.06, 0.07);
+
+    const handleAngle = side < 0
+      ? doorCenterAngle - centerGap * 0.5 - 0.03
+      : doorCenterAngle + centerGap * 0.5 + 0.03;
+    const handle = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), doorMetalMat);
+    handle.position.set(Math.cos(handleAngle) * 2.02, 3.05, Math.sin(handleAngle) * 2.02);
+    handle.castShadow = true;
     door.add(handle);
-    door.position.set(side * 0.74, 3.0, 2.06);
-    door.rotation.y = side * 0.34;
+
     return door;
   }
 
@@ -1220,7 +1247,7 @@ function addLighthouseIsland() {
   lighthouseTopPortal.add(topPortalLight);
   lighthouse.add(
     tower, band, balcony, rail, roof,
-    doorVoid, doorFrameL, doorFrameR, doorFrameTop,
+    doorFrame, doorVoid,
     makeLighthouseDoor(-1), makeLighthouseDoor(1),
     wallLampL, wallLampR
   );
