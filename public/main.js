@@ -34,11 +34,26 @@ const MINE_PLAY_RADIUS = MINE_RADIUS - 1.8;
 const MINE_ROCK_WALL_RADIUS = MINE_RADIUS - 1.25;
 const MINE_SWIM_BLOCK_RADIUS = MINE_RADIUS + 34;
 const HOUSE_POS = new THREE.Vector3(-worldLimit * 0.33, 1.35, worldLimit * 0.12);
-const MINE_ENTRY_POS = new THREE.Vector3(HOUSE_POS.x + 21.5, 1.35, HOUSE_POS.z + 0.5);
+const MINE_ENTRY_ISLAND_POS = new THREE.Vector3(-worldLimit * 1.95, 0, -worldLimit * 1.2);
+const MINE_ENTRY_ISLAND_RADIUS = 11.4;
+const toMainFromMineEntryX = -MINE_ENTRY_ISLAND_POS.x;
+const toMainFromMineEntryZ = -MINE_ENTRY_ISLAND_POS.z;
+const toMainFromMineEntryLen = Math.hypot(toMainFromMineEntryX, toMainFromMineEntryZ) || 1;
+const MINE_ENTRY_DOCK_POS = new THREE.Vector3(
+  MINE_ENTRY_ISLAND_POS.x + (toMainFromMineEntryX / toMainFromMineEntryLen) * 10.1,
+  1.36,
+  MINE_ENTRY_ISLAND_POS.z + (toMainFromMineEntryZ / toMainFromMineEntryLen) * 10.1
+);
+const MINE_ENTRY_DOCK_YAW = Math.atan2(-(MINE_ENTRY_DOCK_POS.z - MINE_ENTRY_ISLAND_POS.z), MINE_ENTRY_DOCK_POS.x - MINE_ENTRY_ISLAND_POS.x);
+const MINE_ENTRY_POS = new THREE.Vector3(
+  MINE_ENTRY_ISLAND_POS.x - (toMainFromMineEntryX / toMainFromMineEntryLen) * 2.4,
+  1.35,
+  MINE_ENTRY_ISLAND_POS.z - (toMainFromMineEntryZ / toMainFromMineEntryLen) * 2.4
+);
 const MINE_EXIT_POS = new THREE.Vector3(MINE_POS.x + 1.4, 1.35, MINE_POS.z + 5.8);
 const QUEST_NPC_POS = new THREE.Vector3(MINE_POS.x + 7.0, 1.35, MINE_POS.z + 2.4);
 const MINE_SHOP_NPC_POS = new THREE.Vector3(MINE_POS.x - 6.6, 1.35, MINE_POS.z - 3.4);
-const MINE_ENTRY_YAW = Math.atan2(HOUSE_POS.x - MINE_ENTRY_POS.x, HOUSE_POS.z - MINE_ENTRY_POS.z);
+const MINE_ENTRY_YAW = Math.atan2(MINE_ENTRY_DOCK_POS.x - MINE_ENTRY_POS.x, MINE_ENTRY_DOCK_POS.z - MINE_ENTRY_POS.z);
 
 let inMine = false;
 let questNpcMesh = null;
@@ -918,6 +933,7 @@ const boatState = {
 };
 const BOAT_CLEARANCE_MAIN = worldLimit + 3.4;
 const BOAT_CLEARANCE_LIGHTHOUSE = 12.6;
+const BOAT_CLEARANCE_MINE_ENTRY = MINE_ENTRY_ISLAND_RADIUS + 1.8;
 addWorldCollider(LIGHTHOUSE_POS.x, LIGHTHOUSE_POS.z, 2.32, 'lighthouse-shell');
 
 function dockOffsetPosition(dock, yaw, forward = 0, side = 0) {
@@ -944,7 +960,8 @@ function findWaterSideSlot(dock, yaw, preferSide = 1, forward = 6.0, baseSide = 
 function dockSlots() {
   return [
     { dock: ISLAND_DOCK_POS, yaw: ISLAND_DOCK_YAW },
-    { dock: LIGHTHOUSE_DOCK_POS, yaw: LIGHTHOUSE_DOCK_YAW }
+    { dock: LIGHTHOUSE_DOCK_POS, yaw: LIGHTHOUSE_DOCK_YAW },
+    { dock: MINE_ENTRY_DOCK_POS, yaw: MINE_ENTRY_DOCK_YAW }
   ];
 }
 
@@ -963,7 +980,7 @@ function boatPoseForDock(slot) {
   if (slot.dock === ISLAND_DOCK_POS) {
     return { ...findWaterSideSlot(slot.dock, slot.yaw, 1, 6.0, 3.2), yaw: slot.yaw };
   }
-  return { ...dockOffsetPosition(slot.dock, slot.yaw, 1.8, 0.8), yaw: slot.yaw };
+  return { ...findWaterSideSlot(slot.dock, slot.yaw, 1, 5.0, 2.4), yaw: slot.yaw };
 }
 
 function addDock(anchor, yaw = 0, options = {}) {
@@ -1163,6 +1180,41 @@ function addLighthouseIsland() {
   lighthouse.add(lighthouseTopPortal);
   lighthouse.position.set(LIGHTHOUSE_POS.x, 0, LIGHTHOUSE_POS.z);
   scene.add(lighthouse);
+}
+
+function addMineEntryIsland() {
+  const base = new THREE.Mesh(
+    new THREE.CylinderGeometry(MINE_ENTRY_ISLAND_RADIUS + 1.8, MINE_ENTRY_ISLAND_RADIUS + 3.4, 3.2, 34),
+    new THREE.MeshStandardMaterial({ color: 0x8b6a4c, roughness: 0.95 })
+  );
+  base.position.set(MINE_ENTRY_ISLAND_POS.x, -0.35, MINE_ENTRY_ISLAND_POS.z);
+  base.receiveShadow = true;
+  scene.add(base);
+
+  const top = new THREE.Mesh(
+    new THREE.CylinderGeometry(MINE_ENTRY_ISLAND_RADIUS, MINE_ENTRY_ISLAND_RADIUS + 1.2, 1.2, 34),
+    new THREE.MeshStandardMaterial({ color: 0x7ea35f, roughness: 0.9 })
+  );
+  top.position.set(MINE_ENTRY_ISLAND_POS.x, 1.35, MINE_ENTRY_ISLAND_POS.z);
+  top.receiveShadow = true;
+  scene.add(top);
+
+  const rockMat = new THREE.MeshStandardMaterial({ color: 0x5f6470, roughness: 0.9 });
+  const edgeRocks = 14;
+  for (let i = 0; i < edgeRocks; i += 1) {
+    const angle = (i / edgeRocks) * Math.PI * 2;
+    const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(1.1 + Math.random() * 0.5, 0), rockMat);
+    const radius = MINE_ENTRY_ISLAND_RADIUS - 0.9 + Math.random() * 1.7;
+    rock.position.set(
+      MINE_ENTRY_ISLAND_POS.x + Math.cos(angle) * radius,
+      1.8 + Math.random() * 1.0,
+      MINE_ENTRY_ISLAND_POS.z + Math.sin(angle) * radius
+    );
+    rock.scale.set(1 + Math.random() * 0.45, 1 + Math.random() * 0.5, 1 + Math.random() * 0.45);
+    rock.castShadow = true;
+    rock.receiveShadow = true;
+    scene.add(rock);
+  }
 }
 
 function addLighthouseInterior() {
@@ -2092,6 +2144,8 @@ function addLandmarks() {
   addDock(ISLAND_DOCK_POS, ISLAND_DOCK_YAW, { segments: 17, plankLength: 3.2, plankWidth: 3.2, spacing: 1.2 });
   addLighthouseIsland();
   addDock(LIGHTHOUSE_DOCK_POS, LIGHTHOUSE_DOCK_YAW, { segments: 12, plankLength: 2.8, plankWidth: 2.2, spacing: 1.1 });
+  addMineEntryIsland();
+  addDock(MINE_ENTRY_DOCK_POS, MINE_ENTRY_DOCK_YAW, { segments: 11, plankLength: 2.7, plankWidth: 2.1, spacing: 1.1 });
   addLighthouseInterior();
   populateMainIslandNature();
   addBeaconIslandLights();
@@ -2240,7 +2294,8 @@ function resolveBoatShoreCollision(x, z) {
   let collided = false;
   const circles = [
     { cx: 0, cz: 0, radius: BOAT_CLEARANCE_MAIN },
-    { cx: LIGHTHOUSE_POS.x, cz: LIGHTHOUSE_POS.z, radius: BOAT_CLEARANCE_LIGHTHOUSE }
+    { cx: LIGHTHOUSE_POS.x, cz: LIGHTHOUSE_POS.z, radius: BOAT_CLEARANCE_LIGHTHOUSE },
+    { cx: MINE_ENTRY_ISLAND_POS.x, cz: MINE_ENTRY_ISLAND_POS.z, radius: BOAT_CLEARANCE_MINE_ENTRY }
   ];
   for (const circle of circles) {
     const dx = nextX - circle.cx;
@@ -2404,6 +2459,7 @@ function sampleInteriorStairHeight(x, z, currentY) {
 function clampToPlayableGround(x, z, allowMine = false) {
   const MAIN_RADIUS = worldLimit * 1.14;
   const LIGHTHOUSE_RADIUS = 10.9;
+  const MINE_ENTRY_RADIUS = MINE_ENTRY_ISLAND_RADIUS;
   const INTERIOR_RADIUS = INTERIOR_PLAY_RADIUS;
   const mineSwimBlocked = allowMine && blocksMineEscapeSwim(x, z);
   const inSwim = isSwimZone(x, z) && !mineSwimBlocked;
@@ -2412,13 +2468,16 @@ function clampToPlayableGround(x, z, allowMine = false) {
   const dxL = x - LIGHTHOUSE_POS.x;
   const dzL = z - LIGHTHOUSE_POS.z;
   const inLighthouse = Math.hypot(dxL, dzL) <= LIGHTHOUSE_RADIUS;
+  const dxE = x - MINE_ENTRY_ISLAND_POS.x;
+  const dzE = z - MINE_ENTRY_ISLAND_POS.z;
+  const inMineEntryIsland = Math.hypot(dxE, dzE) <= MINE_ENTRY_RADIUS;
   const dxI = x - LIGHTHOUSE_INTERIOR_BASE.x;
   const dzI = z - LIGHTHOUSE_INTERIOR_BASE.z;
   const inInterior = Math.hypot(dxI, dzI) <= INTERIOR_RADIUS;
   const dxM = x - MINE_POS.x;
   const dzM = z - MINE_POS.z;
   const inMine = allowMine && mineDistance(x, z) <= MINE_PLAY_RADIUS;
-  if (inMain || inLighthouse || inInterior || inMine || inSwim) {
+  if (inMain || inLighthouse || inMineEntryIsland || inInterior || inMine || inSwim) {
     return { x, z };
   }
 
@@ -2430,6 +2489,12 @@ function clampToPlayableGround(x, z, allowMine = false) {
     z: LIGHTHOUSE_POS.z + (dzL / lenL) * LIGHTHOUSE_RADIUS
   };
   const distLight = Math.hypot(x - toLight.x, z - toLight.z);
+  const lenE = Math.hypot(dxE, dzE) || 1;
+  const toMineEntry = {
+    x: MINE_ENTRY_ISLAND_POS.x + (dxE / lenE) * MINE_ENTRY_RADIUS,
+    z: MINE_ENTRY_ISLAND_POS.z + (dzE / lenE) * MINE_ENTRY_RADIUS
+  };
+  const distMineEntry = Math.hypot(x - toMineEntry.x, z - toMineEntry.z);
   const lenI = Math.hypot(dxI, dzI) || 1;
   const toInterior = {
     x: LIGHTHOUSE_INTERIOR_BASE.x + (dxI / lenI) * INTERIOR_RADIUS,
@@ -2444,8 +2509,9 @@ function clampToPlayableGround(x, z, allowMine = false) {
   const distMine = allowMine ? Math.hypot(x - toMine.x, z - toMine.z) : Number.POSITIVE_INFINITY;
   const toSwim = clampToRing(x, z, SWIM_MIN_RADIUS, SWIM_MAX_RADIUS);
   const distSwim = mineSwimBlocked ? Number.POSITIVE_INFINITY : Math.hypot(x - toSwim.x, z - toSwim.z);
-  if (distMain <= distLight && distMain <= distInterior && distMain <= distMine && distMain <= distSwim) return toMain;
-  if (distLight <= distInterior && distLight <= distMine && distLight <= distSwim) return toLight;
+  if (distMain <= distLight && distMain <= distMineEntry && distMain <= distInterior && distMain <= distMine && distMain <= distSwim) return toMain;
+  if (distLight <= distMineEntry && distLight <= distInterior && distLight <= distMine && distLight <= distSwim) return toLight;
+  if (distMineEntry <= distInterior && distMineEntry <= distMine && distMineEntry <= distSwim) return toMineEntry;
   if (distInterior <= distMine && distInterior <= distSwim) return toInterior;
   if (distMine <= distSwim) return toMine;
   return toSwim;
@@ -2459,6 +2525,7 @@ function isWaterAt(x, z) {
   // Brute-force dock safety: never treat areas around docks as water.
   if (Math.hypot(x - ISLAND_DOCK_POS.x, z - ISLAND_DOCK_POS.z) <= 16) return false;
   if (Math.hypot(x - LIGHTHOUSE_DOCK_POS.x, z - LIGHTHOUSE_DOCK_POS.z) <= 14) return false;
+  if (Math.hypot(x - MINE_ENTRY_DOCK_POS.x, z - MINE_ENTRY_DOCK_POS.z) <= 14) return false;
 
   // Hard land-safe radius for the main island footprint.
   if (radius <= worldLimit + 8.4) return false;
@@ -2480,6 +2547,10 @@ function isWaterAt(x, z) {
   const dzL = z - LIGHTHOUSE_POS.z;
   const onLighthouseIslandLand = Math.hypot(dxL, dzL) <= 15.4;
   if (onLighthouseIslandLand) return false;
+  const dxE = x - MINE_ENTRY_ISLAND_POS.x;
+  const dzE = z - MINE_ENTRY_ISLAND_POS.z;
+  const onMineEntryIslandLand = Math.hypot(dxE, dzE) <= MINE_ENTRY_ISLAND_RADIUS + 3.4;
+  if (onMineEntryIslandLand) return false;
 
   if (isInDockWalkZone(x, z, 3.0, 2.5)) return false;
 
@@ -2734,7 +2805,11 @@ function swimHintText() {
 }
 
 function canBoardBoat(local) {
-  const nearDock = distance2D(local, ISLAND_DOCK_POS) < 5 || distance2D(local, LIGHTHOUSE_DOCK_POS) < 5;
+  const nearDock = (
+    distance2D(local, ISLAND_DOCK_POS) < 5
+    || distance2D(local, LIGHTHOUSE_DOCK_POS) < 5
+    || distance2D(local, MINE_ENTRY_DOCK_POS) < 5
+  );
   const nearBoat = Boolean(boatState.mesh) && distance2D(local, boatState) < 5.2;
   if (nearBoat) return true;
   if (interactWhileSwimming(local)) return false;
@@ -2899,14 +2974,16 @@ function surfaceHintOverride(local) {
 function isWithinPlayableWorld(x, z, allowMine = false) {
   const MAIN_RADIUS = worldLimit * 1.14;
   const LIGHTHOUSE_RADIUS = 11.7;
+  const MINE_ENTRY_RADIUS = MINE_ENTRY_ISLAND_RADIUS;
   const INTERIOR_RADIUS = INTERIOR_PLAY_RADIUS;
   const mineSwimBlocked = allowMine && blocksMineEscapeSwim(x, z);
   const onMain = Math.hypot(x, z) <= MAIN_RADIUS;
   const onLighthouse = Math.hypot(x - LIGHTHOUSE_POS.x, z - LIGHTHOUSE_POS.z) <= LIGHTHOUSE_RADIUS;
+  const onMineEntryIsland = Math.hypot(x - MINE_ENTRY_ISLAND_POS.x, z - MINE_ENTRY_ISLAND_POS.z) <= MINE_ENTRY_RADIUS;
   const inInterior = Math.hypot(x - LIGHTHOUSE_INTERIOR_BASE.x, z - LIGHTHOUSE_INTERIOR_BASE.z) <= INTERIOR_RADIUS;
   const inMine = allowMine && mineDistance(x, z) <= MINE_PLAY_RADIUS;
   const inSwim = isSwimZone(x, z) && !mineSwimBlocked;
-  return onMain || onLighthouse || inInterior || inMine || inSwim;
+  return onMain || onLighthouse || onMineEntryIsland || inInterior || inMine || inSwim;
 }
 
 function setBeaconVisual(active) {
@@ -5582,7 +5659,11 @@ function updateInteractionHint() {
     interactHintEl.textContent = 'Press E to enter lighthouse';
     return;
   }
-  if (distance2D(local, ISLAND_DOCK_POS) < 6 || distance2D(local, LIGHTHOUSE_DOCK_POS) < 6) {
+  if (
+    distance2D(local, ISLAND_DOCK_POS) < 6
+    || distance2D(local, LIGHTHOUSE_DOCK_POS) < 6
+    || distance2D(local, MINE_ENTRY_DOCK_POS) < 6
+  ) {
     interactHintEl.textContent = 'Press E to board boat';
     return;
   }
@@ -5591,7 +5672,7 @@ function updateInteractionHint() {
     interactHintEl.textContent = 'Press E to toggle beacon';
     return;
   }
-  interactHintEl.textContent = 'Use dock boat to reach lighthouse';
+  interactHintEl.textContent = 'Use the dock boat to reach islands';
 }
 
 function headingText() {
@@ -5640,6 +5721,9 @@ function drawMinimap() {
   minimapCtx.fill();
   minimapCtx.beginPath();
   minimapCtx.arc(center + LIGHTHOUSE_DOCK_POS.x * scale, center + LIGHTHOUSE_DOCK_POS.z * scale, 3, 0, Math.PI * 2);
+  minimapCtx.fill();
+  minimapCtx.beginPath();
+  minimapCtx.arc(center + MINE_ENTRY_DOCK_POS.x * scale, center + MINE_ENTRY_DOCK_POS.z * scale, 3, 0, Math.PI * 2);
   minimapCtx.fill();
   minimapCtx.fillStyle = '#f8fafc';
   minimapCtx.beginPath();

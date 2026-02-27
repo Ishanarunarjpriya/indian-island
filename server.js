@@ -28,6 +28,8 @@ const MINE_POS = { x: 160, z: 30 };
 const MINE_RADIUS = 23;
 const MINE_PLAY_RADIUS = MINE_RADIUS - 1.8;
 const MINE_SWIM_BLOCK_RADIUS = MINE_RADIUS + 34;
+const MINE_ENTRY_ISLAND_POS = { x: -WORLD_LIMIT * 1.95, z: -WORLD_LIMIT * 1.2 };
+const MINE_ENTRY_ISLAND_RADIUS = 11.4;
 const INTERACT_RANGE = 4;
 const CHAT_MAX_LEN = 220;
 const NAME_MAX_LEN = 18;
@@ -101,15 +103,17 @@ function clampToIsland(x, z, limit) {
 
 function clampToPlayableGround(x, z, allowMine = false) {
   const MAIN_RADIUS = WORLD_LIMIT * 1.14;
+  const MINE_ENTRY_RADIUS = MINE_ENTRY_ISLAND_RADIUS;
   const mineDist = Math.hypot(x - MINE_POS.x, z - MINE_POS.z);
   const mineSwimBlocked = allowMine && mineDist <= MINE_SWIM_BLOCK_RADIUS;
   const onMain = Math.hypot(x, z) <= MAIN_RADIUS;
   const onLighthouse = Math.hypot(x - LIGHTHOUSE_POS.x, z - LIGHTHOUSE_POS.z) <= LIGHTHOUSE_RADIUS;
+  const onMineEntryIsland = Math.hypot(x - MINE_ENTRY_ISLAND_POS.x, z - MINE_ENTRY_ISLAND_POS.z) <= MINE_ENTRY_RADIUS;
   const onInterior = Math.hypot(x - INTERIOR_POS.x, z - INTERIOR_POS.z) <= INTERIOR_RADIUS;
   const onMine = allowMine && mineDist <= MINE_PLAY_RADIUS;
   const radius = Math.hypot(x, z);
   const onSwimRing = radius >= SWIM_MIN_RADIUS && radius <= SWIM_MAX_RADIUS && !mineSwimBlocked;
-  if (onMain || onLighthouse || onInterior || onMine || onSwimRing) {
+  if (onMain || onLighthouse || onMineEntryIsland || onInterior || onMine || onSwimRing) {
     return { x, z };
   }
 
@@ -124,6 +128,14 @@ function clampToPlayableGround(x, z, allowMine = false) {
     z: LIGHTHOUSE_POS.z + (dzL / lenL) * LIGHTHOUSE_RADIUS
   };
   const distLighthouse = Math.hypot(x - toLighthouse.x, z - toLighthouse.z);
+  const dxE = x - MINE_ENTRY_ISLAND_POS.x;
+  const dzE = z - MINE_ENTRY_ISLAND_POS.z;
+  const lenE = Math.hypot(dxE, dzE) || 1;
+  const toMineEntry = {
+    x: MINE_ENTRY_ISLAND_POS.x + (dxE / lenE) * MINE_ENTRY_RADIUS,
+    z: MINE_ENTRY_ISLAND_POS.z + (dzE / lenE) * MINE_ENTRY_RADIUS
+  };
+  const distMineEntry = Math.hypot(x - toMineEntry.x, z - toMineEntry.z);
 
   const dxI = x - INTERIOR_POS.x;
   const dzI = z - INTERIOR_POS.z;
@@ -149,8 +161,9 @@ function clampToPlayableGround(x, z, allowMine = false) {
   })();
   const distSwim = mineSwimBlocked ? Number.POSITIVE_INFINITY : Math.hypot(x - toSwim.x, z - toSwim.z);
 
-  if (distMain <= distLighthouse && distMain <= distInterior && distMain <= distSwim && distMain <= distMine) return toMain;
-  if (distLighthouse <= distInterior && distLighthouse <= distSwim && distLighthouse <= distMine) return toLighthouse;
+  if (distMain <= distLighthouse && distMain <= distMineEntry && distMain <= distInterior && distMain <= distSwim && distMain <= distMine) return toMain;
+  if (distLighthouse <= distMineEntry && distLighthouse <= distInterior && distLighthouse <= distSwim && distLighthouse <= distMine) return toLighthouse;
+  if (distMineEntry <= distInterior && distMineEntry <= distSwim && distMineEntry <= distMine) return toMineEntry;
   if (distInterior <= distSwim && distInterior <= distMine) return toInterior;
   if (distMine <= distSwim) return toMine;
   return toSwim;
