@@ -1152,15 +1152,15 @@ function addLighthouseIsland() {
   rail.rotation.x = Math.PI / 2;
   rail.position.y = 13.58;
 
-  const doorFrameMat = new THREE.MeshStandardMaterial({ color: 0x8b5a2b, roughness: 0.88 });
-  const doorWoodMat = new THREE.MeshStandardMaterial({ color: 0x6b4226, roughness: 0.9 });
-  const doorMetalMat = new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.58, metalness: 0.3 });
+  const doorFrameMat = new THREE.MeshStandardMaterial({ color: 0x8b5a2b, roughness: 0.88, side: THREE.DoubleSide });
+  const doorWoodMat = new THREE.MeshStandardMaterial({ color: 0x6b4226, roughness: 0.9, side: THREE.DoubleSide });
+  const doorMetalMat = new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.58, metalness: 0.3, side: THREE.DoubleSide });
   const doorCenterAngle = Math.PI * 0.5;
 
   const frameArc = 1.42;
   const frameStart = doorCenterAngle - frameArc * 0.5;
   const doorFrame = new THREE.Mesh(
-    new THREE.CylinderGeometry(2.08, 2.24, 3.98, 28, 1, true, frameStart, frameArc),
+    new THREE.CylinderGeometry(2.34, 2.5, 3.98, 28, 1, true, frameStart, frameArc),
     doorFrameMat
   );
   doorFrame.position.y = 3.0;
@@ -1170,7 +1170,7 @@ function addLighthouseIsland() {
   const doorVoidArc = 1.2;
   const doorVoidStart = doorCenterAngle - doorVoidArc * 0.5;
   const doorVoid = new THREE.Mesh(
-    new THREE.CylinderGeometry(1.86, 2.0, 3.82, 24, 1, true, doorVoidStart, doorVoidArc),
+    new THREE.CylinderGeometry(2.2, 2.34, 3.82, 24, 1, true, doorVoidStart, doorVoidArc),
     new THREE.MeshBasicMaterial({ color: 0x0b0f17, side: THREE.DoubleSide })
   );
   doorVoid.position.y = 3.0;
@@ -1183,7 +1183,7 @@ function addLighthouseIsland() {
       ? doorCenterAngle - centerGap * 0.5 - panelArc
       : doorCenterAngle + centerGap * 0.5;
     const panel = new THREE.Mesh(
-      new THREE.CylinderGeometry(1.96, 2.1, 3.56, 18, 1, true, panelStart, panelArc),
+      new THREE.CylinderGeometry(2.26, 2.4, 3.56, 18, 1, true, panelStart, panelArc),
       doorWoodMat
     );
     panel.position.y = 3.0;
@@ -1193,7 +1193,7 @@ function addLighthouseIsland() {
 
     for (const yOffset of [1.05, 0, -1.05]) {
       const strap = new THREE.Mesh(
-        new THREE.CylinderGeometry(1.985, 2.125, 0.09, 18, 1, true, panelStart, panelArc),
+        new THREE.CylinderGeometry(2.29, 2.43, 0.09, 18, 1, true, panelStart, panelArc),
         doorMetalMat
       );
       strap.position.y = 3.0 + yOffset;
@@ -1206,7 +1206,7 @@ function addLighthouseIsland() {
       ? doorCenterAngle - centerGap * 0.5 - 0.03
       : doorCenterAngle + centerGap * 0.5 + 0.03;
     const handle = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), doorMetalMat);
-    handle.position.set(Math.cos(handleAngle) * 2.02, 3.05, Math.sin(handleAngle) * 2.02);
+    handle.position.set(Math.cos(handleAngle) * 2.34, 3.05, Math.sin(handleAngle) * 2.34);
     handle.castShadow = true;
     door.add(handle);
 
