@@ -1,0 +1,122 @@
+{
+  "3484fb77-091e-4c3c-a09f-cd4129b02fd4": {
+    "name": "ddahi",
+    "color": "#4737e0",
+    "appearance": {
+      "skin": "#f3cfb3",
+      "shirt": "#4737e0",
+      "pants": "#334155",
+      "shoes": "#111827",
+      "hairStyle": "sidepart",
+      "hairColor": "#2b211c",
+      "faceStyle": "wink",
+      "accessories": []
+    },
+    "x": 0,
+    "y": 0,
+    "z": 0,
+    "progress": {
+      "coins": 0,
+      "pickaxe": "wood",
+      "inventory": {
+        "stone": 0,
+        "iron": 0,
+        "gold": 0,
+        "diamond": 0
+      },
+      "questSeed": 1,
+      "quest": {
+        "id": "q-1771817366646-1",
+        "type": "mine",
+        "resource": "iron",
+        "targetCount": 15,
+        "progress": 0,
+        "rewardCoins": 132,
+        "rewardDiamonds": 0,
+        "title": "Mine 15 iron",
+        "description": "Collect 15 iron ore chunks in the mine.",
+        "status": "available"
+      }
+    }
+  },
+  "acct-devansh": {
+    "name": "devansh",
+    "color": "#9aba91",
+    "appearance": {
+      "skin": "#f3cfb3",
+      "shirt": "#9aba91",
+      "pants": "#334155",
+      "shoes": "#111827",
+      "hairStyle": "short",
+      "hairColor": "#2b211c",
+      "faceStyle": "smile",
+      "accessories": []
+    },
+    "x": 45.101611865889545,
+    "y": 1.35,
+    "z": 10.389226567992853,
+    "progress": {
+      "coins": 0,
+      "pickaxe": "wood",
+      "inventory": {
+        "stone": 0,
+        "iron": 0,
+        "gold": 0,
+        "diamond": 0
+      },
+      "questSeed": 1,
+      "quest": {
+        "id": "q-1771817366646-1",
+        "type": "mine",
+        "resource": "iron",
+        "targetCount": 15,
+        "progress": 0,
+        "rewardCoins": 132,
+        "rewardDiamonds": 0,
+        "title": "Mine 15 iron",
+        "description": "Collect 15 iron ore chunks in the mine.",
+        "status": "available"
+      }
+    }
+  },
+  "acct-devansh_testing": {
+    "name": "devansh_testing",
+    "color": "#55e800",
+    "appearance": {
+      "skin": "#f3cfb3",
+      "shirt": "#55e800",
+      "pants": "#334155",
+      "shoes": "#111827",
+      "hairStyle": "short",
+      "hairColor": "#2b211c",
+      "faceStyle": "smile",
+      "accessories": []
+    },
+    "x": 163.1733532627369,
+    "y": 1.35,
+    "z": 20.819246468812132,
+    "progress": {
+      "coins": 0,
+      "pickaxe": "wood",
+      "inventory": {
+        "stone": 1,
+        "iron": 1,
+        "gold": 0,
+        "diamond": 0
+      },
+      "questSeed": 1,
+      "quest": {
+        "id": "q-1771819663864-1",
+        "type": "mine",
+        "resource": "iron",
+        "targetCount": 15,
+        "progress": 0,
+        "rewardCoins": 132,
+        "rewardDiamonds": 0,
+        "title": "Mine 15 iron",
+        "description": "Collect 15 iron ore chunks in the mine.",
+        "status": "available"
+      }
+    }
+  }
+}
