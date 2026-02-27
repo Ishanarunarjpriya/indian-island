@@ -1156,33 +1156,33 @@ function addLighthouseIsland() {
   const doorWoodMat = new THREE.MeshStandardMaterial({ color: 0x6b4226, roughness: 0.9 });
   const doorMetalMat = new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.58, metalness: 0.3 });
   const doorVoid = new THREE.Mesh(
-    new THREE.PlaneGeometry(1.38, 2.04),
+    new THREE.PlaneGeometry(2.05, 2.6),
     new THREE.MeshBasicMaterial({ color: 0x0b0f17, side: THREE.DoubleSide })
   );
-  doorVoid.position.set(0, 2.24, 1.97);
+  doorVoid.position.set(0, 2.45, 1.97);
 
-  const doorFrameL = new THREE.Mesh(new THREE.BoxGeometry(0.16, 2.2, 0.2), doorFrameMat);
-  doorFrameL.position.set(-0.72, 2.24, 2.0);
+  const doorFrameL = new THREE.Mesh(new THREE.BoxGeometry(0.17, 2.72, 0.2), doorFrameMat);
+  doorFrameL.position.set(-1.03, 2.45, 2.0);
   const doorFrameR = doorFrameL.clone();
-  doorFrameR.position.x = 0.72;
-  const doorFrameTop = new THREE.Mesh(new THREE.BoxGeometry(1.58, 0.17, 0.2), doorFrameMat);
-  doorFrameTop.position.set(0, 3.27, 2.0);
+  doorFrameR.position.x = 1.03;
+  const doorFrameTop = new THREE.Mesh(new THREE.BoxGeometry(2.28, 0.18, 0.2), doorFrameMat);
+  doorFrameTop.position.set(0, 3.72, 2.0);
 
   function makeLighthouseDoor(side = 1) {
     const door = new THREE.Group();
-    const panel = new THREE.Mesh(new THREE.BoxGeometry(0.62, 1.92, 0.1), doorWoodMat);
+    const panel = new THREE.Mesh(new THREE.BoxGeometry(0.96, 2.42, 0.1), doorWoodMat);
     door.add(panel);
-    for (const y of [0.55, -0.55]) {
-      const strap = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.08, 0.11), doorMetalMat);
+    for (const y of [0.72, 0, -0.72]) {
+      const strap = new THREE.Mesh(new THREE.BoxGeometry(0.78, 0.09, 0.11), doorMetalMat);
       strap.position.set(0, y, 0.01);
       door.add(strap);
     }
     const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.024, 0.12, 10), doorMetalMat);
     handle.rotation.z = Math.PI / 2;
-    handle.position.set(-side * 0.18, -0.02, 0.07);
+    handle.position.set(-side * 0.26, 0.03, 0.07);
     door.add(handle);
-    door.position.set(side * 0.34, 2.2, 2.06);
-    door.rotation.y = side * 0.28;
+    door.position.set(side * 0.53, 2.43, 2.06);
+    door.rotation.y = side * 0.34;
     return door;
   }
 
@@ -2126,33 +2126,33 @@ function addMineArea() {
   const doorWoodDarkMat = new THREE.MeshStandardMaterial({ color: 0x5f3b22, roughness: 0.92 });
   const doorMetalMat = new THREE.MeshStandardMaterial({ color: 0x6b7280, roughness: 0.52, metalness: 0.44 });
 
-  const doorFrameLeft = new THREE.Mesh(new THREE.BoxGeometry(0.18, 2.72, 0.22), woodMat);
-  doorFrameLeft.position.set(-1.04, 2.72, 4.08);
+  const doorFrameLeft = new THREE.Mesh(new THREE.BoxGeometry(0.2, 3.0, 0.22), woodMat);
+  doorFrameLeft.position.set(-1.26, 2.82, 4.08);
   const doorFrameRight = doorFrameLeft.clone();
-  doorFrameRight.position.x = 1.04;
-  const doorFrameTop = new THREE.Mesh(new THREE.BoxGeometry(2.24, 0.2, 0.22), woodMat);
-  doorFrameTop.position.set(0, 4.0, 4.08);
+  doorFrameRight.position.x = 1.26;
+  const doorFrameTop = new THREE.Mesh(new THREE.BoxGeometry(2.86, 0.22, 0.22), woodMat);
+  doorFrameTop.position.set(0, 4.23, 4.08);
   mineEntrance.add(doorFrameLeft, doorFrameRight, doorFrameTop);
 
   function makeMineDoor(side = 1) {
     const door = new THREE.Group();
-    const panel = new THREE.Mesh(new THREE.BoxGeometry(0.96, 2.26, 0.11), doorWoodMat);
+    const panel = new THREE.Mesh(new THREE.BoxGeometry(1.12, 2.56, 0.11), doorWoodMat);
     door.add(panel);
 
     for (const y of [0.76, 0, -0.76]) {
-      const strap = new THREE.Mesh(new THREE.BoxGeometry(0.84, 0.11, 0.12), doorMetalMat);
+      const strap = new THREE.Mesh(new THREE.BoxGeometry(0.94, 0.11, 0.12), doorMetalMat);
       strap.position.set(0, y, 0.01);
       door.add(strap);
     }
 
-    const brace = new THREE.Mesh(new THREE.BoxGeometry(0.14, 1.96, 0.08), doorWoodDarkMat);
+    const brace = new THREE.Mesh(new THREE.BoxGeometry(0.14, 2.18, 0.08), doorWoodDarkMat);
     brace.rotation.z = side * 0.52;
     brace.position.set(-side * 0.07, 0, 0.02);
     door.add(brace);
 
     for (const y of [0.72, -0.72]) {
       const hinge = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.2, 0.08), doorMetalMat);
-      hinge.position.set(side * 0.42, y, 0.03);
+      hinge.position.set(side * 0.48, y, 0.03);
       door.add(hinge);
     }
 
@@ -2161,7 +2161,7 @@ function addMineArea() {
     handle.position.set(-side * 0.31, 0.05, 0.08);
     door.add(handle);
 
-    door.position.set(side * 0.53, 2.74, 4.14);
+    door.position.set(side * 0.62, 2.85, 4.14);
     door.rotation.y = side * 0.34;
     return door;
   }
@@ -4416,10 +4416,9 @@ function tryMineNode(local) {
 function tryAutoTeleport(local, now = performance.now()) {
   if (!local || isTeleporting || now < teleportTriggerLockUntil) return false;
 
-  const nearMineEntrance = !inMine && !inLighthouseInterior && !local.onBoat && distance2D(local, MINE_ENTRY_POS) < 6.8;
+  const nearMineEntrance = !inMine && !inLighthouseInterior && !local.onBoat && distance2D(local, MINE_ENTRY_POS) < 2.2;
   const nearLighthouseEntry = !inMine && !inLighthouseInterior && !local.onBoat && (
-    distance2D(local, LIGHTHOUSE_DOOR_POS) < 4.9 ||
-    (distance2D(local, LIGHTHOUSE_POS) < 8.6 && local.y <= GROUND_Y + 1.7)
+    distance2D(local, LIGHTHOUSE_DOOR_POS) < 2.35
   );
 
   if (nearMineEntrance) {
@@ -4462,8 +4461,8 @@ function tryInteract() {
   if (nearMineExit) {
     runTeleportTransition('exit-mine', () => {
       inMine = false;
-      const outDX = Math.sin(MINE_ENTRY_YAW) * 8.4;
-      const outDZ = Math.cos(MINE_ENTRY_YAW) * 8.4;
+      const outDX = Math.sin(MINE_ENTRY_YAW) * 11.5;
+      const outDZ = Math.cos(MINE_ENTRY_YAW) * 11.5;
       teleportLocal(
         local,
         { x: MINE_ENTRY_POS.x + outDX, y: GROUND_Y, z: MINE_ENTRY_POS.z + outDZ },
@@ -5747,7 +5746,7 @@ function updateInteractionHint() {
     interactHintEl.textContent = swimHint;
     return;
   }
-  if (distance2D(local, MINE_ENTRY_POS) < 6.8) {
+  if (distance2D(local, MINE_ENTRY_POS) < 2.45) {
     interactHintEl.textContent = 'Walk into the mine entrance to enter';
     return;
   }
@@ -5774,7 +5773,7 @@ function updateInteractionHint() {
     interactHintEl.textContent = 'Press E at the portal to go back inside lighthouse';
     return;
   }
-  if (distance2D(local, LIGHTHOUSE_DOOR_POS) < 5.2 || distance2D(local, LIGHTHOUSE_POS) < 8.6) {
+  if (distance2D(local, LIGHTHOUSE_DOOR_POS) < 2.6) {
     interactHintEl.textContent = 'Walk through the lighthouse door to enter';
     return;
   }
