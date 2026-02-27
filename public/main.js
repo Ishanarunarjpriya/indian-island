@@ -918,6 +918,8 @@ let lighthouseInteriorPortal = null;
 let lighthouseTopPortal = null;
 let inLighthouseInterior = false;
 let isTeleporting = false;
+const TELEPORT_TRIGGER_COOLDOWN_MS = 900;
+let teleportTriggerLockUntil = 0;
 const dockWalkZones = [];
 
 const boatState = {
@@ -1149,6 +1151,46 @@ function addLighthouseIsland() {
   );
   rail.rotation.x = Math.PI / 2;
   rail.position.y = 13.58;
+
+  const doorFrameMat = new THREE.MeshStandardMaterial({ color: 0x8b5a2b, roughness: 0.88 });
+  const doorWoodMat = new THREE.MeshStandardMaterial({ color: 0x6b4226, roughness: 0.9 });
+  const doorMetalMat = new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.58, metalness: 0.3 });
+  const doorVoid = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.38, 2.04),
+    new THREE.MeshBasicMaterial({ color: 0x0b0f17, side: THREE.DoubleSide })
+  );
+  doorVoid.position.set(0, 2.24, 1.97);
+
+  const doorFrameL = new THREE.Mesh(new THREE.BoxGeometry(0.16, 2.2, 0.2), doorFrameMat);
+  doorFrameL.position.set(-0.72, 2.24, 2.0);
+  const doorFrameR = doorFrameL.clone();
+  doorFrameR.position.x = 0.72;
+  const doorFrameTop = new THREE.Mesh(new THREE.BoxGeometry(1.58, 0.17, 0.2), doorFrameMat);
+  doorFrameTop.position.set(0, 3.27, 2.0);
+
+  function makeLighthouseDoor(side = 1) {
+    const door = new THREE.Group();
+    const panel = new THREE.Mesh(new THREE.BoxGeometry(0.62, 1.92, 0.1), doorWoodMat);
+    door.add(panel);
+    for (const y of [0.55, -0.55]) {
+      const strap = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.08, 0.11), doorMetalMat);
+      strap.position.set(0, y, 0.01);
+      door.add(strap);
+    }
+    const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.024, 0.12, 10), doorMetalMat);
+    handle.rotation.z = Math.PI / 2;
+    handle.position.set(-side * 0.18, -0.02, 0.07);
+    door.add(handle);
+    door.position.set(side * 0.34, 2.2, 2.06);
+    door.rotation.y = side * 0.28;
+    return door;
+  }
+
+  const wallLampL = new THREE.PointLight(0xffd68a, 0.45, 5, 2);
+  wallLampL.position.set(-1.18, 2.95, 2.2);
+  const wallLampR = new THREE.PointLight(0xffd68a, 0.45, 5, 2);
+  wallLampR.position.set(1.18, 2.95, 2.2);
+
   lighthouseTopPortal = new THREE.Group();
   const topPortalDisc = new THREE.Mesh(
     new THREE.CylinderGeometry(0.72, 0.72, 0.1, 24),
@@ -1176,7 +1218,12 @@ function addLighthouseIsland() {
   const topPortalLight = new THREE.PointLight(0x67e8f9, 0.75, 8, 2);
   topPortalLight.position.set(0, 13.55, 0);
   lighthouseTopPortal.add(topPortalLight);
-  lighthouse.add(tower, band, balcony, rail, roof);
+  lighthouse.add(
+    tower, band, balcony, rail, roof,
+    doorVoid, doorFrameL, doorFrameR, doorFrameTop,
+    makeLighthouseDoor(-1), makeLighthouseDoor(1),
+    wallLampL, wallLampR
+  );
   lighthouse.add(lighthouseTopPortal);
   lighthouse.position.set(LIGHTHOUSE_POS.x, 0, LIGHTHOUSE_POS.z);
   scene.add(lighthouse);
@@ -2075,6 +2122,65 @@ function addMineArea() {
   signText.position.set(0, 4.62, 4.18);
   mineEntrance.add(postL, postR, beam, signText);
 
+  const doorWoodMat = new THREE.MeshStandardMaterial({ color: 0x7b4a26, roughness: 0.9 });
+  const doorWoodDarkMat = new THREE.MeshStandardMaterial({ color: 0x5f3b22, roughness: 0.92 });
+  const doorMetalMat = new THREE.MeshStandardMaterial({ color: 0x6b7280, roughness: 0.52, metalness: 0.44 });
+
+  const doorFrameLeft = new THREE.Mesh(new THREE.BoxGeometry(0.18, 2.72, 0.22), woodMat);
+  doorFrameLeft.position.set(-1.04, 2.72, 4.08);
+  const doorFrameRight = doorFrameLeft.clone();
+  doorFrameRight.position.x = 1.04;
+  const doorFrameTop = new THREE.Mesh(new THREE.BoxGeometry(2.24, 0.2, 0.22), woodMat);
+  doorFrameTop.position.set(0, 4.0, 4.08);
+  mineEntrance.add(doorFrameLeft, doorFrameRight, doorFrameTop);
+
+  function makeMineDoor(side = 1) {
+    const door = new THREE.Group();
+    const panel = new THREE.Mesh(new THREE.BoxGeometry(0.96, 2.26, 0.11), doorWoodMat);
+    door.add(panel);
+
+    for (const y of [0.76, 0, -0.76]) {
+      const strap = new THREE.Mesh(new THREE.BoxGeometry(0.84, 0.11, 0.12), doorMetalMat);
+      strap.position.set(0, y, 0.01);
+      door.add(strap);
+    }
+
+    const brace = new THREE.Mesh(new THREE.BoxGeometry(0.14, 1.96, 0.08), doorWoodDarkMat);
+    brace.rotation.z = side * 0.52;
+    brace.position.set(-side * 0.07, 0, 0.02);
+    door.add(brace);
+
+    for (const y of [0.72, -0.72]) {
+      const hinge = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.2, 0.08), doorMetalMat);
+      hinge.position.set(side * 0.42, y, 0.03);
+      door.add(hinge);
+    }
+
+    const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.2, 10), doorMetalMat);
+    handle.rotation.z = Math.PI / 2;
+    handle.position.set(-side * 0.31, 0.05, 0.08);
+    door.add(handle);
+
+    door.position.set(side * 0.53, 2.74, 4.14);
+    door.rotation.y = side * 0.34;
+    return door;
+  }
+
+  mineEntrance.add(makeMineDoor(-1), makeMineDoor(1));
+
+  for (const side of [-1, 1]) {
+    const hook = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.4), doorMetalMat);
+    hook.position.set(side * 1.2, 3.82, 4.2);
+    const lantern = new THREE.Mesh(
+      new THREE.BoxGeometry(0.24, 0.34, 0.24),
+      new THREE.MeshStandardMaterial({ color: 0xf4d58d, emissive: 0x7c5a1d, emissiveIntensity: 0.5, roughness: 0.55 })
+    );
+    lantern.position.set(side * 1.2, 3.58, 4.27);
+    const lanternLight = new THREE.PointLight(0xffd68a, 0.85, 8, 2);
+    lanternLight.position.set(side * 1.2, 3.6, 4.28);
+    mineEntrance.add(hook, lantern, lanternLight);
+  }
+
   const leftRail = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.08, 8.6), railMat);
   leftRail.position.set(-0.57, 1.28, 7.4);
   const rightRail = leftRail.clone();
@@ -2259,6 +2365,7 @@ function setTeleportTheme(type) {
 function runTeleportTransition(type, callback) {
   if (isTeleporting) return;
   isTeleporting = true;
+  teleportTriggerLockUntil = Math.max(teleportTriggerLockUntil, performance.now() + 320);
   setTeleportTheme(type);
   renderer.domElement.style.transition = 'filter 240ms ease, transform 240ms ease';
   renderer.domElement.style.filter = 'blur(2px) saturate(1.15) brightness(1.08)';
@@ -2283,6 +2390,7 @@ function runTeleportTransition(type, callback) {
     renderer.domElement.style.filter = 'none';
     renderer.domElement.style.transform = 'scale(1)';
     window.setTimeout(() => {
+      teleportTriggerLockUntil = Math.max(teleportTriggerLockUntil, performance.now() + TELEPORT_TRIGGER_COOLDOWN_MS);
       isTeleporting = false;
     }, 240);
   }, 280);
@@ -4305,6 +4413,37 @@ function tryMineNode(local) {
   return true;
 }
 
+function tryAutoTeleport(local, now = performance.now()) {
+  if (!local || isTeleporting || now < teleportTriggerLockUntil) return false;
+
+  const nearMineEntrance = !inMine && !inLighthouseInterior && !local.onBoat && distance2D(local, MINE_ENTRY_POS) < 6.8;
+  const nearLighthouseEntry = !inMine && !inLighthouseInterior && !local.onBoat && (
+    distance2D(local, LIGHTHOUSE_DOOR_POS) < 4.9 ||
+    (distance2D(local, LIGHTHOUSE_POS) < 8.6 && local.y <= GROUND_Y + 1.7)
+  );
+
+  if (nearMineEntrance) {
+    runTeleportTransition('enter-mine', () => {
+      inMine = true;
+      teleportLocal(local, { x: MINE_POS.x + 0.8, y: GROUND_Y, z: MINE_POS.z + 11.2 }, Math.PI);
+    });
+    lastInteractAt = now;
+    return true;
+  }
+
+  if (nearLighthouseEntry) {
+    runTeleportTransition('enter-lighthouse', () => {
+      inLighthouseInterior = true;
+      if (lighthouseInteriorGroup) lighthouseInteriorGroup.visible = true;
+      teleportLocal(local, { x: INTERIOR_ENTRY_POS.x, y: GROUND_Y, z: INTERIOR_ENTRY_POS.z }, Math.PI);
+    });
+    lastInteractAt = now;
+    return true;
+  }
+
+  return false;
+}
+
 function tryInteract() {
   if (!isAuthenticated || menuOpen || !customizeModalEl.classList.contains('hidden')) return;
   if (npcDialogueOpen) {
@@ -4315,29 +4454,16 @@ function tryInteract() {
   if (now - lastInteractAt < 220) return;
   const local = players.get(localPlayerId);
   if (!local || isTeleporting) return;
-
-  const nearLighthouseEntry =
-    distance2D(local, LIGHTHOUSE_DOOR_POS) < 4.9 ||
-    (distance2D(local, LIGHTHOUSE_POS) < 8.6 && local.y <= GROUND_Y + 1.7);
-  const nearInteriorPortal = inLighthouseInterior && distance2D(local, INTERIOR_EXIT_PORTAL_POS) < 3.1;
-  const nearTopPortal = !inLighthouseInterior && !local.onBoat && distance2D(local, LIGHTHOUSE_TOP_POS) < 2.9 && local.y > 11.6;
-  const nearMineEntrance = !inMine && !inLighthouseInterior && distance2D(local, MINE_ENTRY_POS) < 6.8;
+  if (tryAutoTeleport(local, now)) return;
   const nearMineExit = inMine && distance2D(local, MINE_EXIT_POS) < 3.1;
-
-  if (nearMineEntrance) {
-    runTeleportTransition('enter-mine', () => {
-      inMine = true;
-      teleportLocal(local, { x: MINE_POS.x + 0.8, y: GROUND_Y, z: MINE_POS.z + 8.8 }, Math.PI);
-    });
-    lastInteractAt = now;
-    return;
-  }
+  const nearInteriorPortal = inLighthouseInterior && distance2D(local, INTERIOR_EXIT_PORTAL_POS) < 3.1;
+  const nearTopPortal = !inLighthouseInterior && !local.onBoat && distance2D(local, LIGHTHOUSE_TOP_POS) < 1.25 && local.y > 11.6;
 
   if (nearMineExit) {
     runTeleportTransition('exit-mine', () => {
       inMine = false;
-      const outDX = Math.sin(MINE_ENTRY_YAW) * 5.2;
-      const outDZ = Math.cos(MINE_ENTRY_YAW) * 5.2;
+      const outDX = Math.sin(MINE_ENTRY_YAW) * 8.4;
+      const outDZ = Math.cos(MINE_ENTRY_YAW) * 8.4;
       teleportLocal(
         local,
         { x: MINE_ENTRY_POS.x + outDX, y: GROUND_Y, z: MINE_ENTRY_POS.z + outDZ },
@@ -4363,21 +4489,11 @@ function tryInteract() {
     return;
   }
 
-  if (!local.onBoat && nearLighthouseEntry && !inLighthouseInterior) {
-    runTeleportTransition('enter-lighthouse', () => {
-      inLighthouseInterior = true;
-      if (lighthouseInteriorGroup) lighthouseInteriorGroup.visible = true;
-      teleportLocal(local, { x: INTERIOR_ENTRY_POS.x, y: GROUND_Y, z: INTERIOR_ENTRY_POS.z }, Math.PI);
-    });
-    lastInteractAt = now;
-    return;
-  }
-
   if (nearInteriorPortal) {
     runTeleportTransition('exit-lighthouse', () => {
       inLighthouseInterior = false;
       if (lighthouseInteriorGroup) lighthouseInteriorGroup.visible = false;
-      teleportLocal(local, { x: LIGHTHOUSE_TOP_POS.x, y: LIGHTHOUSE_TOP_POS.y, z: LIGHTHOUSE_TOP_POS.z }, Math.PI);
+      teleportLocal(local, { x: LIGHTHOUSE_TOP_POS.x + 2.2, y: LIGHTHOUSE_TOP_POS.y, z: LIGHTHOUSE_TOP_POS.z + 0.2 }, Math.PI * 0.5);
     });
     lastInteractAt = now;
     return;
@@ -4387,7 +4503,7 @@ function tryInteract() {
     runTeleportTransition('enter-lighthouse', () => {
       inLighthouseInterior = true;
       if (lighthouseInteriorGroup) lighthouseInteriorGroup.visible = true;
-      teleportLocal(local, { x: INTERIOR_EXIT_PORTAL_POS.x, y: INTERIOR_EXIT_PORTAL_POS.y, z: INTERIOR_EXIT_PORTAL_POS.z }, Math.PI);
+      teleportLocal(local, { x: INTERIOR_TOP_POS.x, y: INTERIOR_TOP_POS.y, z: INTERIOR_TOP_POS.z }, Math.PI);
     });
     lastInteractAt = now;
     return;
@@ -5494,6 +5610,9 @@ function updateLocalPlayer(delta, nowMs) {
   } else {
     rotatePlayerTowards(local, local.targetYaw ?? local.facingYaw ?? 0, delta, TURN_SPEED * 0.65);
   }
+  if (tryAutoTeleport(local, nowMs)) {
+    return;
+  }
   if (staminaFillEl) {
     const pct = Math.round((stamina / STAMINA_MAX) * 100);
     staminaFillEl.style.width = `${pct}%`;
@@ -5600,7 +5719,7 @@ function updateInteractionHint() {
   }
   if (inMine) {
     if (distance2D(local, MINE_EXIT_POS) < 3.1) {
-      interactHintEl.textContent = 'Press E to exit mine';
+      interactHintEl.textContent = 'Press E at the glowing marker to exit mine';
       return;
     }
     if (distance2D(local, QUEST_NPC_POS) < 3.4) {
@@ -5629,7 +5748,7 @@ function updateInteractionHint() {
     return;
   }
   if (distance2D(local, MINE_ENTRY_POS) < 6.8) {
-    interactHintEl.textContent = 'Press E to enter mine';
+    interactHintEl.textContent = 'Walk into the mine entrance to enter';
     return;
   }
   if (distance2D(local, QUEST_NPC_POS) < 3.4) {
@@ -5645,18 +5764,18 @@ function updateInteractionHint() {
   }
   if (inLighthouseInterior) {
     if (distance2D(local, INTERIOR_EXIT_PORTAL_POS) < 3.1) {
-      interactHintEl.textContent = 'Press E on the glowing marker to go to lighthouse top';
+      interactHintEl.textContent = 'Press E at the glowing marker to go to lighthouse top';
       return;
     }
     interactHintEl.textContent = 'Climb the stairs to the glowing marker at the top';
     return;
   }
-  if (distance2D(local, LIGHTHOUSE_TOP_POS) < 3 && local.y > 11.6) {
-    interactHintEl.textContent = 'Press E on portal to go back inside lighthouse';
+  if (distance2D(local, LIGHTHOUSE_TOP_POS) < 1.35 && local.y > 11.6) {
+    interactHintEl.textContent = 'Press E at the portal to go back inside lighthouse';
     return;
   }
   if (distance2D(local, LIGHTHOUSE_DOOR_POS) < 5.2 || distance2D(local, LIGHTHOUSE_POS) < 8.6) {
-    interactHintEl.textContent = 'Press E to enter lighthouse';
+    interactHintEl.textContent = 'Walk through the lighthouse door to enter';
     return;
   }
   if (
