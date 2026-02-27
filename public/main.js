@@ -2114,8 +2114,8 @@ function addMineArea() {
   const tieMat = new THREE.MeshStandardMaterial({ color: 0x8d5a34, roughness: 0.9 });
 
   const rockBase = new THREE.Mesh(new THREE.DodecahedronGeometry(2.6, 0), rockMatOuter);
-  rockBase.position.set(0, 3.8, 1.15);
-  rockBase.scale.set(2.8, 2.4, 2.25);
+  rockBase.position.set(0, 3.8, 0.75);
+  rockBase.scale.set(2.8, 2.4, 1.92);
   mineEntrance.add(rockBase);
 
   const rockLeft = new THREE.Mesh(new THREE.DodecahedronGeometry(1.45, 0), rockMatMid);
@@ -2127,8 +2127,8 @@ function addMineArea() {
   mineEntrance.add(rockRight);
 
   const rockBottom = new THREE.Mesh(new THREE.DodecahedronGeometry(1.55, 0), rockMatOuter);
-  rockBottom.position.set(0, 1.42, 2.95);
-  rockBottom.scale.set(2.1, 0.7, 1.35);
+  rockBottom.position.set(0, 1.42, 2.62);
+  rockBottom.scale.set(2.1, 0.7, 1.15);
   mineEntrance.add(rockBottom);
 
   const caveOuter = new THREE.Mesh(new THREE.CylinderGeometry(1.45, 1.7, 3.6, 16, 1, false, 0, Math.PI), caveDarkMat);
@@ -2144,13 +2144,13 @@ function addMineArea() {
   mineEntrance.add(caveVoid);
 
   const postL = new THREE.Mesh(new THREE.BoxGeometry(0.27, 3.25, 0.22), woodMat);
-  postL.position.set(-1.14, 3.05, 4.02);
+  postL.position.set(-1.14, 3.05, 4.52);
   const postR = postL.clone();
   postR.position.x = 1.14;
   const beam = new THREE.Mesh(new THREE.BoxGeometry(2.68, 0.3, 0.24), woodMat);
-  beam.position.set(0, 4.62, 4.02);
+  beam.position.set(0, 4.62, 4.52);
   const signText = makeTextSign('MINE', 2.25, 0.48, '#c27a45', '#4a1d12');
-  signText.position.set(0, 4.62, 4.18);
+  signText.position.set(0, 4.62, 4.68);
   mineEntrance.add(postL, postR, beam, signText);
 
   const doorWoodMat = new THREE.MeshStandardMaterial({ color: 0x7b4a26, roughness: 0.9 });
@@ -2158,11 +2158,11 @@ function addMineArea() {
   const doorMetalMat = new THREE.MeshStandardMaterial({ color: 0x6b7280, roughness: 0.52, metalness: 0.44 });
 
   const doorFrameLeft = new THREE.Mesh(new THREE.BoxGeometry(0.2, 3.28, 0.22), woodMat);
-  doorFrameLeft.position.set(-1.34, 2.96, 4.08);
+  doorFrameLeft.position.set(-1.34, 2.96, 5.22);
   const doorFrameRight = doorFrameLeft.clone();
   doorFrameRight.position.x = 1.34;
   const doorFrameTop = new THREE.Mesh(new THREE.BoxGeometry(3.02, 0.22, 0.22), woodMat);
-  doorFrameTop.position.set(0, 4.5, 4.08);
+  doorFrameTop.position.set(0, 4.5, 5.22);
   mineEntrance.add(doorFrameLeft, doorFrameRight, doorFrameTop);
 
   function makeMineDoor(side = 1) {
@@ -2192,7 +2192,7 @@ function addMineArea() {
     handle.position.set(-side * 0.31, 0.05, 0.08);
     door.add(handle);
 
-    door.position.set(side * 0.66, 2.98, 4.14);
+    door.position.set(side * 0.66, 2.98, 5.28);
     door.rotation.y = side * 0.34;
     return door;
   }
@@ -2201,30 +2201,30 @@ function addMineArea() {
 
   for (const side of [-1, 1]) {
     const hook = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.4), doorMetalMat);
-    hook.position.set(side * 1.2, 3.82, 4.2);
+    hook.position.set(side * 1.2, 3.82, 5.34);
     const lantern = new THREE.Mesh(
       new THREE.BoxGeometry(0.24, 0.34, 0.24),
       new THREE.MeshStandardMaterial({ color: 0xf4d58d, emissive: 0x7c5a1d, emissiveIntensity: 0.5, roughness: 0.55 })
     );
-    lantern.position.set(side * 1.2, 3.58, 4.27);
+    lantern.position.set(side * 1.2, 3.58, 5.41);
     const lanternLight = new THREE.PointLight(0xffd68a, 0.85, 8, 2);
-    lanternLight.position.set(side * 1.2, 3.6, 4.28);
+    lanternLight.position.set(side * 1.2, 3.6, 5.42);
     mineEntrance.add(hook, lantern, lanternLight);
   }
 
   const leftRail = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.08, 8.6), railMat);
-  leftRail.position.set(-0.57, 1.28, 7.4);
+  leftRail.position.set(-0.57, 1.16, 8.0);
   const rightRail = leftRail.clone();
   rightRail.position.x = 0.57;
   mineEntrance.add(leftRail, rightRail);
   for (let i = 0; i < 12; i += 1) {
     const tie = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.08, 0.2), tieMat);
-    tie.position.set(0, 1.24, 3.95 + i * 0.72);
+    tie.position.set(0, 1.12, 4.55 + i * 0.72);
     mineEntrance.add(tie);
   }
 
   const cart = new THREE.Group();
-  cart.position.set(0, 1.55, 7.2);
+  cart.position.set(0, 1.2, 9.05);
   const cartWoodMat = new THREE.MeshStandardMaterial({ color: 0x7a4b2a, roughness: 0.88 });
   const cartMetalMat = new THREE.MeshStandardMaterial({ color: 0x6b7280, roughness: 0.54, metalness: 0.36 });
   const cartBed = new THREE.Mesh(new THREE.BoxGeometry(1.18, 0.3, 1.5), cartWoodMat);
@@ -2427,9 +2427,9 @@ function setTeleportTheme(type) {
 function runTeleportTransition(type, callback) {
   if (isTeleporting) return;
   isTeleporting = true;
-  teleportTriggerLockUntil = Math.max(teleportTriggerLockUntil, performance.now() + 320);
+  teleportTriggerLockUntil = Math.max(teleportTriggerLockUntil, performance.now() + 420);
   setTeleportTheme(type);
-  renderer.domElement.style.transition = 'filter 240ms ease, transform 240ms ease';
+  renderer.domElement.style.transition = 'filter 320ms ease, transform 320ms ease';
   renderer.domElement.style.filter = 'blur(2px) saturate(1.15) brightness(1.08)';
   renderer.domElement.style.transform = (type === 'exit-lighthouse' || type === 'exit-mine') ? 'scale(0.985)' : 'scale(1.02)';
   teleportOverlay.style.opacity = '1';
@@ -2454,8 +2454,8 @@ function runTeleportTransition(type, callback) {
     window.setTimeout(() => {
       teleportTriggerLockUntil = Math.max(teleportTriggerLockUntil, performance.now() + TELEPORT_TRIGGER_COOLDOWN_MS);
       isTeleporting = false;
-    }, 240);
-  }, 280);
+    }, 320);
+  }, 380);
 }
 
 function resolveBoatShoreCollision(x, z) {
