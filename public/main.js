@@ -1156,32 +1156,32 @@ function addLighthouseIsland() {
   const doorWoodMat = new THREE.MeshStandardMaterial({ color: 0x6b4226, roughness: 0.9 });
   const doorMetalMat = new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.58, metalness: 0.3 });
   const doorVoid = new THREE.Mesh(
-    new THREE.PlaneGeometry(2.2, 2.9),
+    new THREE.PlaneGeometry(2.9, 3.8),
     new THREE.MeshBasicMaterial({ color: 0x0b0f17, side: THREE.DoubleSide })
   );
-  doorVoid.position.set(0, 2.58, 1.97);
+  doorVoid.position.set(0, 3.0, 1.97);
 
-  const doorFrameL = new THREE.Mesh(new THREE.BoxGeometry(0.17, 3.02, 0.2), doorFrameMat);
-  doorFrameL.position.set(-1.1, 2.58, 2.0);
+  const doorFrameL = new THREE.Mesh(new THREE.BoxGeometry(0.2, 3.9, 0.2), doorFrameMat);
+  doorFrameL.position.set(-1.45, 3.0, 2.0);
   const doorFrameR = doorFrameL.clone();
-  doorFrameR.position.x = 1.1;
-  const doorFrameTop = new THREE.Mesh(new THREE.BoxGeometry(2.42, 0.18, 0.2), doorFrameMat);
-  doorFrameTop.position.set(0, 4.0, 2.0);
+  doorFrameR.position.x = 1.45;
+  const doorFrameTop = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.2, 0.2), doorFrameMat);
+  doorFrameTop.position.set(0, 4.95, 2.0);
 
   function makeLighthouseDoor(side = 1) {
     const door = new THREE.Group();
-    const panel = new THREE.Mesh(new THREE.BoxGeometry(1.05, 2.72, 0.1), doorWoodMat);
+    const panel = new THREE.Mesh(new THREE.BoxGeometry(1.38, 3.55, 0.1), doorWoodMat);
     door.add(panel);
-    for (const y of [0.84, 0, -0.84]) {
-      const strap = new THREE.Mesh(new THREE.BoxGeometry(0.88, 0.09, 0.11), doorMetalMat);
+    for (const y of [1.05, 0, -1.05]) {
+      const strap = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.09, 0.11), doorMetalMat);
       strap.position.set(0, y, 0.01);
       door.add(strap);
     }
     const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.024, 0.12, 10), doorMetalMat);
     handle.rotation.z = Math.PI / 2;
-    handle.position.set(-side * 0.26, 0.03, 0.07);
+    handle.position.set(-side * 0.36, 0.06, 0.07);
     door.add(handle);
-    door.position.set(side * 0.56, 2.58, 2.06);
+    door.position.set(side * 0.74, 3.0, 2.06);
     door.rotation.y = side * 0.34;
     return door;
   }
