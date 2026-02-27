@@ -2401,11 +2401,12 @@ function sampleInteriorStairHeight(x, z, currentY) {
   return THREE.MathUtils.clamp(bestY, GROUND_Y, INTERIOR_TOP_POS.y + 0.12);
 }
 
-function clampToPlayableGround(x, z) {
+function clampToPlayableGround(x, z, allowMine = false) {
   const MAIN_RADIUS = worldLimit * 1.14;
   const LIGHTHOUSE_RADIUS = 10.9;
   const INTERIOR_RADIUS = INTERIOR_PLAY_RADIUS;
-  const inSwim = isSwimZone(x, z) && !blocksMineEscapeSwim(x, z);
+  const mineSwimBlocked = allowMine && blocksMineEscapeSwim(x, z);
+  const inSwim = isSwimZone(x, z) && !mineSwimBlocked;
 
   const inMain = Math.hypot(x, z) <= MAIN_RADIUS;
   const dxL = x - LIGHTHOUSE_POS.x;
@@ -2416,7 +2417,7 @@ function clampToPlayableGround(x, z) {
   const inInterior = Math.hypot(dxI, dzI) <= INTERIOR_RADIUS;
   const dxM = x - MINE_POS.x;
   const dzM = z - MINE_POS.z;
-  const inMine = mineDistance(x, z) <= MINE_PLAY_RADIUS;
+  const inMine = allowMine && mineDistance(x, z) <= MINE_PLAY_RADIUS;
   if (inMain || inLighthouse || inInterior || inMine || inSwim) {
     return { x, z };
   }
@@ -2440,9 +2441,9 @@ function clampToPlayableGround(x, z) {
     x: MINE_POS.x + (dxM / lenM) * MINE_PLAY_RADIUS,
     z: MINE_POS.z + (dzM / lenM) * MINE_PLAY_RADIUS
   };
-  const distMine = Math.hypot(x - toMine.x, z - toMine.z);
+  const distMine = allowMine ? Math.hypot(x - toMine.x, z - toMine.z) : Number.POSITIVE_INFINITY;
   const toSwim = clampToRing(x, z, SWIM_MIN_RADIUS, SWIM_MAX_RADIUS);
-  const distSwim = blocksMineEscapeSwim(x, z) ? Number.POSITIVE_INFINITY : Math.hypot(x - toSwim.x, z - toSwim.z);
+  const distSwim = mineSwimBlocked ? Number.POSITIVE_INFINITY : Math.hypot(x - toSwim.x, z - toSwim.z);
   if (distMain <= distLight && distMain <= distInterior && distMain <= distMine && distMain <= distSwim) return toMain;
   if (distLight <= distInterior && distLight <= distMine && distLight <= distSwim) return toLight;
   if (distInterior <= distMine && distInterior <= distSwim) return toInterior;
@@ -2453,7 +2454,7 @@ function clampToPlayableGround(x, z) {
 function isWaterAt(x, z) {
   const radius = Math.hypot(x, z);
   if (radius > SWIM_MAX_RADIUS) return false;
-  if (blocksMineEscapeSwim(x, z)) return false;
+  if (inMine && blocksMineEscapeSwim(x, z)) return false;
 
   // Brute-force dock safety: never treat areas around docks as water.
   if (Math.hypot(x - ISLAND_DOCK_POS.x, z - ISLAND_DOCK_POS.z) <= 16) return false;
@@ -2685,8 +2686,8 @@ function swimSyncRange(x, z) {
   return isWaterAt(x, z);
 }
 
-function isServerSyncRange(x, z) {
-  return isWithinPlayableWorld(x, z) || swimSyncRange(x, z);
+function isServerSyncRange(x, z, allowMine = false) {
+  return isWithinPlayableWorld(x, z, allowMine) || swimSyncRange(x, z);
 }
 
 function canEnterSwim(local) {
@@ -2741,7 +2742,7 @@ function canBoardBoat(local) {
 }
 
 function movementClamp(local) {
-  const bounded = clampToPlayableGround(local.x, local.z);
+  const bounded = clampToPlayableGround(local.x, local.z, inMine);
   const collided = resolveWorldCollisions(bounded.x, bounded.z, local.y);
   let nextX = collided.x;
   let nextZ = collided.z;
@@ -2768,7 +2769,7 @@ function localStepMovementEnd(local, delta, nowMs, prevY) {
 }
 
 function serverMovementRange(local) {
-  return isServerSyncRange(local.x, local.z);
+  return isServerSyncRange(local.x, local.z, inMine);
 }
 
 function finalizeRemoteMovement(player) {
@@ -2895,15 +2896,16 @@ function surfaceHintOverride(local) {
   return null;
 }
 
-function isWithinPlayableWorld(x, z) {
+function isWithinPlayableWorld(x, z, allowMine = false) {
   const MAIN_RADIUS = worldLimit * 1.14;
   const LIGHTHOUSE_RADIUS = 11.7;
   const INTERIOR_RADIUS = INTERIOR_PLAY_RADIUS;
+  const mineSwimBlocked = allowMine && blocksMineEscapeSwim(x, z);
   const onMain = Math.hypot(x, z) <= MAIN_RADIUS;
   const onLighthouse = Math.hypot(x - LIGHTHOUSE_POS.x, z - LIGHTHOUSE_POS.z) <= LIGHTHOUSE_RADIUS;
   const inInterior = Math.hypot(x - LIGHTHOUSE_INTERIOR_BASE.x, z - LIGHTHOUSE_INTERIOR_BASE.z) <= INTERIOR_RADIUS;
-  const inMine = mineDistance(x, z) <= MINE_PLAY_RADIUS;
-  const inSwim = isSwimZone(x, z) && !blocksMineEscapeSwim(x, z);
+  const inMine = allowMine && mineDistance(x, z) <= MINE_PLAY_RADIUS;
+  const inSwim = isSwimZone(x, z) && !mineSwimBlocked;
   return onMain || onLighthouse || inInterior || inMine || inSwim;
 }
 
@@ -4374,8 +4376,11 @@ socket.on('init', (payload) => {
 
   const local = payload.players.find((player) => player.id === localPlayerId);
   if (local) {
+    inMine = local.inMine === true || mineDistance(local.x, local.z) <= MINE_PLAY_RADIUS;
     applyPlayerCustomization(local.id, local.name, local.color, local.appearance);
     customizeStatusEl.textContent = `Loaded account avatar for ${local.name || 'Player'}.`;
+  } else {
+    inMine = false;
   }
   applyProgressState(payload.progress || null);
 
@@ -5424,7 +5429,7 @@ function updateLocalPlayer(delta, nowMs) {
       Math.abs(local.y - prevY) > 0.01 ||
       Math.abs(local.z - prevZ) > 0.01;
     if (changed && inServerSyncRange) {
-      socket.emit('move', { x: local.x, y: local.y, z: local.z });
+      socket.emit('move', { x: local.x, y: local.y, z: local.z, inMine });
       lastSentAt = nowMs;
     }
   }

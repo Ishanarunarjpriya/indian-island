@@ -99,15 +99,16 @@ function clampToIsland(x, z, limit) {
   return { x: x * scale, z: z * scale };
 }
 
-function clampToPlayableGround(x, z) {
+function clampToPlayableGround(x, z, allowMine = false) {
   const MAIN_RADIUS = WORLD_LIMIT * 1.14;
   const mineDist = Math.hypot(x - MINE_POS.x, z - MINE_POS.z);
+  const mineSwimBlocked = allowMine && mineDist <= MINE_SWIM_BLOCK_RADIUS;
   const onMain = Math.hypot(x, z) <= MAIN_RADIUS;
   const onLighthouse = Math.hypot(x - LIGHTHOUSE_POS.x, z - LIGHTHOUSE_POS.z) <= LIGHTHOUSE_RADIUS;
   const onInterior = Math.hypot(x - INTERIOR_POS.x, z - INTERIOR_POS.z) <= INTERIOR_RADIUS;
-  const onMine = mineDist <= MINE_PLAY_RADIUS;
+  const onMine = allowMine && mineDist <= MINE_PLAY_RADIUS;
   const radius = Math.hypot(x, z);
-  const onSwimRing = radius >= SWIM_MIN_RADIUS && radius <= SWIM_MAX_RADIUS && mineDist > MINE_SWIM_BLOCK_RADIUS;
+  const onSwimRing = radius >= SWIM_MIN_RADIUS && radius <= SWIM_MAX_RADIUS && !mineSwimBlocked;
   if (onMain || onLighthouse || onInterior || onMine || onSwimRing) {
     return { x, z };
   }
@@ -139,14 +140,14 @@ function clampToPlayableGround(x, z) {
     x: MINE_POS.x + (dxM / lenM) * MINE_PLAY_RADIUS,
     z: MINE_POS.z + (dzM / lenM) * MINE_PLAY_RADIUS
   };
-  const distMine = Math.hypot(x - toMine.x, z - toMine.z);
+  const distMine = allowMine ? Math.hypot(x - toMine.x, z - toMine.z) : Number.POSITIVE_INFINITY;
   const toSwim = (() => {
     const len = Math.hypot(x, z) || 1;
     const target = len < SWIM_MIN_RADIUS ? SWIM_MIN_RADIUS : SWIM_MAX_RADIUS;
     const scale = target / len;
     return { x: x * scale, z: z * scale };
   })();
-  const distSwim = mineDist <= MINE_SWIM_BLOCK_RADIUS ? Number.POSITIVE_INFINITY : Math.hypot(x - toSwim.x, z - toSwim.z);
+  const distSwim = mineSwimBlocked ? Number.POSITIVE_INFINITY : Math.hypot(x - toSwim.x, z - toSwim.z);
 
   if (distMain <= distLighthouse && distMain <= distInterior && distMain <= distSwim && distMain <= distMine) return toMain;
   if (distLighthouse <= distInterior && distLighthouse <= distSwim && distLighthouse <= distMine) return toLighthouse;
@@ -493,10 +494,13 @@ function spawnPlayer(socket, profileId, username) {
   const savedY = Number(profile?.y);
   const savedZ = Number(profile?.z);
   const hasSavedPosition = Number.isFinite(savedX) && Number.isFinite(savedY) && Number.isFinite(savedZ);
+  const savedInMine = hasSavedPosition
+    && Math.hypot(savedX - MINE_POS.x, savedZ - MINE_POS.z) <= MINE_PLAY_RADIUS;
   const boundedSaved = hasSavedPosition
     ? clampToPlayableGround(
       clamp(savedX, -PLAYABLE_BOUND, PLAYABLE_BOUND),
-      clamp(savedZ, -PLAYABLE_BOUND, PLAYABLE_BOUND)
+      clamp(savedZ, -PLAYABLE_BOUND, PLAYABLE_BOUND),
+      savedInMine
     )
     : null;
   const spawn = {
@@ -506,6 +510,7 @@ function spawnPlayer(socket, profileId, username) {
     x: boundedSaved ? boundedSaved.x : spawnPoint.x,
     y: hasSavedPosition ? clamp(savedY, SWIM_MIN_Y, 30) : ISLAND_SURFACE_Y,
     z: boundedSaved ? boundedSaved.z : spawnPoint.z,
+    inMine: Boolean(savedInMine),
     appearance: sanitizeAppearance(profile?.appearance, {
       ...defaultAppearance(),
       shirt: profile?.color || randomHexColor()
@@ -609,7 +614,8 @@ io.on('connection', (socket) => {
     const nextZ = Number.isFinite(z) ? z : current.z;
     const boundedX = clamp(nextX, -PLAYABLE_BOUND, PLAYABLE_BOUND);
     const boundedZ = clamp(nextZ, -PLAYABLE_BOUND, PLAYABLE_BOUND);
-    const next = clampToPlayableGround(boundedX, boundedZ);
+    const inMine = payload?.inMine === true;
+    const next = clampToPlayableGround(boundedX, boundedZ, inMine);
 
     current.x = next.x;
     current.y = clamp(nextY, SWIM_MIN_Y, 30);
