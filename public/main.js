@@ -1155,7 +1155,11 @@ function addLighthouseIsland() {
   const doorFrameMat = new THREE.MeshStandardMaterial({ color: 0x8b5a2b, roughness: 0.88, side: THREE.DoubleSide });
   const doorWoodMat = new THREE.MeshStandardMaterial({ color: 0x6b4226, roughness: 0.9, side: THREE.DoubleSide });
   const doorMetalMat = new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.58, metalness: 0.3, side: THREE.DoubleSide });
-  const doorCenterAngle = Math.PI * 0.5;
+  // CylinderGeometry uses 0 radians at +Z, same convention as atan2(dx, dz) yaw math.
+  const doorCenterAngle = Math.atan2(
+    LIGHTHOUSE_DOOR_POS.x - LIGHTHOUSE_POS.x,
+    LIGHTHOUSE_DOOR_POS.z - LIGHTHOUSE_POS.z
+  );
 
   const frameArc = 1.42;
   const frameStart = doorCenterAngle - frameArc * 0.5;
