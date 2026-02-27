@@ -30,7 +30,7 @@ const questState = {
 
 const MINE_POS = new THREE.Vector3(160, 1.35, 30);
 const MINE_RADIUS = 23;
-const MINE_PLAY_RADIUS = MINE_RADIUS + 2.2;
+const MINE_PLAY_RADIUS = MINE_RADIUS - 1.8;
 const MINE_ROCK_WALL_RADIUS = MINE_RADIUS - 1.25;
 const MINE_SWIM_BLOCK_RADIUS = MINE_RADIUS + 34;
 const HOUSE_POS = new THREE.Vector3(-worldLimit * 0.33, 1.35, worldLimit * 0.12);
@@ -2743,8 +2743,22 @@ function canBoardBoat(local) {
 function movementClamp(local) {
   const bounded = clampToPlayableGround(local.x, local.z);
   const collided = resolveWorldCollisions(bounded.x, bounded.z, local.y);
-  local.x = collided.x;
-  local.z = collided.z;
+  let nextX = collided.x;
+  let nextZ = collided.z;
+
+  if (inMine) {
+    const dx = nextX - MINE_POS.x;
+    const dz = nextZ - MINE_POS.z;
+    const dist = Math.hypot(dx, dz);
+    if (dist > MINE_PLAY_RADIUS) {
+      const scale = MINE_PLAY_RADIUS / (dist || 1);
+      nextX = MINE_POS.x + dx * scale;
+      nextZ = MINE_POS.z + dz * scale;
+    }
+  }
+
+  local.x = nextX;
+  local.z = nextZ;
 }
 
 function localStepMovementEnd(local, delta, nowMs, prevY) {
