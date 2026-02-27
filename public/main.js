@@ -2105,7 +2105,7 @@ function addMineArea() {
   mineGroup.visible = false;
 
   const mineEntrance = new THREE.Group();
-  mineEntrance.position.copy(MINE_ENTRY_POS);
+  mineEntrance.position.set(MINE_ENTRY_POS.x, 0, MINE_ENTRY_POS.z);
   const rockMatOuter = new THREE.MeshStandardMaterial({ color: 0xb9a79a, roughness: 0.96 });
   const rockMatMid = new THREE.MeshStandardMaterial({ color: 0x8f7f74, roughness: 0.95 });
   const caveDarkMat = new THREE.MeshStandardMaterial({ color: 0x2b2f3a, roughness: 0.98 });
@@ -2222,6 +2222,37 @@ function addMineArea() {
     tie.position.set(0, 1.24, 3.95 + i * 0.72);
     mineEntrance.add(tie);
   }
+
+  const cart = new THREE.Group();
+  cart.position.set(0, 1.55, 7.2);
+  const cartWoodMat = new THREE.MeshStandardMaterial({ color: 0x7a4b2a, roughness: 0.88 });
+  const cartMetalMat = new THREE.MeshStandardMaterial({ color: 0x6b7280, roughness: 0.54, metalness: 0.36 });
+  const cartBed = new THREE.Mesh(new THREE.BoxGeometry(1.18, 0.3, 1.5), cartWoodMat);
+  cartBed.position.y = 0.22;
+  const cartSideL = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.52, 1.5), cartWoodMat);
+  cartSideL.position.set(-0.54, 0.44, 0);
+  const cartSideR = cartSideL.clone();
+  cartSideR.position.x = 0.54;
+  const cartFront = new THREE.Mesh(new THREE.BoxGeometry(1.18, 0.52, 0.1), cartWoodMat);
+  cartFront.position.set(0, 0.44, 0.7);
+  const cartBack = cartFront.clone();
+  cartBack.position.z = -0.7;
+  cart.add(cartBed, cartSideL, cartSideR, cartFront, cartBack);
+
+  const wheelGeo = new THREE.CylinderGeometry(0.17, 0.17, 0.11, 14);
+  const wheelOffsets = [
+    [-0.43, 0, -0.52],
+    [0.43, 0, -0.52],
+    [-0.43, 0, 0.52],
+    [0.43, 0, 0.52]
+  ];
+  for (const [x, y, z] of wheelOffsets) {
+    const wheel = new THREE.Mesh(wheelGeo, cartMetalMat);
+    wheel.rotation.z = Math.PI / 2;
+    wheel.position.set(x, y, z);
+    cart.add(wheel);
+  }
+  mineEntrance.add(cart);
 
   mineEntrance.traverse((obj) => {
     if (obj.isMesh) {
