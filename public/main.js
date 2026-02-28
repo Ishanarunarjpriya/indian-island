@@ -1812,6 +1812,7 @@ function addWoodHouse(x, z, yaw = 0) {
 function addCliffAndWaterfall(x, z) {
   const cliff = new THREE.Group();
   cliff.position.set(x, 0, z);
+  cliff.scale.setScalar(0.92);
   const cliffRockMeshes = [];
   const rockMat = new THREE.MeshStandardMaterial({ color: 0x586069, roughness: 0.93 });
   const faceMat = new THREE.MeshStandardMaterial({ color: 0x5f6872, roughness: 0.9 });
