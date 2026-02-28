@@ -259,15 +259,15 @@ let minimapExpanded = false;
 let minimapEnabled = localStorage.getItem('island_minimap_enabled') !== '0';
 let lowPerformanceMode = localStorage.getItem('island_low_performance_mode') === '1';
 
-const BALANCED_RENDER_PIXEL_RATIO_CAP = 1.25;
+const BALANCED_RENDER_PIXEL_RATIO_CAP = 2;
 const LOW_RENDER_PIXEL_RATIO_CAP = 0.8;
-const BALANCED_PREVIEW_PIXEL_RATIO_CAP = 1.1;
+const BALANCED_PREVIEW_PIXEL_RATIO_CAP = 2;
 const LOW_PREVIEW_PIXEL_RATIO_CAP = 0.75;
-const BALANCED_VOICE_UPDATE_INTERVAL_MS = 120;
+const BALANCED_VOICE_UPDATE_INTERVAL_MS = 0;
 const LOW_VOICE_UPDATE_INTERVAL_MS = 180;
-const BALANCED_WATERFALL_UPDATE_INTERVAL_MS = 33;
+const BALANCED_WATERFALL_UPDATE_INTERVAL_MS = 0;
 const LOW_WATERFALL_UPDATE_INTERVAL_MS = 80;
-const BALANCED_MINIMAP_DRAW_INTERVAL_MS = 120;
+const BALANCED_MINIMAP_DRAW_INTERVAL_MS = 100;
 const LOW_MINIMAP_DRAW_INTERVAL_MS = 220;
 
 let renderPixelRatioCap = lowPerformanceMode ? LOW_RENDER_PIXEL_RATIO_CAP : BALANCED_RENDER_PIXEL_RATIO_CAP;
@@ -504,7 +504,7 @@ scene.fog = new THREE.Fog(0xb7d7e6, 45, 160);
 const camera = new THREE.PerspectiveCamera(68, window.innerWidth / window.innerHeight, 0.1, 300);
 camera.position.set(0, 11, 16);
 
-const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'low-power' });
+const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, renderPixelRatioCap));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = !lowPerformanceMode;
@@ -570,7 +570,7 @@ scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xffffff, 1.12);
 sun.position.set(14, 32, 22);
 sun.castShadow = !lowPerformanceMode;
-sun.shadow.mapSize.set(lowPerformanceMode ? 256 : 512, lowPerformanceMode ? 256 : 512);
+sun.shadow.mapSize.set(lowPerformanceMode ? 256 : 1024, lowPerformanceMode ? 256 : 1024);
 scene.add(sun);
 
 const beaconIslandLights = [];
@@ -2689,7 +2689,7 @@ beaconGroup.add(beaconPedestal);
 beaconGroup.add(beaconCore);
 scene.add(beaconGroup);
 
-const rainCount = 420;
+const rainCount = 700;
 const rainPositions = new Float32Array(rainCount * 3);
 for (let i = 0; i < rainCount; i += 1) {
   const idx = i * 3;
@@ -2716,7 +2716,7 @@ function applyPerformanceMode({ persist = true } = {}) {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, renderPixelRatioCap));
   renderer.shadowMap.enabled = !lowPerformanceMode;
   sun.castShadow = !lowPerformanceMode;
-  sun.shadow.mapSize.set(lowPerformanceMode ? 256 : 512, lowPerformanceMode ? 256 : 512);
+  sun.shadow.mapSize.set(lowPerformanceMode ? 256 : 1024, lowPerformanceMode ? 256 : 1024);
   sun.shadow.needsUpdate = true;
 
   if (previewRenderer) {
@@ -5218,7 +5218,7 @@ function ensurePreviewScene() {
   );
   pad.rotation.x = -Math.PI / 2;
   previewScene.add(pad);
-  previewRenderer = new THREE.WebGLRenderer({ canvas: customizePreviewEl, antialias: false, alpha: false, powerPreference: 'low-power' });
+  previewRenderer = new THREE.WebGLRenderer({ canvas: customizePreviewEl, antialias: true, alpha: false });
   previewRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, previewPixelRatioCap));
 
   const startDrag = (event) => {
