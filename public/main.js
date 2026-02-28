@@ -77,6 +77,7 @@ const miniPanelEl = document.getElementById('mini-panel');
 const minimapEl = document.getElementById('mini-map');
 const minimapCtx = minimapEl.getContext('2d');
 const minimapToggleEl = document.getElementById('minimap-toggle');
+const minimapQuickToggleEl = document.getElementById('minimap-quick-toggle');
 const performanceToggleEl = document.getElementById('performance-toggle');
 const chatLogEl = document.getElementById('chat-log');
 const chatFormEl = document.getElementById('chat-form');
@@ -319,6 +320,12 @@ function updateMinimapToggleLabel() {
   minimapToggleEl.textContent = minimapEnabled ? 'Minimap: On' : 'Minimap: Off';
 }
 
+function updateMinimapQuickToggleState() {
+  if (!minimapQuickToggleEl) return;
+  minimapQuickToggleEl.style.filter = minimapEnabled ? 'none' : 'grayscale(0.95) brightness(0.75)';
+  minimapQuickToggleEl.title = minimapEnabled ? 'Hide minimap' : 'Show minimap';
+}
+
 function updatePerformanceToggleLabel() {
   if (!performanceToggleEl) return;
   if (graphicsPreset === 'performance') {
@@ -347,6 +354,7 @@ function setMinimapEnabled(enabled) {
   miniPanelEl?.classList.toggle('expanded', minimapEnabled && minimapExpanded);
   setMinimapCanvasSize(minimapEnabled && minimapExpanded);
   updateMinimapToggleLabel();
+  updateMinimapQuickToggleState();
 }
 
 function setChatPanelOpen(open) {
@@ -4821,6 +4829,40 @@ function tryAutoTeleport(local, now = performance.now()) {
   return false;
 }
 
+function hasManualInteractTarget(local) {
+  if (!local) return false;
+  if (npcDialogueOpen) return true;
+  if (isTeleporting) return false;
+
+  const nearMineExit = inMine && distance2D(local, MINE_EXIT_POS) < 3.1;
+  if (nearMineExit) return true;
+  if (inMine && getNearbyOreNode(local)) return true;
+  if (inMine && distance2D(local, MINE_SHOP_NPC_POS) <= 3.2) return true;
+  if (distance2D(local, QUEST_NPC_POS) <= 3.2) return true;
+
+  const nearInteriorPortal = inLighthouseInterior && distance2D(local, INTERIOR_EXIT_PORTAL_POS) < 3.1;
+  if (nearInteriorPortal) return true;
+  const nearTopPortal = !inLighthouseInterior && !local.onBoat && distance2D(local, LIGHTHOUSE_TOP_POS) < 1.25 && local.y > 11.6;
+  if (nearTopPortal) return true;
+
+  if (boatState.onboard || allowBoatBoard(local)) return true;
+
+  const beacon = interactables.get('beacon');
+  if (!beacon) return false;
+  return Math.hypot(local.x - beacon.x, local.z - beacon.z) <= 4.2;
+}
+
+function updateMobileUseButtonVisibility(local) {
+  if (!mobileUseEl) return;
+  const canUse = Boolean(local)
+    && isAuthenticated
+    && !menuOpen
+    && authModalEl.classList.contains('hidden')
+    && customizeModalEl.classList.contains('hidden')
+    && hasManualInteractTarget(local);
+  mobileUseEl.classList.toggle('hidden', !canUse);
+}
+
 function tryInteract() {
   if (!isAuthenticated || menuOpen || !customizeModalEl.classList.contains('hidden')) return;
   if (npcDialogueOpen) {
@@ -5522,6 +5564,9 @@ menuOverlayEl?.addEventListener('click', (event) => {
 minimapToggleEl?.addEventListener('click', () => {
   setMinimapEnabled(!minimapEnabled);
 });
+minimapQuickToggleEl?.addEventListener('click', () => {
+  setMinimapEnabled(!minimapEnabled);
+});
 performanceToggleEl?.addEventListener('click', () => {
   const currentIdx = GRAPHICS_PRESETS.indexOf(graphicsPreset);
   const nextIdx = currentIdx >= 0 ? (currentIdx + 1) % GRAPHICS_PRESETS.length : 0;
@@ -6095,6 +6140,7 @@ function updateNameTags() {
 
 function updateInteractionHint() {
   const local = players.get(localPlayerId);
+  updateMobileUseButtonVisibility(local);
   if (!local) {
     interactHintEl.textContent = 'Explore the island';
     return;
