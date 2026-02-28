@@ -75,7 +75,7 @@
       #hud {
         position: fixed;
         right: 16px;
-        bottom: 16px;
+        top: 16px;
         z-index: 10;
         padding: 12px 14px;
         min-width: 240px;
@@ -747,7 +747,8 @@
 
       body.mobile-ui #hud {
         right: max(8px, env(safe-area-inset-right));
-        bottom: calc(156px + env(safe-area-inset-bottom));
+        top: calc(56px + env(safe-area-inset-top));
+        bottom: auto;
         min-width: 0;
         width: min(52vw, 220px);
         padding: 8px 10px;
@@ -771,7 +772,7 @@
       body.mobile-ui #mini-panel {
         left: auto;
         right: max(8px, env(safe-area-inset-right));
-        top: calc(56px + env(safe-area-inset-top));
+        top: calc(188px + env(safe-area-inset-top));
         bottom: auto;
         width: 130px;
         padding: 8px;
