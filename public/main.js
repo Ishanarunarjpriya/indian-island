@@ -5601,6 +5601,7 @@ window.addEventListener('resize', () => {
     previewRenderHeight = 0;
   }
   applyResponsiveLayout();
+  resetJoystick();
 });
 
 window.addEventListener('beforeunload', () => {
@@ -5620,25 +5621,31 @@ function updateJoystick(event) {
   const centerY = rect.top + rect.height / 2;
   const dx = event.clientX - centerX;
   const dy = event.clientY - centerY;
-  const radius = rect.width * 0.38;
+  const radius = rect.width * 0.42;
   const len = Math.hypot(dx, dy) || 1;
   const scale = len > radius ? radius / len : 1;
   const clampedX = dx * scale;
   const clampedY = dy * scale;
+  const inputGain = 1.15;
+  const stickSize = joystickStickEl.offsetWidth || 40;
+  const stickHome = (rect.width - stickSize) * 0.5;
 
-  joystickX = clampedX / radius;
-  joystickY = clampedY / radius;
+  joystickX = THREE.MathUtils.clamp((clampedX / radius) * inputGain, -1, 1);
+  joystickY = THREE.MathUtils.clamp((clampedY / radius) * inputGain, -1, 1);
 
-  joystickStickEl.style.left = `${40 + clampedX}px`;
-  joystickStickEl.style.top = `${40 + clampedY}px`;
+  joystickStickEl.style.left = `${stickHome + clampedX}px`;
+  joystickStickEl.style.top = `${stickHome + clampedY}px`;
 }
 
 function resetJoystick() {
   joystickId = null;
   joystickX = 0;
   joystickY = 0;
-  joystickStickEl.style.left = '40px';
-  joystickStickEl.style.top = '40px';
+  const stickSize = joystickStickEl.offsetWidth || 40;
+  const baseSize = joystickEl.clientWidth || 120;
+  const stickHome = (baseSize - stickSize) * 0.5;
+  joystickStickEl.style.left = `${stickHome}px`;
+  joystickStickEl.style.top = `${stickHome}px`;
 }
 
 joystickEl.addEventListener('pointerdown', (event) => {

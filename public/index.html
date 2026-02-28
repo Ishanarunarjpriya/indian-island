@@ -618,7 +618,7 @@
       #mobile-controls {
         position: fixed;
         inset: 0;
-        z-index: 12;
+        z-index: 24;
         pointer-events: none;
         display: none;
       }
@@ -666,10 +666,10 @@
 
       #joystick {
         position: absolute;
-        left: 14px;
-        bottom: 18px;
-        width: 120px;
-        height: 120px;
+        left: max(10px, env(safe-area-inset-left));
+        bottom: calc(10px + env(safe-area-inset-bottom));
+        width: 128px;
+        height: 128px;
         border-radius: 999px;
         background: rgba(15, 23, 42, 0.45);
         border: 1px solid rgba(255, 255, 255, 0.25);
@@ -679,8 +679,8 @@
 
       #joystick-stick {
         position: absolute;
-        left: 40px;
-        top: 40px;
+        left: 44px;
+        top: 44px;
         width: 40px;
         height: 40px;
         border-radius: 999px;
@@ -689,20 +689,21 @@
 
       #mobile-actions {
         position: absolute;
-        right: 14px;
-        bottom: 18px;
+        right: max(10px, env(safe-area-inset-right));
+        bottom: calc(10px + env(safe-area-inset-bottom));
         display: grid;
-        grid-template-columns: repeat(2, 64px);
+        grid-template-columns: repeat(2, 68px);
         gap: 10px;
         pointer-events: auto;
       }
 
       .mobile-btn {
-        width: 64px;
-        height: 64px;
+        width: 68px;
+        height: 68px;
         border-radius: 999px;
         padding: 0;
-        font-size: 11px;
+        font-size: 12px;
+        touch-action: manipulation;
       }
 
       @media (pointer: coarse) {
@@ -712,8 +713,8 @@
       }
 
       body.mobile-ui #top-left-toolbar {
-        left: 8px;
-        top: 8px;
+        left: max(8px, env(safe-area-inset-left));
+        top: calc(8px + env(safe-area-inset-top));
         gap: 6px;
         padding: 6px;
       }
@@ -725,18 +726,18 @@
       }
 
       body.mobile-ui #world-state {
-        top: 8px;
+        top: calc(8px + env(safe-area-inset-top));
         padding: 6px 10px;
         font-size: 11px;
       }
 
       body.mobile-ui #chat-panel {
         top: auto;
-        left: 8px;
-        right: 8px;
-        bottom: 8px;
+        left: max(8px, env(safe-area-inset-left));
+        right: max(8px, env(safe-area-inset-right));
+        bottom: calc(158px + env(safe-area-inset-bottom));
         width: auto;
-        max-height: 42vh;
+        max-height: 36vh;
         z-index: 22;
       }
 
@@ -745,10 +746,10 @@
       }
 
       body.mobile-ui #hud {
-        right: 8px;
-        bottom: 8px;
+        right: max(8px, env(safe-area-inset-right));
+        bottom: calc(156px + env(safe-area-inset-bottom));
         min-width: 0;
-        width: min(56vw, 240px);
+        width: min(52vw, 220px);
         padding: 8px 10px;
         z-index: 12;
       }
@@ -768,25 +769,27 @@
       }
 
       body.mobile-ui #mini-panel {
-        left: 8px;
-        bottom: 8px;
-        width: 138px;
+        left: auto;
+        right: max(8px, env(safe-area-inset-right));
+        top: calc(56px + env(safe-area-inset-top));
+        bottom: auto;
+        width: 130px;
         padding: 8px;
         z-index: 12;
       }
 
       body.mobile-ui #mini-map {
-        width: 122px;
-        height: 122px;
+        width: 114px;
+        height: 114px;
       }
 
       body.mobile-ui #mini-panel.expanded {
-        width: min(82vw, 300px);
+        width: min(72vw, 270px);
       }
 
       body.mobile-ui #mini-panel.expanded #mini-map {
-        width: min(76vw, 276px);
-        height: min(76vw, 276px);
+        width: min(66vw, 248px);
+        height: min(66vw, 248px);
       }
 
       body.mobile-ui #compass {
