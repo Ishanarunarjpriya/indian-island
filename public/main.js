@@ -902,6 +902,34 @@ function addSphereCollisionFromMesh(mesh, tag = 'solid', extraRadius = 0.12) {
   addWorldCollider(center.x, center.z, radius, tag);
 }
 
+function addRockFootprintCollisionFromMesh(mesh, tag = 'rock', radiusPadding = 0) {
+  if (!mesh) return;
+  mesh.updateWorldMatrix(true, false);
+  const box = new THREE.Box3().setFromObject(mesh);
+  if (box.isEmpty()) return;
+
+  const minX = box.min.x;
+  const maxX = box.max.x;
+  const minZ = box.min.z;
+  const maxZ = box.max.z;
+  const width = Math.max(0.2, maxX - minX);
+  const depth = Math.max(0.2, maxZ - minZ);
+  const cx = (minX + maxX) * 0.5;
+  const cz = (minZ + maxZ) * 0.5;
+
+  const minDim = Math.min(width, depth);
+  const baseRadius = Math.max(0.24, minDim * 0.22 + radiusPadding);
+  const armRadius = baseRadius * 0.82;
+  const offsetX = width * 0.33;
+  const offsetZ = depth * 0.33;
+
+  addWorldCollider(cx, cz, baseRadius * 0.9, tag);
+  addWorldCollider(cx - offsetX, cz, armRadius, tag);
+  addWorldCollider(cx + offsetX, cz, armRadius, tag);
+  addWorldCollider(cx, cz - offsetZ, armRadius, tag);
+  addWorldCollider(cx, cz + offsetZ, armRadius, tag);
+}
+
 function resolveWorldCollisions(x, z, y = GROUND_Y) {
   let nextX = x;
   let nextZ = z;
@@ -912,7 +940,8 @@ function resolveWorldCollisions(x, z, y = GROUND_Y) {
     }
     const dx = nextX - collider.x;
     const dz = nextZ - collider.z;
-    const minDist = PLAYER_COLLISION_RADIUS + collider.radius;
+    const cliffTightening = collider.tag === 'cliff' ? -0.18 : 0;
+    const minDist = Math.max(0.05, PLAYER_COLLISION_RADIUS + collider.radius + cliffTightening);
     const dist = Math.hypot(dx, dz);
     if (dist >= minDist) continue;
     const scale = minDist / (dist || 1);
@@ -2154,9 +2183,9 @@ function addCliffAndWaterfall(x, z) {
 
   scene.add(cliff);
   cliff.updateWorldMatrix(true, true);
-  // Cliff collision should tightly follow each rock chunk without creating long invisible strips.
+  // Build a tighter rock footprint so collision follows the visible cliff shape.
   for (const rockMesh of cliffRockMeshes) {
-    addSphereCollisionFromMesh(rockMesh, 'cliff', 0.02);
+    addRockFootprintCollisionFromMesh(rockMesh, 'cliff', -0.05);
   }
 }
 
