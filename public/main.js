@@ -896,7 +896,8 @@ function addSphereCollisionFromMesh(mesh, tag = 'solid', extraRadius = 0.12) {
   const center = sphere.center.clone().applyMatrix4(mesh.matrixWorld);
   const worldScale = new THREE.Vector3();
   mesh.getWorldScale(worldScale);
-  const scale = Math.max(Math.abs(worldScale.x), Math.abs(worldScale.y), Math.abs(worldScale.z), 0.01);
+  // Collisions are resolved in XZ only, so use horizontal scale to avoid oversized blockers on tall meshes.
+  const scale = Math.max(Math.abs(worldScale.x), Math.abs(worldScale.z), 0.01);
   const radius = sphere.radius * scale + extraRadius;
   addWorldCollider(center.x, center.z, radius, tag);
 }
@@ -1812,7 +1813,7 @@ function addWoodHouse(x, z, yaw = 0) {
 function addCliffAndWaterfall(x, z) {
   const cliff = new THREE.Group();
   cliff.position.set(x, 0, z);
-  cliff.scale.setScalar(0.92);
+  cliff.scale.setScalar(0.84);
   const cliffRockMeshes = [];
   const rockMat = new THREE.MeshStandardMaterial({ color: 0x586069, roughness: 0.93 });
   const faceMat = new THREE.MeshStandardMaterial({ color: 0x5f6872, roughness: 0.9 });
@@ -2155,7 +2156,7 @@ function addCliffAndWaterfall(x, z) {
   cliff.updateWorldMatrix(true, true);
   // Cliff collision should tightly follow each rock chunk without creating long invisible strips.
   for (const rockMesh of cliffRockMeshes) {
-    addSphereCollisionFromMesh(rockMesh, 'cliff', 0.08);
+    addSphereCollisionFromMesh(rockMesh, 'cliff', 0.02);
   }
 }
 
