@@ -28,7 +28,7 @@ const questState = {
   }
 };
 
-const MINE_POS = new THREE.Vector3(160, 1.35, 30);
+const MINE_POS = new THREE.Vector3(140, 1.35, 140);
 const MINE_RADIUS = 23;
 const MINE_PLAY_RADIUS = MINE_RADIUS - 1.8;
 const MINE_ROCK_WALL_RADIUS = MINE_RADIUS - 1.25;
