@@ -718,33 +718,33 @@ const waterfallWorldQuat = new THREE.Quaternion();
 
 function createWaterfallFlowTexture() {
   const canvas = document.createElement('canvas');
-  canvas.width = 128;
+  canvas.width = 192;
   canvas.height = 512;
   const ctx = canvas.getContext('2d');
 
   const baseGradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-  baseGradient.addColorStop(0, '#76d5ff');
-  baseGradient.addColorStop(0.36, '#42b9f4');
-  baseGradient.addColorStop(0.72, '#2a9cde');
-  baseGradient.addColorStop(1, '#1b72be');
+  baseGradient.addColorStop(0, 'rgba(163, 230, 255, 0.9)');
+  baseGradient.addColorStop(0.26, 'rgba(104, 206, 247, 0.86)');
+  baseGradient.addColorStop(0.66, 'rgba(58, 166, 220, 0.82)');
+  baseGradient.addColorStop(1, 'rgba(34, 120, 178, 0.78)');
   ctx.fillStyle = baseGradient;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  for (let i = 0; i < 46; i += 1) {
+  for (let i = 0; i < 64; i += 1) {
     const x = Math.random() * canvas.width;
     const y = Math.random() * canvas.height;
-    const length = 44 + Math.random() * 120;
-    const width = 1.5 + Math.random() * 2.3;
-    const alpha = 0.18 + Math.random() * 0.24;
+    const length = 54 + Math.random() * 168;
+    const width = 1.1 + Math.random() * 2.8;
+    const alpha = 0.12 + Math.random() * 0.28;
     ctx.strokeStyle = `rgba(235,248,255,${alpha.toFixed(3)})`;
     ctx.lineWidth = width;
     ctx.beginPath();
     ctx.moveTo(x, y);
-    ctx.lineTo(x + (Math.random() - 0.5) * 9, y + length);
+    ctx.lineTo(x + (Math.random() - 0.5) * 15, y + length);
     ctx.stroke();
   }
 
-  for (let i = 0; i < 24; i += 1) {
+  for (let i = 0; i < 30; i += 1) {
     const radius = 6 + Math.random() * 14;
     const x = Math.random() * canvas.width;
     const y = Math.random() * canvas.height;
@@ -757,10 +757,64 @@ function createWaterfallFlowTexture() {
     ctx.fill();
   }
 
+  for (let i = 0; i < 18; i += 1) {
+    const laneWidth = 8 + Math.random() * 18;
+    const laneX = Math.random() * canvas.width;
+    const laneGradient = ctx.createLinearGradient(laneX, 0, laneX + laneWidth, 0);
+    laneGradient.addColorStop(0, 'rgba(255,255,255,0)');
+    laneGradient.addColorStop(0.5, `rgba(240,252,255,${(0.12 + Math.random() * 0.14).toFixed(3)})`);
+    laneGradient.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = laneGradient;
+    ctx.fillRect(laneX, 0, laneWidth, canvas.height);
+  }
+
+  const edgeMask = ctx.createLinearGradient(0, 0, canvas.width, 0);
+  edgeMask.addColorStop(0, 'rgba(0,0,0,0)');
+  edgeMask.addColorStop(0.08, 'rgba(0,0,0,0.18)');
+  edgeMask.addColorStop(0.2, 'rgba(0,0,0,0.88)');
+  edgeMask.addColorStop(0.5, 'rgba(0,0,0,1)');
+  edgeMask.addColorStop(0.8, 'rgba(0,0,0,0.88)');
+  edgeMask.addColorStop(0.92, 'rgba(0,0,0,0.18)');
+  edgeMask.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.globalCompositeOperation = 'destination-in';
+  ctx.fillStyle = edgeMask;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const heightMask = ctx.createLinearGradient(0, 0, 0, canvas.height);
+  heightMask.addColorStop(0, 'rgba(0,0,0,0.75)');
+  heightMask.addColorStop(0.08, 'rgba(0,0,0,1)');
+  heightMask.addColorStop(0.84, 'rgba(0,0,0,0.98)');
+  heightMask.addColorStop(1, 'rgba(0,0,0,0.72)');
+  ctx.fillStyle = heightMask;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.globalCompositeOperation = 'source-over';
+
   const tex = new THREE.CanvasTexture(canvas);
   tex.wrapS = THREE.RepeatWrapping;
   tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(1.12, 1.65);
+  tex.repeat.set(1.05, 1.95);
+  tex.anisotropy = 4;
+  return tex;
+}
+
+function createWaterfallMistTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 96;
+  canvas.height = 96;
+  const ctx = canvas.getContext('2d');
+  const cx = canvas.width * 0.5;
+  const cy = canvas.height * 0.5;
+  const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, canvas.width * 0.5);
+  gradient.addColorStop(0, 'rgba(245, 253, 255, 0.96)');
+  gradient.addColorStop(0.25, 'rgba(228, 248, 255, 0.55)');
+  gradient.addColorStop(0.65, 'rgba(210, 238, 251, 0.22)');
+  gradient.addColorStop(1, 'rgba(210, 238, 251, 0)');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = THREE.ClampToEdgeWrapping;
+  tex.wrapT = THREE.ClampToEdgeWrapping;
   return tex;
 }
 
@@ -1876,6 +1930,31 @@ function addCliffAndWaterfall(x, z) {
   guaranteedCoreSheet.renderOrder = 41;
   guaranteedFall.add(guaranteedCoreSheet);
 
+  const edgeVeils = [];
+  for (const side of [-1, 1]) {
+    const edgeTexture = guaranteedFlowTexture.clone();
+    edgeTexture.repeat.set(0.34, 2.15);
+    edgeTexture.offset.x = side < 0 ? 0.03 : 0.63;
+    const veil = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.55, 9.0),
+      new THREE.MeshBasicMaterial({
+        color: 0xc9f2ff,
+        map: edgeTexture,
+        transparent: true,
+        opacity: 0.36,
+        side: THREE.FrontSide,
+        depthTest: false,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending
+      })
+    );
+    veil.position.set(side * 2.72, -0.02, 6.03);
+    veil.rotation.y = side * 0.14;
+    veil.renderOrder = 41;
+    guaranteedFall.add(veil);
+    edgeVeils.push(veil);
+  }
+
   const guaranteedStreakMat = new THREE.MeshBasicMaterial({
     color: 0xeaf7ff,
     transparent: true,
@@ -1964,6 +2043,63 @@ function addCliffAndWaterfall(x, z) {
   }
   guaranteedFall.add(splashGroup);
 
+  const mistCurtain = new THREE.Mesh(
+    new THREE.PlaneGeometry(6.45, 1.85),
+    new THREE.MeshBasicMaterial({
+      color: 0xe6f7ff,
+      transparent: true,
+      opacity: 0.22,
+      side: THREE.FrontSide,
+      depthTest: false,
+      depthWrite: false
+    })
+  );
+  mistCurtain.position.set(0, -4.03, 6.26);
+  mistCurtain.renderOrder = 44;
+  guaranteedFall.add(mistCurtain);
+
+  const mistTexture = createWaterfallMistTexture();
+  const mistCount = 72;
+  const mistPositions = new Float32Array(mistCount * 3);
+  const mistData = [];
+  for (let i = 0; i < mistCount; i += 1) {
+    const idx = i * 3;
+    const side = Math.random() > 0.5 ? 1 : -1;
+    mistPositions[idx] = side * (0.22 + Math.random() * 0.64);
+    mistPositions[idx + 1] = Math.random() * 1.1;
+    mistPositions[idx + 2] = (Math.random() - 0.5) * 0.5;
+    mistData.push({
+      phase: Math.random(),
+      speed: 0.45 + Math.random() * 0.8,
+      angle: Math.random() * Math.PI * 2,
+      radius: 0.32 + Math.random() * 0.98,
+      spread: 0.64 + Math.random() * 1.6,
+      lift: 0.34 + Math.random() * 1.05,
+      drift: 0.35 + Math.random() * 0.9
+    });
+  }
+  const mistGeo = new THREE.BufferGeometry();
+  const mistAttr = new THREE.BufferAttribute(mistPositions, 3);
+  mistGeo.setAttribute('position', mistAttr);
+  const mistPoints = new THREE.Points(
+    mistGeo,
+    new THREE.PointsMaterial({
+      map: mistTexture,
+      color: 0xe9f8ff,
+      transparent: true,
+      opacity: 0.46,
+      size: 0.7,
+      sizeAttenuation: true,
+      side: THREE.FrontSide,
+      depthTest: false,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending
+    })
+  );
+  mistPoints.position.set(0, -4.46, 6.16);
+  mistPoints.renderOrder = 45;
+  guaranteedFall.add(mistPoints);
+
   cliffWaterfallRoot = guaranteedFall;
   cliffWaterfallFoam = guaranteedFoam;
   cliffWaterfallState = {
@@ -1971,11 +2107,16 @@ function addCliffAndWaterfall(x, z) {
     coreTexture: guaranteedCoreTexture,
     sheet: guaranteedSheet,
     coreSheet: guaranteedCoreSheet,
+    edgeVeils,
     foam: guaranteedFoam,
     lipFoam: guaranteedLipFoam,
     streaks: guaranteedStreaks,
     splashDrops,
-    splashGroup
+    splashGroup,
+    mistCurtain,
+    mistPoints,
+    mistData,
+    mistAttr
   };
 
   scene.add(cliff);
@@ -4162,6 +4303,13 @@ function updateCliffWaterfallVisibility() {
     cliffWaterfallState.foam.visible = fromFront;
     cliffWaterfallState.lipFoam.visible = fromFront;
     cliffWaterfallState.splashGroup.visible = fromFront;
+    if (cliffWaterfallState.mistCurtain) cliffWaterfallState.mistCurtain.visible = fromFront;
+    if (cliffWaterfallState.mistPoints) cliffWaterfallState.mistPoints.visible = fromFront;
+    if (Array.isArray(cliffWaterfallState.edgeVeils)) {
+      for (const veil of cliffWaterfallState.edgeVeils) {
+        veil.visible = fromFront;
+      }
+    }
   } else if (cliffWaterfallFoam) {
     cliffWaterfallFoam.visible = fromFront;
   }
@@ -4175,15 +4323,27 @@ function updateCliffWaterfall(nowMs, delta) {
   }
 
   const t = nowMs * 0.001;
-  state.flowTexture.offset.y = (state.flowTexture.offset.y - delta * 0.86 + 1) % 1;
-  state.flowTexture.offset.x = Math.sin(t * 0.34) * 0.017;
-  state.coreTexture.offset.y = (state.coreTexture.offset.y - delta * 1.28 + 1) % 1;
-  state.coreTexture.offset.x = 0.19 + Math.cos(t * 0.46) * 0.011;
+  state.flowTexture.offset.y = (state.flowTexture.offset.y - delta * (0.78 + Math.sin(t * 0.7) * 0.08) + 1) % 1;
+  state.flowTexture.offset.x = Math.sin(t * 0.32) * 0.022;
+  state.coreTexture.offset.y = (state.coreTexture.offset.y - delta * (1.22 + Math.cos(t * 0.9) * 0.09) + 1) % 1;
+  state.coreTexture.offset.x = 0.19 + Math.cos(t * 0.53) * 0.015;
 
-  state.sheet.material.opacity = 0.84 + Math.sin(t * 2.4) * 0.06;
-  state.coreSheet.material.opacity = 0.33 + Math.sin(t * 3.1 + 0.8) * 0.1;
-  state.sheet.position.x = Math.sin(t * 1.75) * 0.035;
-  state.coreSheet.position.x = Math.sin(t * 2.1 + 1.2) * 0.06;
+  state.sheet.material.opacity = 0.78 + Math.sin(t * 2.2) * 0.08;
+  state.coreSheet.material.opacity = 0.31 + Math.sin(t * 3.3 + 0.8) * 0.11;
+  state.sheet.position.x = Math.sin(t * 1.68) * 0.042;
+  state.sheet.position.y = Math.sin(t * 0.95) * 0.03;
+  state.coreSheet.position.x = Math.sin(t * 2.02 + 1.2) * 0.07;
+
+  if (Array.isArray(state.edgeVeils)) {
+    for (let i = 0; i < state.edgeVeils.length; i += 1) {
+      const veil = state.edgeVeils[i];
+      const side = i === 0 ? -1 : 1;
+      veil.position.x = side * (2.68 + Math.sin(t * 1.5 + i * 0.9) * 0.08);
+      veil.position.z = 6.03 + Math.cos(t * 1.2 + i * 0.7) * 0.03;
+      veil.rotation.y = side * (0.14 + Math.sin(t * 1.15 + i * 0.6) * 0.03);
+      veil.material.opacity = 0.28 + Math.sin(t * 2.4 + i * 0.85) * 0.08;
+    }
+  }
 
   for (const streak of state.streaks) {
     const { minY, maxY, speed, baseX, swayPhase, swayAmp } = streak.userData;
@@ -4191,15 +4351,53 @@ function updateCliffWaterfall(nowMs, delta) {
     if (streak.position.y < minY) {
       streak.position.y += (maxY - minY);
     }
-    streak.position.x = baseX + Math.sin(t * (1.6 + speed * 0.12) + swayPhase) * swayAmp;
-    streak.material.opacity = 0.46 + Math.sin(t * 3.2 + swayPhase) * 0.18;
+    streak.position.x = baseX + Math.sin(t * (1.8 + speed * 0.14) + swayPhase) * (swayAmp + 0.03);
+    streak.material.opacity = 0.42 + Math.sin(t * 3.3 + swayPhase) * 0.2;
   }
 
-  state.foam.scale.setScalar(1 + Math.sin(t * 4.2) * 0.06);
-  state.foam.material.opacity = 0.66 + Math.sin(t * 2.8) * 0.14;
-  state.foam.position.y = -4.55 + Math.sin(t * 2.6) * 0.03;
-  state.lipFoam.material.opacity = 0.48 + Math.sin(t * 4.6 + 0.4) * 0.16;
-  state.lipFoam.position.y = 4.58 + Math.sin(t * 3.1) * 0.03;
+  state.foam.scale.set(
+    1.02 + Math.sin(t * 4.1) * 0.08,
+    1 + Math.sin(t * 3.2) * 0.05,
+    1
+  );
+  state.foam.material.opacity = 0.62 + Math.sin(t * 2.8) * 0.16;
+  state.foam.position.y = -4.55 + Math.sin(t * 2.4) * 0.04;
+  state.foam.position.x = Math.sin(t * 1.22) * 0.08;
+  state.lipFoam.material.opacity = 0.46 + Math.sin(t * 4.8 + 0.4) * 0.18;
+  state.lipFoam.position.y = 4.58 + Math.sin(t * 3.0) * 0.035;
+  state.lipFoam.scale.x = 1 + Math.sin(t * 1.6) * 0.03;
+
+  if (state.mistCurtain) {
+    state.mistCurtain.material.opacity = 0.2 + Math.sin(t * 2.1 + 0.4) * 0.06;
+    state.mistCurtain.position.y = -4.03 + Math.sin(t * 1.7) * 0.04;
+    state.mistCurtain.scale.x = 1 + Math.sin(t * 0.9) * 0.03;
+  }
+
+  if (state.mistAttr && Array.isArray(state.mistData) && state.mistData.length) {
+    const arr = state.mistAttr.array;
+    for (let i = 0; i < state.mistData.length; i += 1) {
+      const data = state.mistData[i];
+      data.phase += delta * data.speed;
+      if (data.phase >= 1) {
+        data.phase -= 1;
+        data.angle = Math.random() * Math.PI * 2;
+        data.radius = 0.32 + Math.random() * 0.98;
+        data.spread = 0.64 + Math.random() * 1.6;
+        data.lift = 0.34 + Math.random() * 1.05;
+        data.speed = 0.45 + Math.random() * 0.8;
+        data.drift = 0.35 + Math.random() * 0.9;
+      }
+      const p = data.phase;
+      const liftPulse = Math.sin(p * Math.PI);
+      const spread = data.radius + data.spread * p;
+      const idx = i * 3;
+      arr[idx] = Math.cos(data.angle) * spread + Math.sin(t * (1.4 + data.drift) + i * 0.37) * 0.14;
+      arr[idx + 1] = Math.pow(liftPulse, 0.8) * data.lift + Math.sin(t * 2.5 + i * 0.12) * 0.04;
+      arr[idx + 2] = Math.sin(data.angle) * spread * 0.34 + Math.cos(t * (1.1 + data.drift) + i * 0.23) * 0.1;
+    }
+    state.mistAttr.needsUpdate = true;
+    state.mistPoints.material.opacity = 0.36 + Math.sin(t * 1.8) * 0.08;
+  }
 
   for (const drop of state.splashDrops) {
     const data = drop.userData;
