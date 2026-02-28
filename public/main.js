@@ -257,24 +257,39 @@ let chatPanelOpen = cachedChatOpen === null ? true : cachedChatOpen === '1';
 let pointerLocked = false;
 let minimapExpanded = false;
 let minimapEnabled = localStorage.getItem('island_minimap_enabled') !== '0';
-let lowPerformanceMode = localStorage.getItem('island_low_performance_mode') === '1';
+const GRAPHICS_PRESETS = ['quality', 'balanced', 'performance'];
+const legacyLowPerformanceMode = localStorage.getItem('island_low_performance_mode') === '1';
+const storedGraphicsPreset = localStorage.getItem('island_graphics_preset');
+let graphicsPreset = GRAPHICS_PRESETS.includes(storedGraphicsPreset || '')
+  ? storedGraphicsPreset
+  : (legacyLowPerformanceMode ? 'performance' : 'quality');
+let lowPerformanceMode = graphicsPreset === 'performance';
 
-const BALANCED_RENDER_PIXEL_RATIO_CAP = 2;
-const LOW_RENDER_PIXEL_RATIO_CAP = 0.8;
-const BALANCED_PREVIEW_PIXEL_RATIO_CAP = 2;
-const LOW_PREVIEW_PIXEL_RATIO_CAP = 0.75;
-const BALANCED_VOICE_UPDATE_INTERVAL_MS = 0;
-const LOW_VOICE_UPDATE_INTERVAL_MS = 180;
-const BALANCED_WATERFALL_UPDATE_INTERVAL_MS = 0;
-const LOW_WATERFALL_UPDATE_INTERVAL_MS = 80;
-const BALANCED_MINIMAP_DRAW_INTERVAL_MS = 100;
-const LOW_MINIMAP_DRAW_INTERVAL_MS = 220;
+const QUALITY_RENDER_PIXEL_RATIO_CAP = 2;
+const BALANCED_RENDER_PIXEL_RATIO_CAP = 1.25;
+const PERFORMANCE_RENDER_PIXEL_RATIO_CAP = 0.8;
+const QUALITY_PREVIEW_PIXEL_RATIO_CAP = 2;
+const BALANCED_PREVIEW_PIXEL_RATIO_CAP = 1.1;
+const PERFORMANCE_PREVIEW_PIXEL_RATIO_CAP = 0.75;
+const QUALITY_VOICE_UPDATE_INTERVAL_MS = 0;
+const BALANCED_VOICE_UPDATE_INTERVAL_MS = 120;
+const PERFORMANCE_VOICE_UPDATE_INTERVAL_MS = 180;
+const QUALITY_WATERFALL_UPDATE_INTERVAL_MS = 0;
+const BALANCED_WATERFALL_UPDATE_INTERVAL_MS = 33;
+const PERFORMANCE_WATERFALL_UPDATE_INTERVAL_MS = 80;
+const QUALITY_MINIMAP_DRAW_INTERVAL_MS = 100;
+const BALANCED_MINIMAP_DRAW_INTERVAL_MS = 120;
+const PERFORMANCE_MINIMAP_DRAW_INTERVAL_MS = 220;
+const QUALITY_SHADOW_MAP_SIZE = 1024;
+const BALANCED_SHADOW_MAP_SIZE = 512;
+const PERFORMANCE_SHADOW_MAP_SIZE = 256;
 
-let renderPixelRatioCap = lowPerformanceMode ? LOW_RENDER_PIXEL_RATIO_CAP : BALANCED_RENDER_PIXEL_RATIO_CAP;
-let previewPixelRatioCap = lowPerformanceMode ? LOW_PREVIEW_PIXEL_RATIO_CAP : BALANCED_PREVIEW_PIXEL_RATIO_CAP;
-let voiceUpdateIntervalMs = lowPerformanceMode ? LOW_VOICE_UPDATE_INTERVAL_MS : BALANCED_VOICE_UPDATE_INTERVAL_MS;
-let waterfallUpdateIntervalMs = lowPerformanceMode ? LOW_WATERFALL_UPDATE_INTERVAL_MS : BALANCED_WATERFALL_UPDATE_INTERVAL_MS;
-let minimapDrawIntervalMs = lowPerformanceMode ? LOW_MINIMAP_DRAW_INTERVAL_MS : BALANCED_MINIMAP_DRAW_INTERVAL_MS;
+let renderPixelRatioCap = QUALITY_RENDER_PIXEL_RATIO_CAP;
+let previewPixelRatioCap = QUALITY_PREVIEW_PIXEL_RATIO_CAP;
+let voiceUpdateIntervalMs = QUALITY_VOICE_UPDATE_INTERVAL_MS;
+let waterfallUpdateIntervalMs = QUALITY_WATERFALL_UPDATE_INTERVAL_MS;
+let minimapDrawIntervalMs = QUALITY_MINIMAP_DRAW_INTERVAL_MS;
+let shadowMapSize = QUALITY_SHADOW_MAP_SIZE;
 
 let previewScene = null;
 let previewCamera = null;
@@ -306,7 +321,15 @@ function updateMinimapToggleLabel() {
 
 function updatePerformanceToggleLabel() {
   if (!performanceToggleEl) return;
-  performanceToggleEl.textContent = lowPerformanceMode ? 'Low Performance Mode: On' : 'Low Performance Mode: Off';
+  if (graphicsPreset === 'performance') {
+    performanceToggleEl.textContent = 'Graphics: Performance';
+    return;
+  }
+  if (graphicsPreset === 'balanced') {
+    performanceToggleEl.textContent = 'Graphics: Balanced';
+    return;
+  }
+  performanceToggleEl.textContent = 'Graphics: Quality';
 }
 
 function setMinimapExpanded(expanded) {
@@ -507,7 +530,7 @@ camera.position.set(0, 11, 16);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, renderPixelRatioCap));
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.shadowMap.enabled = !lowPerformanceMode;
+renderer.shadowMap.enabled = graphicsPreset !== 'performance';
 document.body.appendChild(renderer.domElement);
 renderer.domElement.style.touchAction = 'none';
 
@@ -569,8 +592,8 @@ scene.add(hemi);
 
 const sun = new THREE.DirectionalLight(0xffffff, 1.12);
 sun.position.set(14, 32, 22);
-sun.castShadow = !lowPerformanceMode;
-sun.shadow.mapSize.set(lowPerformanceMode ? 256 : 1024, lowPerformanceMode ? 256 : 1024);
+sun.castShadow = graphicsPreset !== 'performance';
+sun.shadow.mapSize.set(shadowMapSize, shadowMapSize);
 scene.add(sun);
 
 const beaconIslandLights = [];
@@ -2705,18 +2728,40 @@ const rain = new THREE.Points(
 );
 rain.visible = false;
 scene.add(rain);
+let rainParticleUpdateCount = rainCount;
 
 function applyPerformanceMode({ persist = true } = {}) {
-  renderPixelRatioCap = lowPerformanceMode ? LOW_RENDER_PIXEL_RATIO_CAP : BALANCED_RENDER_PIXEL_RATIO_CAP;
-  previewPixelRatioCap = lowPerformanceMode ? LOW_PREVIEW_PIXEL_RATIO_CAP : BALANCED_PREVIEW_PIXEL_RATIO_CAP;
-  voiceUpdateIntervalMs = lowPerformanceMode ? LOW_VOICE_UPDATE_INTERVAL_MS : BALANCED_VOICE_UPDATE_INTERVAL_MS;
-  waterfallUpdateIntervalMs = lowPerformanceMode ? LOW_WATERFALL_UPDATE_INTERVAL_MS : BALANCED_WATERFALL_UPDATE_INTERVAL_MS;
-  minimapDrawIntervalMs = lowPerformanceMode ? LOW_MINIMAP_DRAW_INTERVAL_MS : BALANCED_MINIMAP_DRAW_INTERVAL_MS;
+  lowPerformanceMode = graphicsPreset === 'performance';
+  if (graphicsPreset === 'performance') {
+    renderPixelRatioCap = PERFORMANCE_RENDER_PIXEL_RATIO_CAP;
+    previewPixelRatioCap = PERFORMANCE_PREVIEW_PIXEL_RATIO_CAP;
+    voiceUpdateIntervalMs = PERFORMANCE_VOICE_UPDATE_INTERVAL_MS;
+    waterfallUpdateIntervalMs = PERFORMANCE_WATERFALL_UPDATE_INTERVAL_MS;
+    minimapDrawIntervalMs = PERFORMANCE_MINIMAP_DRAW_INTERVAL_MS;
+    shadowMapSize = PERFORMANCE_SHADOW_MAP_SIZE;
+    rainParticleUpdateCount = 220;
+  } else if (graphicsPreset === 'balanced') {
+    renderPixelRatioCap = BALANCED_RENDER_PIXEL_RATIO_CAP;
+    previewPixelRatioCap = BALANCED_PREVIEW_PIXEL_RATIO_CAP;
+    voiceUpdateIntervalMs = BALANCED_VOICE_UPDATE_INTERVAL_MS;
+    waterfallUpdateIntervalMs = BALANCED_WATERFALL_UPDATE_INTERVAL_MS;
+    minimapDrawIntervalMs = BALANCED_MINIMAP_DRAW_INTERVAL_MS;
+    shadowMapSize = BALANCED_SHADOW_MAP_SIZE;
+    rainParticleUpdateCount = 520;
+  } else {
+    renderPixelRatioCap = QUALITY_RENDER_PIXEL_RATIO_CAP;
+    previewPixelRatioCap = QUALITY_PREVIEW_PIXEL_RATIO_CAP;
+    voiceUpdateIntervalMs = QUALITY_VOICE_UPDATE_INTERVAL_MS;
+    waterfallUpdateIntervalMs = QUALITY_WATERFALL_UPDATE_INTERVAL_MS;
+    minimapDrawIntervalMs = QUALITY_MINIMAP_DRAW_INTERVAL_MS;
+    shadowMapSize = QUALITY_SHADOW_MAP_SIZE;
+    rainParticleUpdateCount = rainCount;
+  }
 
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, renderPixelRatioCap));
-  renderer.shadowMap.enabled = !lowPerformanceMode;
-  sun.castShadow = !lowPerformanceMode;
-  sun.shadow.mapSize.set(lowPerformanceMode ? 256 : 1024, lowPerformanceMode ? 256 : 1024);
+  renderer.shadowMap.enabled = graphicsPreset !== 'performance';
+  sun.castShadow = graphicsPreset !== 'performance';
+  sun.shadow.mapSize.set(shadowMapSize, shadowMapSize);
   sun.shadow.needsUpdate = true;
 
   if (previewRenderer) {
@@ -2726,10 +2771,11 @@ function applyPerformanceMode({ persist = true } = {}) {
   }
 
   if (cliffWaterfallRoot) {
-    cliffWaterfallRoot.visible = !lowPerformanceMode;
+    cliffWaterfallRoot.visible = graphicsPreset !== 'performance';
   }
 
   if (persist) {
+    localStorage.setItem('island_graphics_preset', graphicsPreset);
     localStorage.setItem('island_low_performance_mode', lowPerformanceMode ? '1' : '0');
   }
   updatePerformanceToggleLabel();
@@ -5477,7 +5523,9 @@ minimapToggleEl?.addEventListener('click', () => {
   setMinimapEnabled(!minimapEnabled);
 });
 performanceToggleEl?.addEventListener('click', () => {
-  lowPerformanceMode = !lowPerformanceMode;
+  const currentIdx = GRAPHICS_PRESETS.indexOf(graphicsPreset);
+  const nextIdx = currentIdx >= 0 ? (currentIdx + 1) % GRAPHICS_PRESETS.length : 0;
+  graphicsPreset = GRAPHICS_PRESETS[nextIdx];
   applyPerformanceMode();
 });
 minimapEl?.addEventListener('click', () => {
@@ -5752,7 +5800,7 @@ function updateDayAndWeather(delta, nowSeconds) {
   if (renderRain) {
     const attr = rainGeometry.attributes.position;
     // Only iterate particles when rain is actually visible
-    for (let i = 0; i < rainCount; i += 1) {
+    for (let i = 0; i < rainParticleUpdateCount; i += 1) {
       const idx = i * 3;
       attr.array[idx + 1] -= delta * 22;
       if (attr.array[idx + 1] < 0.5) {
