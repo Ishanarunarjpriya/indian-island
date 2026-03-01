@@ -16,6 +16,7 @@ let menuOpen = false;
 let isAuthenticated = false;
 const CHAT_BUBBLE_MS = 4500;
 let lastMineAt = 0;
+let torchEquipped = false;
 
 const questState = {
   coins: 0,
@@ -123,6 +124,7 @@ const emoteButtons = Array.from(document.querySelectorAll('[data-emote]'));
 const inventoryBarEl = document.getElementById('inventory-bar');
 const inventoryPickaxeEl = document.getElementById('inventory-pickaxe');
 const inventoryTorchEl = document.getElementById('inventory-torch');
+const inventoryTorchSlotEl = inventoryTorchEl?.closest('.inventory-slot') || null;
 const gameplayPanels = ['hud', 'mini-panel', 'chat-panel', 'world-state', 'top-left-toolbar', 'inventory-bar']
   .map((id) => document.getElementById(id))
   .filter(Boolean);
@@ -472,6 +474,7 @@ function clearSessionWorld() {
   interactables.clear();
   boatState.onboard = false;
   inMine = false;
+  torchEquipped = false;
 }
 
 function setAuthModalOpen(open, statusText = '') {
@@ -606,6 +609,14 @@ sun.position.set(14, 32, 22);
 sun.castShadow = graphicsPreset !== 'performance';
 sun.shadow.mapSize.set(shadowMapSize, shadowMapSize);
 scene.add(sun);
+
+const TORCH_LIGHT_INTENSITY_SURFACE = 1.45;
+const TORCH_LIGHT_INTENSITY_MINE = 2.25;
+const TORCH_LIGHT_DISTANCE_SURFACE = 14;
+const TORCH_LIGHT_DISTANCE_MINE = 22;
+const torchLight = new THREE.PointLight(0xffcc7a, 0, TORCH_LIGHT_DISTANCE_SURFACE, 1.25);
+torchLight.visible = false;
+scene.add(torchLight);
 
 const beaconIslandLights = [];
 const ISLAND_LAMP_BASE_INTENSITY = 0;
@@ -4283,6 +4294,9 @@ function applyProgressState(progress) {
   questState.inventory.torch = Number.isFinite(torchCount)
     ? Math.max(0, Math.floor(torchCount))
     : 1;
+  if (questState.inventory.torch <= 0) {
+    torchEquipped = false;
+  }
   questState.quest = progress.quest ? { ...progress.quest } : null;
   renderInventoryBar();
   updateQuestPanel();
@@ -4316,9 +4330,51 @@ function renderInventoryBar() {
   if (inventoryPickaxeEl) {
     inventoryPickaxeEl.textContent = capitalizeWord(questState.pickaxe || 'wood');
   }
+  const torchCount = Math.max(0, Math.floor(Number(questState.inventory.torch) || 0));
   if (inventoryTorchEl) {
-    inventoryTorchEl.textContent = String(Math.max(0, Math.floor(Number(questState.inventory.torch) || 0)));
+    inventoryTorchEl.textContent = torchEquipped && torchCount > 0 ? `${torchCount} (On)` : String(torchCount);
   }
+  if (inventoryTorchSlotEl) {
+    inventoryTorchSlotEl.classList.toggle('active', torchEquipped && torchCount > 0);
+  }
+}
+
+function toggleTorchEquip() {
+  const torchCount = Math.max(0, Math.floor(Number(questState.inventory.torch) || 0));
+  if (torchCount <= 0) {
+    torchEquipped = false;
+    renderInventoryBar();
+    appendChatLine({ text: 'No torches available in inventory.', isSystem: true });
+    return;
+  }
+  torchEquipped = !torchEquipped;
+  renderInventoryBar();
+  appendChatLine({ text: torchEquipped ? 'Torch equipped.' : 'Torch put away.', isSystem: true });
+}
+
+function updateTorchLight(local, nowMs) {
+  const torchCount = Math.max(0, Math.floor(Number(questState.inventory.torch) || 0));
+  const active = Boolean(local && torchEquipped && torchCount > 0);
+  if (!active) {
+    torchLight.visible = false;
+    return;
+  }
+
+  const facing = Number.isFinite(local.facingYaw) ? local.facingYaw : cameraYaw;
+  const nearMine = inMine || mineDistance(local.x, local.z) <= MINE_PLAY_RADIUS + 6;
+  const forwardOffset = nearMine ? 0.95 : 0.82;
+  const sideOffset = 0.28;
+  const handY = local.y + (local.isSwimming ? 1.15 : 1.55);
+  const flicker = 0.92 + Math.sin(nowMs * 0.02) * 0.08;
+
+  torchLight.visible = true;
+  torchLight.distance = nearMine ? TORCH_LIGHT_DISTANCE_MINE : TORCH_LIGHT_DISTANCE_SURFACE;
+  torchLight.intensity = (nearMine ? TORCH_LIGHT_INTENSITY_MINE : TORCH_LIGHT_INTENSITY_SURFACE) * flicker;
+  torchLight.position.set(
+    local.x + Math.sin(facing) * forwardOffset + Math.cos(facing) * sideOffset,
+    handY,
+    local.z + Math.cos(facing) * forwardOffset - Math.sin(facing) * sideOffset
+  );
 }
 
 function updateHud() {
@@ -5443,6 +5499,11 @@ window.addEventListener('keydown', (event) => {
 
   if (!isAuthenticated || menuOpen || !customizeModalEl.classList.contains('hidden')) return;
   if (typingInInput) return;
+  if (key === 't' && !event.repeat) {
+    event.preventDefault();
+    toggleTorchEquip();
+    return;
+  }
   if (key === 'q') {
     emoteWheelOpen = true;
     emoteWheelEl?.classList.remove('hidden');
@@ -6684,6 +6745,7 @@ function animate(nowMs) {
   updateMineVisuals(nowMs, delta);
 
   const local = players.get(localPlayerId);
+  updateTorchLight(local, nowMs);
   if (local) {
     const headTrackY = local.y + (local.isSwimming ? 1.15 : 1.78);
     if (firstPersonEnabled) {
