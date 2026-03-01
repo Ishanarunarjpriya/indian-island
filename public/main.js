@@ -29,11 +29,11 @@ const questState = {
 };
 
 const MINE_POS = new THREE.Vector3(140, 1.35, 140);
-const MINE_RADIUS = 38;
-const MINE_PLAY_RADIUS = MINE_RADIUS - 2.4;
-const MINE_ROCK_WALL_RADIUS = MINE_RADIUS - 1.5;
-const MINE_CEILING_Y = 14.2;
-const MINE_CAMERA_MAX_DISTANCE = 12.5;
+const MINE_RADIUS = 52;
+const MINE_PLAY_RADIUS = MINE_RADIUS - 3;
+const MINE_ROCK_WALL_RADIUS = MINE_RADIUS - 2.3;
+const MINE_CEILING_Y = 19.8;
+const MINE_CAMERA_MAX_DISTANCE = 16;
 const MINE_SWIM_BLOCK_RADIUS = MINE_RADIUS + 34;
 const HOUSE_POS = new THREE.Vector3(-worldLimit * 0.33, 1.35, worldLimit * 0.12);
 const MINE_ENTRY_ISLAND_POS = new THREE.Vector3(-worldLimit * 1.95, 0, -worldLimit * 1.2);
@@ -52,9 +52,9 @@ const MINE_ENTRY_POS = new THREE.Vector3(
   1.35,
   MINE_ENTRY_ISLAND_POS.z - (toMainFromMineEntryZ / toMainFromMineEntryLen) * 2.4
 );
-const MINE_EXIT_POS = new THREE.Vector3(MINE_POS.x + 2.2, 1.35, MINE_POS.z + 16.2);
-const QUEST_NPC_POS = new THREE.Vector3(MINE_POS.x + 12.8, 1.35, MINE_POS.z + 5.9);
-const MINE_SHOP_NPC_POS = new THREE.Vector3(MINE_POS.x - 11.6, 1.35, MINE_POS.z - 6.4);
+const MINE_EXIT_POS = new THREE.Vector3(MINE_POS.x + 2.6, 1.35, MINE_POS.z + 23.2);
+const QUEST_NPC_POS = new THREE.Vector3(MINE_POS.x + 19.5, 1.35, MINE_POS.z + 8.1);
+const MINE_SHOP_NPC_POS = new THREE.Vector3(MINE_POS.x - 18.2, 1.35, MINE_POS.z - 9.2);
 const MINE_ENTRY_YAW = Math.atan2(MINE_ENTRY_DOCK_POS.x - MINE_ENTRY_POS.x, MINE_ENTRY_DOCK_POS.z - MINE_ENTRY_POS.z);
 
 let inMine = false;
@@ -2263,7 +2263,7 @@ function addMineArea() {
   mine.position.set(MINE_POS.x, 0, MINE_POS.z);
 
   const floor = new THREE.Mesh(
-    new THREE.CircleGeometry(MINE_RADIUS, 42),
+    new THREE.CircleGeometry(MINE_RADIUS, 68),
     new THREE.MeshStandardMaterial({ color: 0x3b3b3b, roughness: 0.95 })
   );
   floor.rotation.x = -Math.PI / 2;
@@ -2272,7 +2272,7 @@ function addMineArea() {
   mine.add(floor);
 
   const ring = new THREE.Mesh(
-    new THREE.RingGeometry(MINE_RADIUS - 2.2, MINE_RADIUS, 56),
+    new THREE.RingGeometry(MINE_RADIUS - 2.8, MINE_RADIUS, 72),
     new THREE.MeshStandardMaterial({ color: 0x2f241a, roughness: 0.95 })
   );
   ring.rotation.x = -Math.PI / 2;
@@ -2280,13 +2280,13 @@ function addMineArea() {
   mine.add(ring);
 
   const caveShellMat = new THREE.MeshStandardMaterial({
-    color: 0x1a202d,
+    color: 0x151b26,
     roughness: 0.98,
     metalness: 0.02,
     side: THREE.DoubleSide
   });
   const caveWall = new THREE.Mesh(
-    new THREE.CylinderGeometry(MINE_RADIUS + 3.8, MINE_RADIUS + 2.4, MINE_CEILING_Y - 1.4, 68, 1, true),
+    new THREE.CylinderGeometry(MINE_RADIUS + 5.2, MINE_RADIUS + 3.3, MINE_CEILING_Y - 1.2, 88, 1, true),
     caveShellMat
   );
   caveWall.position.y = MINE_CEILING_Y * 0.55;
@@ -2295,8 +2295,8 @@ function addMineArea() {
   mine.add(caveWall);
 
   const caveRoof = new THREE.Mesh(
-    new THREE.CircleGeometry(MINE_RADIUS + 3.9, 64),
-    new THREE.MeshStandardMaterial({ color: 0x171c27, roughness: 0.98, metalness: 0.02, side: THREE.DoubleSide })
+    new THREE.CircleGeometry(MINE_RADIUS + 5.4, 84),
+    new THREE.MeshStandardMaterial({ color: 0x131826, roughness: 0.98, metalness: 0.02, side: THREE.DoubleSide })
   );
   caveRoof.rotation.x = Math.PI / 2;
   caveRoof.position.y = MINE_CEILING_Y;
@@ -2304,16 +2304,16 @@ function addMineArea() {
   caveRoof.receiveShadow = true;
   mine.add(caveRoof);
 
-  for (let i = 0; i < 22; i += 1) {
-    const angle = (i / 22) * Math.PI * 2 + (Math.random() - 0.5) * 0.35;
-    const radius = MINE_RADIUS * (0.2 + Math.random() * 0.72);
+  for (let i = 0; i < 40; i += 1) {
+    const angle = (i / 40) * Math.PI * 2 + (Math.random() - 0.5) * 0.28;
+    const radius = MINE_RADIUS * (0.14 + Math.random() * 0.78);
     const spike = new THREE.Mesh(
-      new THREE.ConeGeometry(0.38 + Math.random() * 0.62, 1.2 + Math.random() * 1.6, 8),
-      new THREE.MeshStandardMaterial({ color: 0x252c3a, roughness: 0.94 })
+      new THREE.ConeGeometry(0.42 + Math.random() * 0.82, 1.4 + Math.random() * 2.2, 8),
+      new THREE.MeshStandardMaterial({ color: 0x202838, roughness: 0.94 })
     );
     spike.position.set(
       Math.cos(angle) * radius,
-      MINE_CEILING_Y - 0.55 - Math.random() * 1.1,
+      MINE_CEILING_Y - 0.48 - Math.random() * 1.8,
       Math.sin(angle) * radius
     );
     spike.rotation.x = Math.PI;
@@ -2323,30 +2323,50 @@ function addMineArea() {
   }
 
   const rockMat = new THREE.MeshStandardMaterial({ color: 0x4b5563, roughness: 0.9 });
-  for (let i = 0; i < 32; i += 1) {
-    const angle = (i / 32) * Math.PI * 2;
-    const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(1.8 + Math.random() * 1.1, 0), rockMat);
-    const radius = MINE_RADIUS - 4.7 + Math.random() * 4.1;
-    rock.position.set(Math.cos(angle) * radius, 2.1 + Math.random() * 2.1, Math.sin(angle) * radius);
-    rock.scale.set(1.2 + Math.random() * 0.9, 1.3 + Math.random() * 1.2, 1.2 + Math.random() * 0.9);
+  for (let i = 0; i < 48; i += 1) {
+    const angle = (i / 48) * Math.PI * 2;
+    const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(1.9 + Math.random() * 1.5, 0), rockMat);
+    const radius = MINE_RADIUS - 6.8 + Math.random() * 5.4;
+    rock.position.set(Math.cos(angle) * radius, 2.2 + Math.random() * 2.8, Math.sin(angle) * radius);
+    rock.scale.set(1.3 + Math.random() * 1.2, 1.4 + Math.random() * 1.5, 1.3 + Math.random() * 1.2);
     rock.castShadow = true;
     rock.receiveShadow = true;
     mine.add(rock);
   }
-  const wallColliderCount = 56;
+  const wallColliderCount = 88;
   for (let i = 0; i < wallColliderCount; i += 1) {
     const angle = (i / wallColliderCount) * Math.PI * 2;
     addWorldCollider(
       MINE_POS.x + Math.cos(angle) * MINE_ROCK_WALL_RADIUS,
       MINE_POS.z + Math.sin(angle) * MINE_ROCK_WALL_RADIUS,
-      1.35,
+      1.5,
       'mine-wall'
     );
   }
 
-  const mineFillLight = new THREE.PointLight(0x8dd5ff, 1.2, MINE_RADIUS * 2.2, 2);
-  mineFillLight.position.set(0, 7.8, 0);
+  const mineAmbient = new THREE.AmbientLight(0x8b9ec6, 0.42);
+  mine.add(mineAmbient);
+  const mineFillLight = new THREE.PointLight(0x8dd5ff, 1.9, MINE_RADIUS * 2.6, 2);
+  mineFillLight.position.set(0, 9.8, 0);
   mine.add(mineFillLight);
+
+  const centralCrystal = new THREE.Mesh(
+    new THREE.OctahedronGeometry(1.9, 0),
+    new THREE.MeshStandardMaterial({
+      color: 0x93c5fd,
+      emissive: 0x1d4ed8,
+      emissiveIntensity: 1.45,
+      roughness: 0.28,
+      metalness: 0.05
+    })
+  );
+  centralCrystal.position.set(0, 3.2, 0);
+  centralCrystal.rotation.y = Math.PI * 0.14;
+  centralCrystal.castShadow = true;
+  mine.add(centralCrystal);
+  const centralCrystalLight = new THREE.PointLight(0x60a5fa, 2.3, 34, 2);
+  centralCrystalLight.position.set(0, 3.5, 0);
+  mine.add(centralCrystalLight);
 
   const caveLampBulbMat = new THREE.MeshStandardMaterial({
     color: 0xffd89c,
@@ -2355,8 +2375,8 @@ function addMineArea() {
     roughness: 0.56
   });
   const caveLampStoneMat = new THREE.MeshStandardMaterial({ color: 0x303948, roughness: 0.95 });
-  const caveLampCount = 6;
-  const caveLampRadius = MINE_RADIUS - 8.2;
+  const caveLampCount = 10;
+  const caveLampRadius = MINE_RADIUS - 9.8;
   for (let i = 0; i < caveLampCount; i += 1) {
     const angle = (i / caveLampCount) * Math.PI * 2 + Math.PI / 6;
     const x = Math.cos(angle) * caveLampRadius;
@@ -2367,7 +2387,7 @@ function addMineArea() {
     lampStone.receiveShadow = true;
     const lampBulb = new THREE.Mesh(new THREE.SphereGeometry(0.28, 14, 12), caveLampBulbMat);
     lampBulb.position.set(x, 2.7, z);
-    const lampLight = new THREE.PointLight(0xffca7c, 1.7, 25, 2);
+    const lampLight = new THREE.PointLight(0xffca7c, 2.3, 32, 2);
     lampLight.position.set(x, 2.86, z);
     mine.add(lampStone, lampBulb, lampLight);
   }
@@ -2392,28 +2412,30 @@ function addMineArea() {
       color: 0x9ca3af,
       reward: 1,
       cooldownMs: 2400,
-      positions: [[-15, -12], [-12, -4], [-9, 9], [-3, -14], [3, -9], [7, 6], [13, -2], [16, 8], [-6, 15], [11, 13]]
+      positions: [
+        [-26, -18], [-22, -7], [-18, 11], [-12, -22], [-7, -12], [-1, 16], [6, -17], [11, 8], [16, -6], [22, 12], [28, 3], [-14, 22]
+      ]
     },
     {
       resource: 'iron',
       color: 0xb45309,
       reward: 2,
       cooldownMs: 4200,
-      positions: [[-14, 4], [-7, -16], [1, -12], [8, 2], [12, 11], [-3, 13], [15, -9]]
+      positions: [[-24, 8], [-16, -25], [-9, -15], [-2, 24], [8, -11], [14, 4], [19, 18], [25, -12], [4, 20]]
     },
     {
       resource: 'gold',
       color: 0xf59e0b,
       reward: 3,
       cooldownMs: 6200,
-      positions: [[-16, 13], [-2, 17], [10, -15], [17, 3], [4, 14]]
+      positions: [[-28, 15], [-12, 26], [3, 28], [14, -22], [24, 6], [20, 23], [-4, -26]]
     },
     {
       resource: 'diamond',
       color: 0x22d3ee,
       reward: 1,
       cooldownMs: 9800,
-      positions: [[-18, -3], [0, 5], [18, 10]]
+      positions: [[-30, -5], [-8, 4], [0, 0], [18, 14], [30, 10]]
     }
   ];
 
