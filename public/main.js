@@ -29,6 +29,14 @@ const questState = {
   }
 };
 
+const PICKAXE_TIERS = ['wood', 'stone', 'iron', 'diamond'];
+const PICKAXE_HEAD_COLORS = {
+  wood: 0x8b5a2b,
+  stone: 0x94a3b8,
+  iron: 0xcbd5e1,
+  diamond: 0x67e8f9
+};
+
 const MINE_POS = new THREE.Vector3(140, 1.35, 140);
 const MINE_RADIUS = 52;
 const MINE_PLAY_RADIUS = MINE_RADIUS - 3;
@@ -173,57 +181,11 @@ const cachedAuthPassword = localStorage.getItem('island_auth_password') || '';
 if (authUsernameEl) authUsernameEl.value = cachedAuthUsername;
 if (authPasswordEl) authPasswordEl.value = cachedAuthPassword;
 
-function makeGuestCredentials() {
-  const arr = new Uint8Array(6);
-  crypto.getRandomValues(arr);
-  const suffix = Array.from(arr).map(b => b.toString(36)).join('').slice(0, 8);
-  const arr2 = new Uint8Array(2);
-  crypto.getRandomValues(arr2);
-  const pin = (arr2[0] * 256 + arr2[1]) % 9000 + 1000;
-  return { username: `guest_${suffix}`, password: `g_${suffix}${pin}` };
-}
-
 function persistAuth(username, password) {
   localStorage.setItem('island_auth_username', username);
   localStorage.setItem('island_auth_password', password);
   if (authUsernameEl) authUsernameEl.value = username;
   if (authPasswordEl) authPasswordEl.value = password;
-}
-
-function autoAuthToGameplay() {
-  const initialUsername = (authUsernameEl?.value || '').trim().toLowerCase();
-  const initialPassword = authPasswordEl?.value || '';
-  const creds = initialUsername && initialPassword ? { username: initialUsername, password: initialPassword } : makeGuestCredentials();
-
-  const tryGuestFallback = () => {
-    const guest = makeGuestCredentials();
-    if (authStatusEl) authStatusEl.textContent = 'Creating guest session...';
-    socket.emit('auth:register', guest, (registerGuest) => {
-      if (!registerGuest?.ok) {
-        if (authStatusEl) authStatusEl.textContent = registerGuest?.error || 'Login failed. Click Login.';
-        return;
-      }
-      persistAuth(guest.username, guest.password);
-      if (authStatusEl) authStatusEl.textContent = `Welcome, ${guest.username}.`;
-    });
-  };
-
-  if (authStatusEl) authStatusEl.textContent = 'Signing in...';
-  socket.emit('auth:login', creds, (loginResp) => {
-    if (loginResp?.ok) {
-      persistAuth(creds.username, creds.password);
-      if (authStatusEl) authStatusEl.textContent = `Welcome, ${creds.username}.`;
-      return;
-    }
-    socket.emit('auth:register', creds, (registerResp) => {
-      if (registerResp?.ok) {
-        persistAuth(creds.username, creds.password);
-        if (authStatusEl) authStatusEl.textContent = `Welcome, ${creds.username}.`;
-        return;
-      }
-      tryGuestFallback();
-    });
-  });
 }
 
 const cachedName = localStorage.getItem('island_profile_name');
@@ -3841,6 +3803,17 @@ function makePlayerMesh(appearance) {
   const rightHand = leftHand.clone();
   rightArmPivot.add(rightHand);
 
+  const heldTorch = createHeldTorchMesh(UNIT);
+  heldTorch.position.set(-0.03 * UNIT, -0.42 * UNIT, 0.05 * UNIT);
+  heldTorch.rotation.set(0.22, 0.08, -0.38);
+  heldTorch.visible = false;
+  leftHand.add(heldTorch);
+
+  const heldPickaxe = createHeldPickaxeMesh(UNIT);
+  heldPickaxe.position.set(0.03 * UNIT, -0.2 * UNIT, 0.05 * UNIT);
+  heldPickaxe.rotation.set(0.35, 0.1, -0.88);
+  rightHand.add(heldPickaxe);
+
   const leftLegPivot = new THREE.Group();
   leftLegPivot.position.set(-0.38 * UNIT, 1.02 * UNIT, 0);
   const leftLeg = new THREE.Mesh(
@@ -4105,6 +4078,10 @@ function makePlayerMesh(appearance) {
     leftEyeWink,
     leftLashes,
     rightLashes,
+    heldTorch,
+    heldTorchFlame: heldTorch.userData.flame || null,
+    heldPickaxe,
+    heldPickaxeHead: heldPickaxe.userData.head || null,
     hat,
     glasses,
     backpack,
@@ -4222,6 +4199,7 @@ function applyPlayerCustomization(id, name, color, appearancePayload) {
   player.appearance = appearance;
   player.color = appearance.shirt;
   paintPlayer(player, appearance);
+  applyHeldGearVisual(player);
 
   if (player.label) {
     player.label.textContent = player.name;
@@ -4294,12 +4272,16 @@ function addPlayer(data) {
     onBoat: false,
     isSwimming: false,
     isLocal: data.id === localPlayerId,
+    heldPickaxe: normalizePickaxeTier(data.pickaxe, 'wood'),
+    torchEquipped: Boolean(data.torchEquipped),
     label: tag,
     bubble,
     bubbleUntil: 0
   });
 
-  paintPlayer(players.get(data.id), appearance);
+  const player = players.get(data.id);
+  paintPlayer(player, appearance);
+  applyHeldGearVisual(player);
   updateHud();
 }
 
@@ -4338,6 +4320,95 @@ function capitalizeWord(value) {
   const text = String(value || '');
   if (!text) return '';
   return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function normalizePickaxeTier(value, fallback = 'wood') {
+  const tier = typeof value === 'string' ? value.toLowerCase() : '';
+  return PICKAXE_TIERS.includes(tier) ? tier : fallback;
+}
+
+function createHeldPickaxeMesh(unit) {
+  const mesh = new THREE.Group();
+  const handle = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.055 * unit, 0.055 * unit, 1.42 * unit, 8),
+    new THREE.MeshStandardMaterial({ color: 0x7c4a26, roughness: 0.8 })
+  );
+  handle.rotation.z = Math.PI / 2;
+  handle.castShadow = true;
+
+  const head = new THREE.Mesh(
+    new THREE.BoxGeometry(0.64 * unit, 0.22 * unit, 0.22 * unit),
+    new THREE.MeshStandardMaterial({ color: PICKAXE_HEAD_COLORS.wood, roughness: 0.45, metalness: 0.18 })
+  );
+  head.position.set(0.58 * unit, 0, 0);
+  head.castShadow = true;
+
+  mesh.add(handle, head);
+  mesh.userData.head = head;
+  return mesh;
+}
+
+function createHeldTorchMesh(unit) {
+  const torch = new THREE.Group();
+  const handle = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.06 * unit, 0.07 * unit, 1.0 * unit, 8),
+    new THREE.MeshStandardMaterial({ color: 0x7c4a26, roughness: 0.85 })
+  );
+  handle.castShadow = true;
+
+  const band = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.08 * unit, 0.08 * unit, 0.14 * unit, 10),
+    new THREE.MeshStandardMaterial({ color: 0x9ca3af, roughness: 0.3, metalness: 0.6 })
+  );
+  band.position.y = 0.42 * unit;
+  band.castShadow = true;
+
+  const flame = new THREE.Mesh(
+    new THREE.ConeGeometry(0.14 * unit, 0.36 * unit, 10),
+    new THREE.MeshStandardMaterial({ color: 0xf97316, emissive: 0xf59e0b, emissiveIntensity: 1.25, roughness: 0.28 })
+  );
+  flame.position.y = 0.72 * unit;
+  flame.castShadow = true;
+
+  torch.add(handle, band, flame);
+  torch.userData.flame = flame;
+  return torch;
+}
+
+function applyHeldGearVisual(player) {
+  const parts = player?.mesh?.userData?.parts;
+  if (!parts) return;
+
+  const tier = normalizePickaxeTier(player.heldPickaxe, 'wood');
+  if (parts.heldPickaxeHead?.material?.color) {
+    parts.heldPickaxeHead.material.color.set(PICKAXE_HEAD_COLORS[tier] || PICKAXE_HEAD_COLORS.wood);
+  }
+  if (parts.heldPickaxe) {
+    parts.heldPickaxe.visible = true;
+  }
+
+  const localTorchCount = player.isLocal ? Math.max(0, Math.floor(Number(questState.inventory.torch) || 0)) : 1;
+  const torchVisible = Boolean(player.torchEquipped) && localTorchCount > 0;
+  if (parts.heldTorch) {
+    parts.heldTorch.visible = torchVisible;
+  }
+  if (parts.heldTorchFlame) {
+    parts.heldTorchFlame.visible = torchVisible;
+  }
+}
+
+function syncLocalHeldGear(emitToServer = false) {
+  const local = players.get(localPlayerId);
+  if (!local) return;
+  local.heldPickaxe = normalizePickaxeTier(questState.pickaxe, 'wood');
+  if (Math.max(0, Math.floor(Number(questState.inventory.torch) || 0)) <= 0) {
+    torchEquipped = false;
+  }
+  local.torchEquipped = torchEquipped;
+  applyHeldGearVisual(local);
+  if (emitToServer && isAuthenticated) {
+    socket.emit('player:gear', { torchEquipped });
+  }
 }
 
 function makeTextSign(text, width = 2.2, height = 0.7, bg = '#8b5a2b', fg = '#fef3c7') {
@@ -4390,7 +4461,7 @@ function nextPickaxeTier() {
 function applyProgressState(progress) {
   if (!progress || typeof progress !== 'object') return;
   questState.coins = Math.max(0, Math.floor(Number(progress.coins) || 0));
-  questState.pickaxe = typeof progress.pickaxe === 'string' ? progress.pickaxe : 'wood';
+  questState.pickaxe = normalizePickaxeTier(progress.pickaxe, 'wood');
   const inv = progress.inventory || {};
   questState.inventory.stone = Math.max(0, Math.floor(Number(inv.stone) || 0));
   questState.inventory.iron = Math.max(0, Math.floor(Number(inv.iron) || 0));
@@ -4404,6 +4475,7 @@ function applyProgressState(progress) {
     torchEquipped = false;
   }
   questState.quest = progress.quest ? { ...progress.quest } : null;
+  syncLocalHeldGear();
   renderInventoryBar();
   updateQuestPanel();
 }
@@ -4452,11 +4524,13 @@ function toggleTorchEquip() {
   const torchCount = Math.max(0, Math.floor(Number(questState.inventory.torch) || 0));
   if (torchCount <= 0) {
     torchEquipped = false;
+    syncLocalHeldGear(true);
     renderInventoryBar();
     appendChatLine({ text: 'No torches available in inventory.', isSystem: true });
     return;
   }
   torchEquipped = !torchEquipped;
+  syncLocalHeldGear(true);
   renderInventoryBar();
   appendChatLine({ text: torchEquipped ? 'Torch equipped.' : 'Torch put away.', isSystem: true });
 }
@@ -5358,9 +5432,8 @@ socket.on('connect', () => {
   statusEl.textContent = 'Connected';
   if (!isAuthenticated) {
     if (authStatusEl && !authStatusEl.textContent.trim()) {
-      authStatusEl.textContent = 'Signing in...';
+      authStatusEl.textContent = 'Connected. Login to continue.';
     }
-    autoAuthToGameplay();
   }
 });
 
@@ -5377,7 +5450,6 @@ socket.on('auth:required', () => {
   statusEl.textContent = 'Auth Required';
   clearSessionWorld();
   setAuthModalOpen(true, 'Please login or create an account.');
-  autoAuthToGameplay();
 });
 
 socket.on('init', (payload) => {
@@ -5435,15 +5507,38 @@ socket.on('playerLeft', (id) => {
   });
 });
 
-socket.on('playerMoved', ({ id, x, y, z, name, color, appearance }) => {
+socket.on('playerMoved', ({ id, x, y, z, name, color, appearance, pickaxe, torchEquipped: movedTorchEquipped }) => {
   const player = players.get(id);
   if (!player) return;
   player.x = x;
   player.y = Number.isFinite(y) ? y : player.y;
   player.z = z;
+  if (typeof pickaxe === 'string') {
+    player.heldPickaxe = normalizePickaxeTier(pickaxe, player.heldPickaxe || 'wood');
+  }
+  if (typeof movedTorchEquipped === 'boolean') {
+    player.torchEquipped = movedTorchEquipped;
+  }
+  applyHeldGearVisual(player);
   if (typeof name === 'string' || typeof color === 'string' || appearance) {
     applyPlayerCustomization(id, name, color, appearance);
   }
+});
+
+socket.on('playerGear', ({ id, pickaxe, torchEquipped: nextTorchEquipped }) => {
+  const player = players.get(id);
+  if (!player) return;
+  if (typeof pickaxe === 'string') {
+    player.heldPickaxe = normalizePickaxeTier(pickaxe, player.heldPickaxe || 'wood');
+  }
+  if (typeof nextTorchEquipped === 'boolean') {
+    player.torchEquipped = nextTorchEquipped;
+    if (id === localPlayerId) {
+      torchEquipped = nextTorchEquipped;
+      renderInventoryBar();
+    }
+  }
+  applyHeldGearVisual(player);
 });
 
 socket.on('playerCustomized', ({ id, name, color, appearance }) => {
@@ -5994,8 +6089,7 @@ async function submitAuth(mode) {
       if (authStatusEl) authStatusEl.textContent = response?.error || 'Authentication failed.';
       return;
     }
-    localStorage.setItem('island_auth_username', username);
-    localStorage.setItem('island_auth_password', password);
+    persistAuth(username, password);
     if (authStatusEl) authStatusEl.textContent = `Welcome, ${username}.`;
   });
 }

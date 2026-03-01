@@ -84,6 +84,7 @@ const interactables = new Map([
 ]);
 let saveTimer = null;
 let accountSaveTimer = null;
+let shuttingDown = false;
 
 app.use(express.static('public'));
 
@@ -449,25 +450,70 @@ function readAccounts() {
   }
 }
 
+function serializeProfiles() {
+  const serialized = {};
+  for (const [profileId, profile] of profiles.entries()) {
+    serialized[profileId] = {
+      name: profile.name,
+      color: profile.color,
+      appearance: profile.appearance,
+      x: Number.isFinite(profile.x) ? profile.x : null,
+      y: Number.isFinite(profile.y) ? profile.y : null,
+      z: Number.isFinite(profile.z) ? profile.z : null,
+      progress: sanitizeProgress(profile.progress)
+    };
+  }
+  return serialized;
+}
+
+function serializeAccounts() {
+  const serialized = {};
+  for (const [username, account] of accounts.entries()) {
+    serialized[username] = {
+      salt: account.salt,
+      hash: account.hash,
+      profileId: account.profileId
+    };
+  }
+  return serialized;
+}
+
+function saveProfilesNow() {
+  try {
+    fs.writeFileSync(PROFILE_FILE, JSON.stringify(serializeProfiles(), null, 2));
+  } catch {
+    // Ignore write failures; runtime state remains authoritative.
+  }
+}
+
+function saveAccountsNow() {
+  try {
+    fs.writeFileSync(ACCOUNT_FILE, JSON.stringify(serializeAccounts(), null, 2));
+  } catch {
+    // Ignore write failures; runtime state remains authoritative.
+  }
+}
+
+function flushPendingSaves() {
+  if (saveTimer) {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+  }
+  if (accountSaveTimer) {
+    clearTimeout(accountSaveTimer);
+    accountSaveTimer = null;
+  }
+  saveProfilesNow();
+  saveAccountsNow();
+}
+
 function scheduleProfileSave() {
   if (saveTimer) {
     clearTimeout(saveTimer);
   }
   saveTimer = setTimeout(() => {
     saveTimer = null;
-    const serialized = {};
-    for (const [profileId, profile] of profiles.entries()) {
-      serialized[profileId] = {
-        name: profile.name,
-        color: profile.color,
-        appearance: profile.appearance,
-        x: Number.isFinite(profile.x) ? profile.x : null,
-        y: Number.isFinite(profile.y) ? profile.y : null,
-        z: Number.isFinite(profile.z) ? profile.z : null,
-        progress: sanitizeProgress(profile.progress)
-      };
-    }
-    fs.writeFile(PROFILE_FILE, JSON.stringify(serialized, null, 2), () => {});
+    saveProfilesNow();
   }, 250);
 }
 
@@ -477,15 +523,7 @@ function scheduleAccountSave() {
   }
   accountSaveTimer = setTimeout(() => {
     accountSaveTimer = null;
-    const serialized = {};
-    for (const [username, account] of accounts.entries()) {
-      serialized[username] = {
-        salt: account.salt,
-        hash: account.hash,
-        profileId: account.profileId
-      };
-    }
-    fs.writeFile(ACCOUNT_FILE, JSON.stringify(serialized, null, 2), () => {});
+    saveAccountsNow();
   }, 250);
 }
 
@@ -556,6 +594,7 @@ function spawnPlayer(socket, profileId, username) {
     y: hasSavedPosition ? clamp(savedY, SWIM_MIN_Y, 30) : ISLAND_SURFACE_Y,
     z: boundedSaved ? boundedSaved.z : spawnPoint.z,
     inMine: Boolean(savedInMine),
+    torchEquipped: false,
     appearance: sanitizeAppearance(profile?.appearance, {
       ...defaultAppearance(),
       shirt: profile?.color || randomHexColor()
@@ -563,6 +602,7 @@ function spawnPlayer(socket, profileId, username) {
     progress: sanitizeProgress(profile?.progress)
   };
   spawn.color = spawn.appearance.shirt;
+  spawn.pickaxe = sanitizePickaxe(spawn.progress?.pickaxe, 'wood');
   players.set(socket.id, spawn);
   socket.emit('init', {
     id: socket.id,
@@ -574,7 +614,7 @@ function spawnPlayer(socket, profileId, username) {
   socket.broadcast.emit('playerJoined', spawn);
 }
 
-function persistPlayerProgress(player) {
+function persistPlayerProgress(player, options = {}) {
   if (!player?.profileId) return;
   profiles.set(player.profileId, {
     name: player.name,
@@ -585,6 +625,10 @@ function persistPlayerProgress(player) {
     z: player.z,
     progress: sanitizeProgress(player.progress)
   });
+  if (options.immediate) {
+    saveProfilesNow();
+    return;
+  }
   scheduleProfileSave();
 }
 
@@ -679,7 +723,9 @@ io.on('connection', (socket) => {
       z: current.z,
       name: current.name,
       color: current.color,
-      appearance: current.appearance
+      appearance: current.appearance,
+      pickaxe: sanitizePickaxe(current?.progress?.pickaxe, 'wood'),
+      torchEquipped: current.torchEquipped === true
     });
   });
 
@@ -720,7 +766,7 @@ io.on('connection', (socket) => {
     const coins = quest.rewardCoins;
     const bonus = quest.rewardDiamonds;
     nextQuest(progress);
-    persistPlayerProgress(actor);
+    persistPlayerProgress(actor, { immediate: true });
     emitProgress(socket, actor);
     io.emit('chat', {
       fromName: 'System',
@@ -788,9 +834,29 @@ io.on('connection', (socket) => {
     }
     progress.coins -= price;
     progress.pickaxe = requested;
-    persistPlayerProgress(actor);
+    actor.pickaxe = requested;
+    persistPlayerProgress(actor, { immediate: true });
     emitProgress(socket, actor);
+    io.emit('playerGear', {
+      id: socket.id,
+      pickaxe: progress.pickaxe,
+      torchEquipped: actor.torchEquipped === true
+    });
     if (typeof ack === 'function') ack({ ok: true, tier: requested });
+  });
+
+  socket.on('player:gear', (payload) => {
+    const actor = players.get(socket.id);
+    if (!actor || !payload || typeof payload !== 'object') return;
+    const wantsTorch = payload.torchEquipped === true;
+    const torchCount = Number(actor.progress?.inventory?.torch);
+    actor.torchEquipped = wantsTorch && Number.isFinite(torchCount) && torchCount > 0;
+    players.set(socket.id, actor);
+    io.emit('playerGear', {
+      id: socket.id,
+      pickaxe: sanitizePickaxe(actor?.progress?.pickaxe, 'wood'),
+      torchEquipped: actor.torchEquipped
+    });
   });
 
   socket.on('interact', (payload) => {
@@ -986,4 +1052,20 @@ io.on('connection', (socket) => {
 
 server.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);
+});
+
+function handleShutdown() {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  flushPendingSaves();
+  server.close(() => {
+    process.exit(0);
+  });
+  setTimeout(() => process.exit(0), 2000).unref();
+}
+
+process.on('SIGINT', handleShutdown);
+process.on('SIGTERM', handleShutdown);
+process.on('beforeExit', () => {
+  flushPendingSaves();
 });
