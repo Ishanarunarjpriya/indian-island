@@ -190,6 +190,10 @@ function sanitizeName(value, fallback) {
   return safe || fallback;
 }
 
+function normalizeNameKey(value) {
+  return sanitizeName(value, '').toLowerCase();
+}
+
 function sanitizeColor(value, fallback) {
   const raw = typeof value === 'string' ? value.trim() : '';
   const isHex = /^#([0-9a-fA-F]{6})$/.test(raw);
@@ -481,6 +485,30 @@ function scheduleAccountSave() {
   }, 250);
 }
 
+function findProfileIdByDisplayName(name, excludeProfileId = null) {
+  const key = normalizeNameKey(name);
+  if (!key) return null;
+  for (const [profileId, profile] of profiles.entries()) {
+    if (excludeProfileId && profileId === excludeProfileId) continue;
+    if (normalizeNameKey(profile?.name) === key) {
+      return profileId;
+    }
+  }
+  return null;
+}
+
+function findAccountByUsernameLikeName(name, excludeProfileId = null) {
+  const key = normalizeNameKey(name);
+  if (!key) return null;
+  for (const account of accounts.values()) {
+    if (excludeProfileId && account.profileId === excludeProfileId) continue;
+    if (normalizeNameKey(account.username) === key) {
+      return account;
+    }
+  }
+  return null;
+}
+
 readProfiles();
 readAccounts();
 
@@ -583,6 +611,10 @@ io.on('connection', (socket) => {
     }
     if (accounts.has(username)) {
       if (typeof ack === 'function') ack({ ok: false, error: 'Username already exists.' });
+      return;
+    }
+    if (findProfileIdByDisplayName(username)) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Display username already exists. Choose a different account username.' });
       return;
     }
     const { salt, hash } = hashPassword(password);
@@ -847,7 +879,16 @@ io.on('connection', (socket) => {
     }
 
     const previousName = current.name;
-    current.name = sanitizeName(payload.name, current.name);
+    const nextName = sanitizeName(payload.name, current.name);
+    if (findProfileIdByDisplayName(nextName, current.profileId)) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Display username already exists.' });
+      return;
+    }
+    if (findAccountByUsernameLikeName(nextName, current.profileId)) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Display username cannot match another account username.' });
+      return;
+    }
+    current.name = nextName;
     current.appearance = sanitizeAppearance(payload.appearance, {
       ...current.appearance,
       shirt: sanitizeColor(payload.color, current.color)

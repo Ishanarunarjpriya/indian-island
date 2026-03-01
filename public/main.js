@@ -5651,7 +5651,7 @@ customizeFormEl.addEventListener('submit', (event) => {
       customizeTimer = null;
     }
     if (!response?.ok) {
-      customizeStatusEl.textContent = 'Save failed. Try again.';
+      customizeStatusEl.textContent = response?.error || 'Save failed. Try again.';
       return;
     }
 
