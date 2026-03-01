@@ -20,7 +20,7 @@ let lastMineAt = 0;
 const questState = {
   coins: 0,
   pickaxe: 'wood',
-  inventory: { stone: 0, iron: 0, gold: 0, diamond: 0 },
+  inventory: { stone: 0, iron: 0, gold: 0, diamond: 0, torch: 1 },
   quest: null,
   shop: {
     order: ['wood', 'stone', 'iron', 'diamond'],
@@ -120,7 +120,10 @@ const emoteWheelEl = document.getElementById('emote-wheel');
 const wheelButtons = Array.from(document.querySelectorAll('[data-wheel-emote]'));
 const nameTagsEl = document.getElementById('name-tags');
 const emoteButtons = Array.from(document.querySelectorAll('[data-emote]'));
-const gameplayPanels = ['hud', 'mini-panel', 'chat-panel', 'world-state', 'top-left-toolbar']
+const inventoryBarEl = document.getElementById('inventory-bar');
+const inventoryPickaxeEl = document.getElementById('inventory-pickaxe');
+const inventoryTorchEl = document.getElementById('inventory-torch');
+const gameplayPanels = ['hud', 'mini-panel', 'chat-panel', 'world-state', 'top-left-toolbar', 'inventory-bar']
   .map((id) => document.getElementById(id))
   .filter(Boolean);
 
@@ -4254,7 +4257,12 @@ function applyProgressState(progress) {
   questState.inventory.iron = Math.max(0, Math.floor(Number(inv.iron) || 0));
   questState.inventory.gold = Math.max(0, Math.floor(Number(inv.gold) || 0));
   questState.inventory.diamond = Math.max(0, Math.floor(Number(inv.diamond) || 0));
+  const torchCount = Number(inv.torch);
+  questState.inventory.torch = Number.isFinite(torchCount)
+    ? Math.max(0, Math.floor(torchCount))
+    : 1;
   questState.quest = progress.quest ? { ...progress.quest } : null;
+  renderInventoryBar();
   updateQuestPanel();
 }
 
@@ -4281,8 +4289,19 @@ function getPickaxePower() {
   return 1;
 }
 
+function renderInventoryBar() {
+  if (inventoryBarEl) inventoryBarEl.classList.remove('hidden');
+  if (inventoryPickaxeEl) {
+    inventoryPickaxeEl.textContent = capitalizeWord(questState.pickaxe || 'wood');
+  }
+  if (inventoryTorchEl) {
+    inventoryTorchEl.textContent = String(Math.max(0, Math.floor(Number(questState.inventory.torch) || 0)));
+  }
+}
+
 function updateHud() {
   playerCountEl.textContent = String(players.size || 1);
+  renderInventoryBar();
   updateQuestPanel();
 }
 

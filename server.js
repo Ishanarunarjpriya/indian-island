@@ -218,7 +218,8 @@ function defaultInventory() {
     stone: 0,
     iron: 0,
     gold: 0,
-    diamond: 0
+    diamond: 0,
+    torch: 1
   };
 }
 
@@ -266,8 +267,11 @@ function sanitizeInventory(value) {
   const base = defaultInventory();
   if (!value || typeof value !== 'object') return base;
   for (const key of Object.keys(base)) {
+    if (!Object.prototype.hasOwnProperty.call(value, key)) continue;
     const n = Number(value[key]);
-    base[key] = Number.isFinite(n) ? clamp(Math.floor(n), 0, 1_000_000) : 0;
+    if (Number.isFinite(n)) {
+      base[key] = clamp(Math.floor(n), 0, 1_000_000);
+    }
   }
   return base;
 }
