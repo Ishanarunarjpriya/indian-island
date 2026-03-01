@@ -4821,9 +4821,13 @@ function tryMineNode(local) {
       updateQuestPanel(resp?.error || 'Could not mine ore.');
       return;
     }
+    if (resp.progress) {
+      applyProgressState(resp.progress);
+    }
     node.readyAt = now + node.cooldownMs;
     node.mesh.visible = false;
-    updateQuestPanel(`Mined ${amount} ${node.resource}.`);
+    const questMsg = resp.questProgressed ? ' Quest progress updated.' : '';
+    updateQuestPanel(`Mined ${amount} ${node.resource}.${questMsg}`);
   });
   return true;
 }

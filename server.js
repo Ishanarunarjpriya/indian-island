@@ -238,8 +238,8 @@ function defaultQuest(seed = 1) {
     progress: 0,
     rewardCoins,
     rewardDiamonds,
-    title: `Mine ${targetCount} ${entry.resource}`,
-    description: `Collect ${targetCount} ${entry.resource} ore chunks in the mine.`,
+    title: `Mine ${targetCount} ore`,
+    description: `Collect ${targetCount} ore chunks in the mine.`,
     status: 'available'
   };
 }
@@ -285,8 +285,8 @@ function sanitizeQuest(value, fallbackSeed = 1) {
     progress,
     rewardCoins,
     rewardDiamonds,
-    title: typeof value.title === 'string' && value.title ? value.title.slice(0, 80) : `Mine ${targetCount} ${resource}`,
-    description: typeof value.description === 'string' && value.description ? value.description.slice(0, 180) : `Collect ${targetCount} ${resource} ore chunks in the mine.`,
+    title: `Mine ${targetCount} ore`,
+    description: `Collect ${targetCount} ore chunks in the mine.`,
     status: progress >= targetCount && status === 'active' ? 'ready' : status
   };
 }
@@ -714,15 +714,17 @@ io.on('connection', (socket) => {
     }
     progress.inventory[resource] = clamp((progress.inventory[resource] || 0) + amount, 0, 1_000_000);
     const quest = progress.quest;
-    if (quest?.status === 'active' && quest.resource === resource) {
+    let questProgressed = false;
+    if (quest?.status === 'active' && quest.type === 'mine') {
       quest.progress = clamp(quest.progress + amount, 0, quest.targetCount);
+      questProgressed = true;
       if (quest.progress >= quest.targetCount) {
         quest.status = 'ready';
       }
     }
     persistPlayerProgress(actor);
     emitProgress(socket, actor);
-    if (typeof ack === 'function') ack({ ok: true });
+    if (typeof ack === 'function') ack({ ok: true, progress: progressSnapshot(progress), questProgressed });
   });
 
   socket.on('shop:buyPickaxe', (payload, ack) => {
