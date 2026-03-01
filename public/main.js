@@ -29,9 +29,11 @@ const questState = {
 };
 
 const MINE_POS = new THREE.Vector3(140, 1.35, 140);
-const MINE_RADIUS = 23;
-const MINE_PLAY_RADIUS = MINE_RADIUS - 1.8;
-const MINE_ROCK_WALL_RADIUS = MINE_RADIUS - 1.25;
+const MINE_RADIUS = 38;
+const MINE_PLAY_RADIUS = MINE_RADIUS - 2.4;
+const MINE_ROCK_WALL_RADIUS = MINE_RADIUS - 1.5;
+const MINE_CEILING_Y = 14.2;
+const MINE_CAMERA_MAX_DISTANCE = 12.5;
 const MINE_SWIM_BLOCK_RADIUS = MINE_RADIUS + 34;
 const HOUSE_POS = new THREE.Vector3(-worldLimit * 0.33, 1.35, worldLimit * 0.12);
 const MINE_ENTRY_ISLAND_POS = new THREE.Vector3(-worldLimit * 1.95, 0, -worldLimit * 1.2);
@@ -50,9 +52,9 @@ const MINE_ENTRY_POS = new THREE.Vector3(
   1.35,
   MINE_ENTRY_ISLAND_POS.z - (toMainFromMineEntryZ / toMainFromMineEntryLen) * 2.4
 );
-const MINE_EXIT_POS = new THREE.Vector3(MINE_POS.x + 1.4, 1.35, MINE_POS.z + 5.8);
-const QUEST_NPC_POS = new THREE.Vector3(MINE_POS.x + 7.0, 1.35, MINE_POS.z + 2.4);
-const MINE_SHOP_NPC_POS = new THREE.Vector3(MINE_POS.x - 6.6, 1.35, MINE_POS.z - 3.4);
+const MINE_EXIT_POS = new THREE.Vector3(MINE_POS.x + 2.2, 1.35, MINE_POS.z + 16.2);
+const QUEST_NPC_POS = new THREE.Vector3(MINE_POS.x + 12.8, 1.35, MINE_POS.z + 5.9);
+const MINE_SHOP_NPC_POS = new THREE.Vector3(MINE_POS.x - 11.6, 1.35, MINE_POS.z - 6.4);
 const MINE_ENTRY_YAW = Math.atan2(MINE_ENTRY_DOCK_POS.x - MINE_ENTRY_POS.x, MINE_ENTRY_DOCK_POS.z - MINE_ENTRY_POS.z);
 
 let inMine = false;
@@ -2267,33 +2269,104 @@ function addMineArea() {
   mine.add(floor);
 
   const ring = new THREE.Mesh(
-    new THREE.RingGeometry(MINE_RADIUS - 1.4, MINE_RADIUS, 42),
+    new THREE.RingGeometry(MINE_RADIUS - 2.2, MINE_RADIUS, 56),
     new THREE.MeshStandardMaterial({ color: 0x2f241a, roughness: 0.95 })
   );
   ring.rotation.x = -Math.PI / 2;
   ring.position.y = 1.335;
   mine.add(ring);
 
+  const caveShellMat = new THREE.MeshStandardMaterial({
+    color: 0x1a202d,
+    roughness: 0.98,
+    metalness: 0.02,
+    side: THREE.DoubleSide
+  });
+  const caveWall = new THREE.Mesh(
+    new THREE.CylinderGeometry(MINE_RADIUS + 3.8, MINE_RADIUS + 2.4, MINE_CEILING_Y - 1.4, 68, 1, true),
+    caveShellMat
+  );
+  caveWall.position.y = MINE_CEILING_Y * 0.55;
+  caveWall.castShadow = true;
+  caveWall.receiveShadow = true;
+  mine.add(caveWall);
+
+  const caveRoof = new THREE.Mesh(
+    new THREE.CircleGeometry(MINE_RADIUS + 3.9, 64),
+    new THREE.MeshStandardMaterial({ color: 0x171c27, roughness: 0.98, metalness: 0.02, side: THREE.DoubleSide })
+  );
+  caveRoof.rotation.x = Math.PI / 2;
+  caveRoof.position.y = MINE_CEILING_Y;
+  caveRoof.castShadow = true;
+  caveRoof.receiveShadow = true;
+  mine.add(caveRoof);
+
+  for (let i = 0; i < 22; i += 1) {
+    const angle = (i / 22) * Math.PI * 2 + (Math.random() - 0.5) * 0.35;
+    const radius = MINE_RADIUS * (0.2 + Math.random() * 0.72);
+    const spike = new THREE.Mesh(
+      new THREE.ConeGeometry(0.38 + Math.random() * 0.62, 1.2 + Math.random() * 1.6, 8),
+      new THREE.MeshStandardMaterial({ color: 0x252c3a, roughness: 0.94 })
+    );
+    spike.position.set(
+      Math.cos(angle) * radius,
+      MINE_CEILING_Y - 0.55 - Math.random() * 1.1,
+      Math.sin(angle) * radius
+    );
+    spike.rotation.x = Math.PI;
+    spike.rotation.y = Math.random() * Math.PI * 2;
+    spike.castShadow = true;
+    mine.add(spike);
+  }
+
   const rockMat = new THREE.MeshStandardMaterial({ color: 0x4b5563, roughness: 0.9 });
-  for (let i = 0; i < 18; i += 1) {
-    const angle = (i / 18) * Math.PI * 2;
-    const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(1.7 + Math.random() * 0.7, 0), rockMat);
-    const radius = MINE_RADIUS - 2.6 + Math.random() * 2.2;
-    rock.position.set(Math.cos(angle) * radius, 2.0 + Math.random() * 1.5, Math.sin(angle) * radius);
-    rock.scale.set(1.1 + Math.random() * 0.6, 1.2 + Math.random() * 0.8, 1.1 + Math.random() * 0.6);
+  for (let i = 0; i < 32; i += 1) {
+    const angle = (i / 32) * Math.PI * 2;
+    const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(1.8 + Math.random() * 1.1, 0), rockMat);
+    const radius = MINE_RADIUS - 4.7 + Math.random() * 4.1;
+    rock.position.set(Math.cos(angle) * radius, 2.1 + Math.random() * 2.1, Math.sin(angle) * radius);
+    rock.scale.set(1.2 + Math.random() * 0.9, 1.3 + Math.random() * 1.2, 1.2 + Math.random() * 0.9);
     rock.castShadow = true;
     rock.receiveShadow = true;
     mine.add(rock);
   }
-  const wallColliderCount = 30;
+  const wallColliderCount = 56;
   for (let i = 0; i < wallColliderCount; i += 1) {
     const angle = (i / wallColliderCount) * Math.PI * 2;
     addWorldCollider(
       MINE_POS.x + Math.cos(angle) * MINE_ROCK_WALL_RADIUS,
       MINE_POS.z + Math.sin(angle) * MINE_ROCK_WALL_RADIUS,
-      1.2,
+      1.35,
       'mine-wall'
     );
+  }
+
+  const mineFillLight = new THREE.PointLight(0x8dd5ff, 1.2, MINE_RADIUS * 2.2, 2);
+  mineFillLight.position.set(0, 7.8, 0);
+  mine.add(mineFillLight);
+
+  const caveLampBulbMat = new THREE.MeshStandardMaterial({
+    color: 0xffd89c,
+    emissive: 0x8a5d1f,
+    emissiveIntensity: 1.35,
+    roughness: 0.56
+  });
+  const caveLampStoneMat = new THREE.MeshStandardMaterial({ color: 0x303948, roughness: 0.95 });
+  const caveLampCount = 6;
+  const caveLampRadius = MINE_RADIUS - 8.2;
+  for (let i = 0; i < caveLampCount; i += 1) {
+    const angle = (i / caveLampCount) * Math.PI * 2 + Math.PI / 6;
+    const x = Math.cos(angle) * caveLampRadius;
+    const z = Math.sin(angle) * caveLampRadius;
+    const lampStone = new THREE.Mesh(new THREE.DodecahedronGeometry(0.85, 0), caveLampStoneMat);
+    lampStone.position.set(x, 2.0, z);
+    lampStone.castShadow = true;
+    lampStone.receiveShadow = true;
+    const lampBulb = new THREE.Mesh(new THREE.SphereGeometry(0.28, 14, 12), caveLampBulbMat);
+    lampBulb.position.set(x, 2.7, z);
+    const lampLight = new THREE.PointLight(0xffca7c, 1.7, 25, 2);
+    lampLight.position.set(x, 2.86, z);
+    mine.add(lampStone, lampBulb, lampLight);
   }
 
   const exitPortal = new THREE.Mesh(
@@ -2311,10 +2384,34 @@ function addMineArea() {
   mineExitMesh = exitPortal;
 
   const oreDefs = [
-    { resource: 'stone', color: 0x9ca3af, reward: 1, cooldownMs: 2400, positions: [[-7, -5], [-4, -2], [3, -4], [6, -1], [-2, 6], [5, 7]] },
-    { resource: 'iron', color: 0xb45309, reward: 2, cooldownMs: 4200, positions: [[-6, 2], [-1, -7], [4, 4], [8, 1]] },
-    { resource: 'gold', color: 0xf59e0b, reward: 3, cooldownMs: 6200, positions: [[-8, 7], [1, 8], [7, -7]] },
-    { resource: 'diamond', color: 0x22d3ee, reward: 1, cooldownMs: 9800, positions: [[-9, -1], [9, 5]] }
+    {
+      resource: 'stone',
+      color: 0x9ca3af,
+      reward: 1,
+      cooldownMs: 2400,
+      positions: [[-15, -12], [-12, -4], [-9, 9], [-3, -14], [3, -9], [7, 6], [13, -2], [16, 8], [-6, 15], [11, 13]]
+    },
+    {
+      resource: 'iron',
+      color: 0xb45309,
+      reward: 2,
+      cooldownMs: 4200,
+      positions: [[-14, 4], [-7, -16], [1, -12], [8, 2], [12, 11], [-3, 13], [15, -9]]
+    },
+    {
+      resource: 'gold',
+      color: 0xf59e0b,
+      reward: 3,
+      cooldownMs: 6200,
+      positions: [[-16, 13], [-2, 17], [10, -15], [17, 3], [4, 14]]
+    },
+    {
+      resource: 'diamond',
+      color: 0x22d3ee,
+      reward: 1,
+      cooldownMs: 9800,
+      positions: [[-18, -3], [0, 5], [18, 10]]
+    }
   ];
 
   oreDefs.forEach((def) => {
@@ -5975,16 +6072,27 @@ function updateDayAndWeather(delta, nowSeconds) {
   // Center daylight at noon and keep midnight consistently darkest.
   const solarCurve = Math.cos((dayTime - 0.5) * Math.PI * 2);
   const dayFactor = THREE.MathUtils.clamp((solarCurve + 0.2) / 1.2, 0, 1);
+  const insideMine = inMine === true;
+  const outdoorSunIntensity = 0.03 + dayFactor * 1.07;
+  const outdoorHemiIntensity = 0.06 + dayFactor * 0.92;
 
-  sun.intensity = 0.03 + dayFactor * 1.07;
-  hemi.intensity = 0.06 + dayFactor * 0.92;
+  sun.intensity = insideMine ? outdoorSunIntensity * 0.08 : outdoorSunIntensity;
+  hemi.intensity = insideMine ? (0.1 + dayFactor * 0.2) : outdoorHemiIntensity;
   sun.position.set(Math.cos(sunAngle) * 40, 16 + dayFactor * 26, Math.sin(sunAngle) * 40);
 
-  _skyColor.setHSL(0.58, 0.5, 0.035 + dayFactor * 0.52);
-  _fogColor.setHSL(0.58, 0.36, 0.02 + dayFactor * 0.35);
-  scene.fog.color.copy(_fogColor);
-  scene.fog.near = 34 + dayFactor * 14;
-  scene.fog.far = 88 + dayFactor * 84;
+  if (insideMine) {
+    _skyColor.setHSL(0.62, 0.28, 0.055);
+    _fogColor.setHSL(0.62, 0.25, 0.045);
+    scene.fog.color.copy(_fogColor);
+    scene.fog.near = 10;
+    scene.fog.far = MINE_RADIUS + 26;
+  } else {
+    _skyColor.setHSL(0.58, 0.5, 0.035 + dayFactor * 0.52);
+    _fogColor.setHSL(0.58, 0.36, 0.02 + dayFactor * 0.35);
+    scene.fog.color.copy(_fogColor);
+    scene.fog.near = 34 + dayFactor * 14;
+    scene.fog.far = 88 + dayFactor * 84;
+  }
   renderer.setClearColor(_skyColor);
 
   if (nowSeconds > nextWeatherToggleAt) {
@@ -5992,9 +6100,9 @@ function updateDayAndWeather(delta, nowSeconds) {
     nextWeatherToggleAt = nowSeconds + 22 + Math.random() * 16;
   }
 
-  const renderRain = rainActive && !lowPerformanceMode;
+  const renderRain = rainActive && !lowPerformanceMode && !insideMine;
   rain.visible = renderRain;
-  weatherLabelEl.textContent = rainActive ? (lowPerformanceMode ? 'Rain (lite)' : 'Rain') : 'Clear';
+  weatherLabelEl.textContent = insideMine ? 'Cave' : (rainActive ? (lowPerformanceMode ? 'Rain (lite)' : 'Rain') : 'Clear');
 
   if (renderRain) {
     const attr = rainGeometry.attributes.position;
@@ -6555,10 +6663,18 @@ function animate(nowMs) {
       camera.lookAt(lookX, lookY, lookZ);
     } else {
       local.mesh.visible = true;
-      const activeCameraTarget = inLighthouseInterior ? Math.min(cameraDistanceTarget, 10.5) : cameraDistanceTarget;
+      let activeCameraTarget = cameraDistanceTarget;
+      if (inLighthouseInterior) {
+        activeCameraTarget = Math.min(activeCameraTarget, 10.5);
+      } else if (inMine) {
+        activeCameraTarget = Math.min(activeCameraTarget, MINE_CAMERA_MAX_DISTANCE);
+      }
       cameraDistance += (activeCameraTarget - cameraDistance) * Math.min(1, delta * 10);
       if (inLighthouseInterior) {
         cameraDistance = Math.min(cameraDistance, 10.5);
+        cameraDistanceTarget = activeCameraTarget;
+      } else if (inMine) {
+        cameraDistance = Math.min(cameraDistance, MINE_CAMERA_MAX_DISTANCE);
         cameraDistanceTarget = activeCameraTarget;
       }
 
@@ -6567,7 +6683,7 @@ function animate(nowMs) {
       const offsetY = Math.sin(cameraPitch) * cameraDistance;
       const offsetZ = Math.cos(cameraYaw) * horizontal;
       let desiredX = local.x + offsetX;
-      const desiredY = headTrackY + offsetY;
+      let desiredY = headTrackY + offsetY;
       let desiredZ = local.z + offsetZ;
       if (inLighthouseInterior) {
         const camRadius = INTERIOR_PLAY_RADIUS - 1.35;
@@ -6579,6 +6695,17 @@ function animate(nowMs) {
           desiredX = LIGHTHOUSE_INTERIOR_BASE.x + cdx * scale;
           desiredZ = LIGHTHOUSE_INTERIOR_BASE.z + cdz * scale;
         }
+      } else if (inMine) {
+        const camRadius = MINE_PLAY_RADIUS - 1.9;
+        const cdx = desiredX - MINE_POS.x;
+        const cdz = desiredZ - MINE_POS.z;
+        const clen = Math.hypot(cdx, cdz);
+        if (clen > camRadius) {
+          const scale = camRadius / (clen || 1);
+          desiredX = MINE_POS.x + cdx * scale;
+          desiredZ = MINE_POS.z + cdz * scale;
+        }
+        desiredY = Math.min(desiredY, MINE_CEILING_Y - 1.1);
       }
 
       camera.position.x += (desiredX - camera.position.x) * Math.min(1, delta * 10);
