@@ -4189,17 +4189,23 @@ function updateHud() {
   updateQuestPanel();
 }
 
-function appendChatLine({ fromName, text, sentAt, isSystem = false }) {
+function appendChatLine({ fromName, text, sentAt, isSystem = false, isPrivate = false, isOutgoingPrivate = false }) {
   const row = document.createElement('li');
+  if (isSystem) row.classList.add('system');
+  if (isPrivate) row.classList.add('private');
+  if (isOutgoingPrivate) row.classList.add('outgoing');
   const time = new Date(sentAt || Date.now()).toLocaleTimeString([], {
     hour: '2-digit',
     minute: '2-digit'
   });
 
   const safeName = isSystem ? 'System' : fromName || 'Player';
+  const label = isPrivate
+    ? (isOutgoingPrivate ? `To ${safeName} (private)` : `${safeName} (private)`)
+    : safeName;
   const meta = document.createElement('span');
   meta.className = 'meta';
-  meta.textContent = `[${time}] ${safeName}:`;
+  meta.textContent = `[${time}] ${label}:`;
   row.appendChild(meta);
   row.appendChild(document.createTextNode(` ${text}`));
   chatLogEl.appendChild(row);
@@ -4209,6 +4215,70 @@ function appendChatLine({ fromName, text, sentAt, isSystem = false }) {
   }
 
   chatLogEl.scrollTop = chatLogEl.scrollHeight;
+}
+
+function parsePrivateChatCommand(inputText) {
+  const raw = String(inputText || '').trim();
+  const match = raw.match(/^\/(msg|pm|w|whisper)\s+(.+)$/i);
+  if (!match) return null;
+
+  const body = match[2].trim();
+  if (!body) {
+    return { error: 'Usage: /msg <player> <message>' };
+  }
+
+  let targetName = '';
+  let message = '';
+  if (body.startsWith('"')) {
+    const closingQuote = body.indexOf('"', 1);
+    if (closingQuote <= 1) {
+      return { error: 'For names with spaces, use quotes: /msg "Player Name" hello' };
+    }
+    targetName = body.slice(1, closingQuote).trim();
+    message = body.slice(closingQuote + 1).trim();
+  } else {
+    const firstSpace = body.indexOf(' ');
+    if (firstSpace <= 0) {
+      return { error: 'Usage: /msg <player> <message>' };
+    }
+    targetName = body.slice(0, firstSpace).trim();
+    message = body.slice(firstSpace + 1).trim();
+  }
+
+  if (!targetName || !message) {
+    return { error: 'Usage: /msg <player> <message>' };
+  }
+  return { targetName, message };
+}
+
+function resolvePrivateRecipient(targetName) {
+  const query = String(targetName || '').trim().toLowerCase();
+  if (!query) return { error: 'Recipient is required.' };
+
+  const localName = String(players.get(localPlayerId)?.name || '').toLowerCase();
+  if (localName && localName === query) {
+    return { error: 'You cannot message yourself.' };
+  }
+
+  const exactMatches = [];
+  const prefixMatches = [];
+  players.forEach((player, id) => {
+    if (!player || id === localPlayerId) return;
+    const name = String(player.name || '').trim();
+    if (!name) return;
+    const lower = name.toLowerCase();
+    if (lower === query) {
+      exactMatches.push({ id, name });
+    } else if (lower.startsWith(query)) {
+      prefixMatches.push({ id, name });
+    }
+  });
+
+  if (exactMatches.length === 1) return { recipient: exactMatches[0] };
+  if (exactMatches.length > 1) return { error: `Multiple players named "${targetName}" are online.` };
+  if (prefixMatches.length === 1) return { recipient: prefixMatches[0] };
+  if (prefixMatches.length > 1) return { error: `"${targetName}" matches multiple players. Be more specific.` };
+  return { error: `Player "${targetName}" is not online.` };
 }
 
 function triggerEmote(type) {
@@ -5151,6 +5221,14 @@ socket.on('chat', ({ fromId, fromName, text, sentAt }) => {
   }
 });
 
+socket.on('private:message', ({ fromId, fromName, text, sentAt }) => {
+  const resolvedName = fromId ? players.get(fromId)?.name || fromName : fromName;
+  appendChatLine({ fromName: resolvedName, text, sentAt, isPrivate: true });
+  if (fromId) {
+    showChatBubble(fromId, `(private) ${text}`);
+  }
+});
+
 function keyToEmote(key) {
   if (key === '1') return 'wave';
   if (key === '2') return 'dance';
@@ -5282,6 +5360,39 @@ chatFormEl.addEventListener('submit', (event) => {
   if (!isAuthenticated) return;
   const text = chatInputEl.value.trim();
   if (!text) return;
+
+  const privateCommand = parsePrivateChatCommand(text);
+  if (privateCommand) {
+    if (privateCommand.error) {
+      appendChatLine({ text: privateCommand.error, isSystem: true });
+      chatInputEl.focus();
+      return;
+    }
+    const resolved = resolvePrivateRecipient(privateCommand.targetName);
+    if (!resolved.recipient) {
+      appendChatLine({ text: resolved.error || 'Private message failed.', isSystem: true });
+      chatInputEl.focus();
+      return;
+    }
+
+    socket.emit('private:send', { toId: resolved.recipient.id, text: privateCommand.message }, (resp) => {
+      if (!resp?.ok) {
+        appendChatLine({ text: resp?.error || 'Private message failed.', isSystem: true });
+        chatInputEl.focus();
+        return;
+      }
+      appendChatLine({
+        fromName: resp.toName || resolved.recipient.name,
+        text: resp.text || privateCommand.message,
+        sentAt: resp.sentAt,
+        isPrivate: true,
+        isOutgoingPrivate: true
+      });
+      chatInputEl.value = '';
+      chatInputEl.focus();
+    });
+    return;
+  }
 
   socket.emit('chat', { text });
   chatInputEl.value = '';
