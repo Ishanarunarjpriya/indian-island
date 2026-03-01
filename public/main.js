@@ -5635,7 +5635,6 @@ customizeFormEl.addEventListener('submit', (event) => {
   const color = appearance.shirt;
   if (!name) return;
 
-  applyPlayerCustomization(localPlayerId, name, color, appearance);
   customizeStatusEl.textContent = `Saving ${name}...`;
   if (customizeTimer) {
     clearTimeout(customizeTimer);
@@ -5651,6 +5650,10 @@ customizeFormEl.addEventListener('submit', (event) => {
       customizeTimer = null;
     }
     if (!response?.ok) {
+      const persistedName = String(players.get(localPlayerId)?.name || '').trim();
+      if (persistedName) {
+        nameInputEl.value = persistedName;
+      }
       customizeStatusEl.textContent = response?.error || 'Save failed. Try again.';
       return;
     }
