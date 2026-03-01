@@ -792,7 +792,85 @@ io.on('connection', (socket) => {
       fromName: sender.name,
       text,
       sentAt: Date.now()
+    })
+
+  socket.on('private:send', (payload, ack) => {
+    const sender = players.get(socket.id);
+    if (!sender || !payload) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Not authenticated or invalid payload.' });
+      return;
+    }
+
+    const rawText = typeof payload.text === 'string' ? payload.text : '';
+    const text = filterChatText(rawText.trim().slice(0, CHAT_MAX_LEN));
+    if (!text) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Message cannot be empty.' });
+      return;
+    }
+
+    const targetUsername = sanitizeUsername(payload.target);
+    if (!targetUsername) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Invalid recipient.' });
+      return;
+    }
+
+    // Find target player by username
+    let targetSocket = null;
+    for (const [playerSocketId, player] of players.entries()) {
+      if (player.name.toLowerCase() === targetUsername.toLowerCase()) {
+        targetSocket = io.sockets.sockets.get(playerSocketId);
+        break;
+      }
+    }
+
+    if (!targetSocket) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Player not found or offline.' });
+      return;
+    }
+
+    // Send private message to target
+    targetSocket.emit('private:message', {
+      fromId: socket.id,
+      fromName: sender.name,
+      text: text,
+      sentAt: Date.now(),
+      private: true
     });
+
+    // Send confirmation to sender
+    if (typeof ack === 'function') ack({ 
+      ok: true, 
+      to: targetPlayer.name,
+      message: text 
+    });
+
+    // Store message for potential replay/history (optional)
+    // You could add this to player profiles if you want chat history
+  });
+
+  socket.on('private:typing', (payload) => {
+    const sender = players.get(socket.id);
+    if (!sender || !payload || !payload.target) return;
+
+    const targetUsername = sanitizeUsername(payload.target);
+    if (!targetUsername) return;
+
+    // Find target player
+    for (const [playerSocketId, player] of players.entries()) {
+      if (player.name.toLowerCase() === targetUsername.toLowerCase()) {
+        const targetSocket = io.sockets.sockets.get(playerSocketId);
+        if (targetSocket) {
+          targetSocket.emit('private:typing', {
+            fromId: socket.id,
+            fromName: sender.name,
+            typing: payload.typing || false
+          });
+        }
+        break;
+      }
+    }
+  });
+;
   });
 
   socket.on('customize', (payload, ack) => {

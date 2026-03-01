@@ -1,0 +1,981 @@
+### /Users/ishanarun/Library/Mobile Documents/com~apple~CloudDocs/Indian Island Latest (iCloud)/server.js
+```javascript
+1: import express from 'express';
+2: import crypto from 'crypto';
+3: import fs from 'fs';
+4: import http from 'http';
+5: import path from 'path';
+6: import { fileURLToPath } from 'url';
+7: import { Server } from 'socket.io';
+8: 
+9: const app = express();
+10: const server = http.createServer(app);
+11: const io = new Server(server);
+12: 
+13: const PORT = process.env.PORT || 3000;
+14: const WORLD_LIMIT = 40;
+15: const ISLAND_SURFACE_Y = 1.35;
+16: const LIGHTHOUSE_POS = {
+17:   x: WORLD_LIMIT * 1.65,
+18:   z: -WORLD_LIMIT * 1.85
+19: };
+20: const LIGHTHOUSE_RADIUS = 11.7;
+21: const INTERIOR_POS = { x: -130, z: 210 };
+22: const INTERIOR_RADIUS = 11.2;
+23: const SWIM_MIN_RADIUS = WORLD_LIMIT + 0.6;
+24: const SWIM_MAX_RADIUS = WORLD_LIMIT * 3.9;
+25: const SWIM_MIN_Y = -0.15;
+26: const PLAYABLE_BOUND = WORLD_LIMIT * 4.1;
+27: const MINE_POS = { x: 140, z: 140 };
+28: const MINE_RADIUS = 23;
+29: const MINE_PLAY_RADIUS = MINE_RADIUS - 1.8;
+30: const MINE_SWIM_BLOCK_RADIUS = MINE_RADIUS + 34;
+31: const MINE_ENTRY_ISLAND_POS = { x: -WORLD_LIMIT * 1.95, z: -WORLD_LIMIT * 1.2 };
+32: const MINE_ENTRY_ISLAND_RADIUS = 11.4;
+33: const INTERACT_RANGE = 4;
+34: const CHAT_MAX_LEN = 220;
+35: const NAME_MAX_LEN = 18;
+36: const CHAT_FILTER_WORDS = [
+37:   'fuck',
+38:   'fucking',
+39:   'shit',
+40:   'bitch',
+41:   'asshole',
+42:   'bastard',
+43:   'dick',
+44:   'pussy',
+45:   'cunt',
+46:   'nigger',
+47:   'nigga',
+48:   'whore',
+49:   'slut',
+50:   'rape',
+51:   'retard'
+52: ];
+53: const HAIR_STYLES = new Set(['none', 'short', 'sidepart', 'spiky', 'long', 'ponytail', 'bob', 'wavy']);
+54: const FACE_STYLES = new Set(['smile', 'serious', 'grin', 'wink', 'lashessmile', 'soft']);
+55: const ACCESSORY_TYPES = new Set(['hat', 'glasses', 'backpack']);
+56: const ORE_TYPES = new Set(['stone', 'iron', 'gold', 'diamond']);
+57: const PICKAXE_ORDER = ['wood', 'stone', 'iron', 'diamond'];
+58: const PICKAXE_PRICE = {
+59:   stone: 120,
+60:   iron: 280,
+61:   diamond: 620
+62: };
+63: 
+64: const __filename = fileURLToPath(import.meta.url);
+65: const __dirname = path.dirname(__filename);
+66: const PROFILE_FILE = path.join(__dirname, 'profiles.json');
+67: const ACCOUNT_FILE = path.join(__dirname, 'accounts.json');
+68: 
+69: const players = new Map();
+70: const profiles = new Map();
+71: const accounts = new Map();
+72: const voiceParticipants = new Set();
+73: const interactables = new Map([
+74:   [
+75:     'beacon',
+76:     {
+77:       id: 'beacon',
+78:       x: 0,
+79:       z: 0,
+80:       active: false,
+81:       lastBy: null
+82:     }
+83:   ]
+84: ]);
+85: let saveTimer = null;
+86: let accountSaveTimer = null;
+87: 
+88: app.use(express.static('public'));
+89: 
+90: function clamp(value, min, max) {
+91:   return Math.max(min, Math.min(max, value));
+92: }
+93: 
+94: function clampToIsland(x, z, limit) {
+95:   const radius = Math.hypot(x, z);
+96:   if (radius <= limit) {
+97:     return { x, z };
+98:   }
+99: 
+100:   const scale = limit / (radius || 1);
+101:   return { x: x * scale, z: z * scale };
+102: }
+103: 
+104: function clampToPlayableGround(x, z, allowMine = false) {
+105:   const MAIN_RADIUS = WORLD_LIMIT * 1.14;
+106:   const MINE_ENTRY_RADIUS = MINE_ENTRY_ISLAND_RADIUS;
+107:   const mineDist = Math.hypot(x - MINE_POS.x, z - MINE_POS.z);
+108:   const mineSwimBlocked = allowMine && mineDist <= MINE_SWIM_BLOCK_RADIUS;
+109:   const onMain = Math.hypot(x, z) <= MAIN_RADIUS;
+110:   const onLighthouse = Math.hypot(x - LIGHTHOUSE_POS.x, z - LIGHTHOUSE_POS.z) <= LIGHTHOUSE_RADIUS;
+111:   const onMineEntryIsland = Math.hypot(x - MINE_ENTRY_ISLAND_POS.x, z - MINE_ENTRY_ISLAND_POS.z) <= MINE_ENTRY_RADIUS;
+112:   const onInterior = Math.hypot(x - INTERIOR_POS.x, z - INTERIOR_POS.z) <= INTERIOR_RADIUS;
+113:   const onMine = allowMine && mineDist <= MINE_PLAY_RADIUS;
+114:   const radius = Math.hypot(x, z);
+115:   const onSwimRing = radius >= SWIM_MIN_RADIUS && radius <= SWIM_MAX_RADIUS && !mineSwimBlocked;
+116:   if (onMain || onLighthouse || onMineEntryIsland || onInterior || onMine || onSwimRing) {
+117:     return { x, z };
+118:   }
+119: 
+120:   const toMain = clampToIsland(x, z, MAIN_RADIUS);
+121:   const distMain = Math.hypot(x - toMain.x, z - toMain.z);
+122: 
+123:   const dxL = x - LIGHTHOUSE_POS.x;
+124:   const dzL = z - LIGHTHOUSE_POS.z;
+125:   const lenL = Math.hypot(dxL, dzL) || 1;
+126:   const toLighthouse = {
+127:     x: LIGHTHOUSE_POS.x + (dxL / lenL) * LIGHTHOUSE_RADIUS,
+128:     z: LIGHTHOUSE_POS.z + (dzL / lenL) * LIGHTHOUSE_RADIUS
+129:   };
+130:   const distLighthouse = Math.hypot(x - toLighthouse.x, z - toLighthouse.z);
+131:   const dxE = x - MINE_ENTRY_ISLAND_POS.x;
+132:   const dzE = z - MINE_ENTRY_ISLAND_POS.z;
+133:   const lenE = Math.hypot(dxE, dzE) || 1;
+134:   const toMineEntry = {
+135:     x: MINE_ENTRY_ISLAND_POS.x + (dxE / lenE) * MINE_ENTRY_RADIUS,
+136:     z: MINE_ENTRY_ISLAND_POS.z + (dzE / lenE) * MINE_ENTRY_RADIUS
+137:   };
+138:   const distMineEntry = Math.hypot(x - toMineEntry.x, z - toMineEntry.z);
+139: 
+140:   const dxI = x - INTERIOR_POS.x;
+141:   const dzI = z - INTERIOR_POS.z;
+142:   const lenI = Math.hypot(dxI, dzI) || 1;
+143:   const toInterior = {
+144:     x: INTERIOR_POS.x + (dxI / lenI) * INTERIOR_RADIUS,
+145:     z: INTERIOR_POS.z + (dzI / lenI) * INTERIOR_RADIUS
+146:   };
+147:   const distInterior = Math.hypot(x - toInterior.x, z - toInterior.z);
+148:   const dxM = x - MINE_POS.x;
+149:   const dzM = z - MINE_POS.z;
+150:   const lenM = Math.hypot(dxM, dzM) || 1;
+151:   const toMine = {
+152:     x: MINE_POS.x + (dxM / lenM) * MINE_PLAY_RADIUS,
+153:     z: MINE_POS.z + (dzM / lenM) * MINE_PLAY_RADIUS
+154:   };
+155:   const distMine = allowMine ? Math.hypot(x - toMine.x, z - toMine.z) : Number.POSITIVE_INFINITY;
+156:   const toSwim = (() => {
+157:     const len = Math.hypot(x, z) || 1;
+158:     const target = len < SWIM_MIN_RADIUS ? SWIM_MIN_RADIUS : SWIM_MAX_RADIUS;
+159:     const scale = target / len;
+160:     return { x: x * scale, z: z * scale };
+161:   })();
+162:   const distSwim = mineSwimBlocked ? Number.POSITIVE_INFINITY : Math.hypot(x - toSwim.x, z - toSwim.z);
+163: 
+164:   if (distMain <= distLighthouse && distMain <= distMineEntry && distMain <= distInterior && distMain <= distSwim && distMain <= distMine) return toMain;
+165:   if (distLighthouse <= distMineEntry && distLighthouse <= distInterior && distLighthouse <= distSwim && distLighthouse <= distMine) return toLighthouse;
+166:   if (distMineEntry <= distInterior && distMineEntry <= distSwim && distMineEntry <= distMine) return toMineEntry;
+167:   if (distInterior <= distSwim && distInterior <= distMine) return toInterior;
+168:   if (distMine <= distSwim) return toMine;
+169:   return toSwim;
+170: }
+171: 
+172: function randomSpawn(limit) {
+173:   const angle = Math.random() * Math.PI * 2;
+174:   const radius = Math.sqrt(Math.random()) * limit;
+175:   return {
+176:     x: Math.cos(angle) * radius,
+177:     z: Math.sin(angle) * radius
+178:   };
+179: }
+180: 
+181: function randomHexColor() {
+182:   const value = Math.floor(Math.random() * 0xffffff);
+183:   return `#${value.toString(16).padStart(6, '0')}`;
+184: }
+185: 
+186: function sanitizeName(value, fallback) {
+187:   const raw = typeof value === 'string' ? value : '';
+188:   const normalized = raw.replace(/\s+/g, ' ').trim().slice(0, NAME_MAX_LEN);
+189:   const safe = normalized.replace(/[\x00-\x1F\x7F<>]/g, '');
+190:   return safe || fallback;
+191: }
+192: 
+193: function sanitizeColor(value, fallback) {
+194:   const raw = typeof value === 'string' ? value.trim() : '';
+195:   const isHex = /^#([0-9a-fA-F]{6})$/.test(raw);
+196:   return isHex ? raw : fallback;
+197: }
+198: 
+199: function defaultAppearance() {
+200:   return {
+201:     skin: '#f3cfb3',
+202:     shirt: '#5a8ef2',
+203:     pants: '#334155',
+204:     shoes: '#111827',
+205:     hairStyle: 'short',
+206:     hairColor: '#2b211c',
+207:     faceStyle: 'smile',
+208:     accessories: []
+209:   };
+210: }
+211: 
+212: function defaultInventory() {
+213:   return {
+214:     stone: 0,
+215:     iron: 0,
+216:     gold: 0,
+217:     diamond: 0
+218:   };
+219: }
+220: 
+221: function defaultQuest(seed = 1) {
+222:   const pool = [
+223:     { resource: 'stone', min: 14, max: 28, rewardPerItem: 3, diamondBonusChance: 0.08 },
+224:     { resource: 'iron', min: 8, max: 18, rewardPerItem: 7, diamondBonusChance: 0.12 },
+225:     { resource: 'gold', min: 6, max: 14, rewardPerItem: 11, diamondBonusChance: 0.16 },
+226:     { resource: 'diamond', min: 2, max: 7, rewardPerItem: 32, diamondBonusChance: 0.2 }
+227:   ];
+228:   const entry = pool[seed % pool.length];
+229:   const span = entry.max - entry.min + 1;
+230:   const targetCount = entry.min + ((seed * 7) % span);
+231:   const rewardCoins = Math.round(targetCount * entry.rewardPerItem + 24 + Math.min(160, seed * 2.8));
+232:   const rewardDiamonds = Math.random() < entry.diamondBonusChance ? 1 : 0;
+233:   return {
+234:     id: `q-${Date.now()}-${seed}`,
+235:     type: 'mine',
+236:     resource: entry.resource,
+237:     targetCount,
+238:     progress: 0,
+239:     rewardCoins,
+240:     rewardDiamonds,
+241:     title: `Mine ${targetCount} ore`,
+242:     description: `Collect ${targetCount} ore chunks in the mine.`,
+243:     status: 'available'
+244:   };
+245: }
+246: 
+247: function defaultProgress() {
+248:   return {
+249:     coins: 0,
+250:     pickaxe: 'wood',
+251:     inventory: defaultInventory(),
+252:     questSeed: 1,
+253:     quest: defaultQuest(1)
+254:   };
+255: }
+256: 
+257: function sanitizePickaxe(value, fallback = 'wood') {
+258:   return PICKAXE_ORDER.includes(value) ? value : fallback;
+259: }
+260: 
+261: function sanitizeInventory(value) {
+262:   const base = defaultInventory();
+263:   if (!value || typeof value !== 'object') return base;
+264:   for (const key of Object.keys(base)) {
+265:     const n = Number(value[key]);
+266:     base[key] = Number.isFinite(n) ? clamp(Math.floor(n), 0, 1_000_000) : 0;
+267:   }
+268:   return base;
+269: }
+270: 
+271: function sanitizeQuest(value, fallbackSeed = 1) {
+272:   const fallback = defaultQuest(fallbackSeed);
+273:   if (!value || typeof value !== 'object') return fallback;
+274:   const resource = ORE_TYPES.has(value.resource) ? value.resource : fallback.resource;
+275:   const targetCount = clamp(Math.floor(Number(value.targetCount) || fallback.targetCount), 1, 2000);
+276:   const progress = clamp(Math.floor(Number(value.progress) || 0), 0, targetCount);
+277:   const rewardCoins = clamp(Math.floor(Number(value.rewardCoins) || fallback.rewardCoins), 5, 50_000);
+278:   const rewardDiamonds = clamp(Math.floor(Number(value.rewardDiamonds) || 0), 0, 50);
+279:   const status = ['available', 'active', 'ready'].includes(value.status) ? value.status : fallback.status;
+280:   return {
+281:     id: typeof value.id === 'string' && value.id ? value.id.slice(0, 80) : fallback.id,
+282:     type: 'mine',
+283:     resource,
+284:     targetCount,
+285:     progress,
+286:     rewardCoins,
+287:     rewardDiamonds,
+288:     title: `Mine ${targetCount} ore`,
+289:     description: `Collect ${targetCount} ore chunks in the mine.`,
+290:     status: progress >= targetCount && status === 'active' ? 'ready' : status
+291:   };
+292: }
+293: 
+294: function sanitizeProgress(value) {
+295:   const base = defaultProgress();
+296:   if (!value || typeof value !== 'object') return base;
+297:   const questSeed = clamp(Math.floor(Number(value.questSeed) || 1), 1, 1_000_000);
+298:   const quest = sanitizeQuest(value.quest, questSeed);
+299:   return {
+300:     coins: clamp(Math.floor(Number(value.coins) || 0), 0, 100_000_000),
+301:     pickaxe: sanitizePickaxe(value.pickaxe, 'wood'),
+302:     inventory: sanitizeInventory(value.inventory),
+303:     questSeed,
+304:     quest
+305:   };
+306: }
+307: 
+308: function nextQuest(progress) {
+309:   progress.questSeed = clamp((progress.questSeed || 1) + 1, 1, 1_000_000);
+310:   progress.quest = defaultQuest(progress.questSeed);
+311: }
+312: 
+313: function progressSnapshot(progress) {
+314:   return {
+315:     coins: progress.coins,
+316:     pickaxe: progress.pickaxe,
+317:     inventory: { ...progress.inventory },
+318:     questSeed: progress.questSeed,
+319:     quest: { ...progress.quest },
+320:     shop: {
+321:       order: [...PICKAXE_ORDER],
+322:       price: { ...PICKAXE_PRICE }
+323:     }
+324:   };
+325: }
+326: 
+327: function sanitizeAppearance(input, fallback) {
+328:   const base = fallback || defaultAppearance();
+329:   const payload = input && typeof input === 'object' ? input : {};
+330: 
+331:   return {
+332:     skin: sanitizeColor(payload.skin, base.skin),
+333:     shirt: sanitizeColor(payload.shirt ?? payload.color, base.shirt),
+334:     pants: sanitizeColor(payload.pants, base.pants),
+335:     shoes: sanitizeColor(payload.shoes, base.shoes),
+336:     hairStyle: HAIR_STYLES.has(payload.hairStyle) ? payload.hairStyle : base.hairStyle,
+337:     hairColor: sanitizeColor(payload.hairColor, base.hairColor),
+338:     faceStyle: FACE_STYLES.has(payload.faceStyle) ? payload.faceStyle : base.faceStyle,
+339:     accessories: Array.isArray(payload.accessories)
+340:       ? [...new Set(payload.accessories.filter((item) => ACCESSORY_TYPES.has(item)))]
+341:       : Array.isArray(base.accessories)
+342:         ? [...new Set(base.accessories.filter((item) => ACCESSORY_TYPES.has(item)))]
+343:         : []
+344:   };
+345: }
+346: 
+347: function sanitizeProfileId(value) {
+348:   const raw = typeof value === 'string' ? value : '';
+349:   const safe = raw.trim().toLowerCase().slice(0, 64);
+350:   return /^[a-z0-9-]{8,64}$/.test(safe) ? safe : null;
+351: }
+352: 
+353: function sanitizeUsername(value) {
+354:   const raw = typeof value === 'string' ? value.trim() : '';
+355:   const lower = raw.toLowerCase();
+356:   return /^[a-z0-9_]{3,20}$/.test(lower) ? lower : null;
+357: }
+358: 
+359: function sanitizePassword(value) {
+360:   const raw = typeof value === 'string' ? value : '';
+361:   return raw.length >= 4 && raw.length <= 80 ? raw : null;
+362: }
+363: 
+364: function escapeRegex(text) {
+365:   return String(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+366: }
+367: 
+368: const chatFilterPattern = new RegExp(`\\b(${CHAT_FILTER_WORDS.map(escapeRegex).join('|')})\\b`, 'gi');
+369: 
+370: function filterChatText(text) {
+371:   return String(text).replace(chatFilterPattern, (word) => '#'.repeat(word.length));
+372: }
+373: 
+374: function hashPassword(password, salt = crypto.randomBytes(16).toString('hex')) {
+375:   const hash = crypto.scryptSync(password, salt, 64).toString('hex');
+376:   return { salt, hash };
+377: }
+378: 
+379: function verifyPassword(password, salt, expectedHash) {
+380:   try {
+381:     const computed = crypto.scryptSync(password, salt, 64).toString('hex');
+382:     const a = Buffer.from(computed, 'hex');
+383:     const b = Buffer.from(expectedHash, 'hex');
+384:     return a.length === b.length && crypto.timingSafeEqual(a, b);
+385:   } catch {
+386:     return false;
+387:   }
+388: }
+389: 
+390: function readProfiles() {
+391:   try {
+392:     if (!fs.existsSync(PROFILE_FILE)) {
+393:       return;
+394:     }
+395:     const fileData = fs.readFileSync(PROFILE_FILE, 'utf8');
+396:     const parsed = JSON.parse(fileData);
+397:     for (const [profileId, profile] of Object.entries(parsed)) {
+398:       if (!sanitizeProfileId(profileId)) continue;
+399:       const name = sanitizeName(profile?.name, `Player-${profileId.slice(0, 4)}`);
+400:       const color = sanitizeColor(profile?.color, randomHexColor());
+401:       const appearance = sanitizeAppearance(profile?.appearance, {
+402:         ...defaultAppearance(),
+403:         shirt: color
+404:       });
+405:       const x = Number(profile?.x);
+406:       const y = Number(profile?.y);
+407:       const z = Number(profile?.z);
+408:       profiles.set(profileId, {
+409:         name,
+410:         color: appearance.shirt,
+411:         appearance,
+412:         x: Number.isFinite(x) ? x : null,
+413:         y: Number.isFinite(y) ? y : null,
+414:         z: Number.isFinite(z) ? z : null,
+415:         progress: sanitizeProgress(profile?.progress)
+416:       });
+417:     }
+418:   } catch {
+419:     // Ignore corrupt profile storage and continue with runtime defaults.
+420:   }
+421: }
+422: 
+423: function readAccounts() {
+424:   try {
+425:     if (!fs.existsSync(ACCOUNT_FILE)) {
+426:       return;
+427:     }
+428:     const fileData = fs.readFileSync(ACCOUNT_FILE, 'utf8');
+429:     const parsed = JSON.parse(fileData);
+430:     for (const [usernameKey, account] of Object.entries(parsed)) {
+431:       const username = sanitizeUsername(usernameKey);
+432:       if (!username) continue;
+433:       const salt = typeof account?.salt === 'string' ? account.salt : '';
+434:       const hash = typeof account?.hash === 'string' ? account.hash : '';
+435:       const profileId = sanitizeProfileId(account?.profileId) || `acct-${username}`;
+436:       if (!salt || !hash) continue;
+437:       accounts.set(username, { username, salt, hash, profileId });
+438:     }
+439:   } catch {
+440:     // Ignore corrupt account storage and continue.
+441:   }
+442: }
+443: 
+444: function scheduleProfileSave() {
+445:   if (saveTimer) {
+446:     clearTimeout(saveTimer);
+447:   }
+448:   saveTimer = setTimeout(() => {
+449:     saveTimer = null;
+450:     const serialized = {};
+451:     for (const [profileId, profile] of profiles.entries()) {
+452:       serialized[profileId] = {
+453:         name: profile.name,
+454:         color: profile.color,
+455:         appearance: profile.appearance,
+456:         x: Number.isFinite(profile.x) ? profile.x : null,
+457:         y: Number.isFinite(profile.y) ? profile.y : null,
+458:         z: Number.isFinite(profile.z) ? profile.z : null,
+459:         progress: sanitizeProgress(profile.progress)
+460:       };
+461:     }
+462:     fs.writeFile(PROFILE_FILE, JSON.stringify(serialized, null, 2), () => {});
+463:   }, 250);
+464: }
+465: 
+466: function scheduleAccountSave() {
+467:   if (accountSaveTimer) {
+468:     clearTimeout(accountSaveTimer);
+469:   }
+470:   accountSaveTimer = setTimeout(() => {
+471:     accountSaveTimer = null;
+472:     const serialized = {};
+473:     for (const [username, account] of accounts.entries()) {
+474:       serialized[username] = {
+475:         salt: account.salt,
+476:         hash: account.hash,
+477:         profileId: account.profileId
+478:       };
+479:     }
+480:     fs.writeFile(ACCOUNT_FILE, JSON.stringify(serialized, null, 2), () => {});
+481:   }, 250);
+482: }
+483: 
+484: readProfiles();
+485: readAccounts();
+486: 
+487: function ensureProfileExists(profileId, username) {
+488:   if (!profileId || profiles.has(profileId)) return;
+489:   const shirt = randomHexColor();
+490:   profiles.set(profileId, {
+491:     name: sanitizeName(username, username || `Player-${profileId.slice(0, 4)}`),
+492:     color: shirt,
+493:     appearance: sanitizeAppearance(null, { ...defaultAppearance(), shirt }),
+494:     x: null,
+495:     y: null,
+496:     z: null,
+497:     progress: defaultProgress()
+498:   });
+499:   scheduleProfileSave();
+500: }
+501: 
+502: function spawnPlayer(socket, profileId, username) {
+503:   ensureProfileExists(profileId, username);
+504:   const profile = profiles.get(profileId);
+505:   const spawnPoint = randomSpawn(WORLD_LIMIT * 0.65);
+506:   const savedX = Number(profile?.x);
+507:   const savedY = Number(profile?.y);
+508:   const savedZ = Number(profile?.z);
+509:   const hasSavedPosition = Number.isFinite(savedX) && Number.isFinite(savedY) && Number.isFinite(savedZ);
+510:   const savedInMine = hasSavedPosition
+511:     && Math.hypot(savedX - MINE_POS.x, savedZ - MINE_POS.z) <= MINE_PLAY_RADIUS;
+512:   const boundedSaved = hasSavedPosition
+513:     ? clampToPlayableGround(
+514:       clamp(savedX, -PLAYABLE_BOUND, PLAYABLE_BOUND),
+515:       clamp(savedZ, -PLAYABLE_BOUND, PLAYABLE_BOUND),
+516:       savedInMine
+517:     )
+518:     : null;
+519:   const spawn = {
+520:     id: socket.id,
+521:     profileId,
+522:     name: profile?.name || username || `Player-${socket.id.slice(0, 4)}`,
+523:     x: boundedSaved ? boundedSaved.x : spawnPoint.x,
+524:     y: hasSavedPosition ? clamp(savedY, SWIM_MIN_Y, 30) : ISLAND_SURFACE_Y,
+525:     z: boundedSaved ? boundedSaved.z : spawnPoint.z,
+526:     inMine: Boolean(savedInMine),
+527:     appearance: sanitizeAppearance(profile?.appearance, {
+528:       ...defaultAppearance(),
+529:       shirt: profile?.color || randomHexColor()
+530:     }),
+531:     progress: sanitizeProgress(profile?.progress)
+532:   };
+533:   spawn.color = spawn.appearance.shirt;
+534:   players.set(socket.id, spawn);
+535:   socket.emit('init', {
+536:     id: socket.id,
+537:     players: [...players.values()],
+538:     worldLimit: WORLD_LIMIT,
+539:     interactables: [...interactables.values()],
+540:     progress: progressSnapshot(spawn.progress)
+541:   });
+542:   socket.broadcast.emit('playerJoined', spawn);
+543: }
+544: 
+545: function persistPlayerProgress(player) {
+546:   if (!player?.profileId) return;
+547:   profiles.set(player.profileId, {
+548:     name: player.name,
+549:     color: player.color,
+550:     appearance: player.appearance,
+551:     x: player.x,
+552:     y: player.y,
+553:     z: player.z,
+554:     progress: sanitizeProgress(player.progress)
+555:   });
+556:   scheduleProfileSave();
+557: }
+558: 
+559: function emitProgress(socket, player) {
+560:   if (!socket || !player?.progress) return;
+561:   socket.emit('progress:update', progressSnapshot(player.progress));
+562: }
+563: 
+564: function removeAuthenticatedPlayer(socket) {
+565:   const existing = players.get(socket.id);
+566:   if (!existing) return;
+567:   persistPlayerProgress(existing);
+568:   players.delete(socket.id);
+569:   voiceParticipants.delete(socket.id);
+570:   socket.broadcast.emit('voice:user-left', socket.id);
+571:   io.emit('playerLeft', socket.id);
+572: }
+573: 
+574: io.on('connection', (socket) => {
+575:   socket.emit('auth:required');
+576: 
+577:   socket.on('auth:register', (payload, ack) => {
+578:     const username = sanitizeUsername(payload?.username);
+579:     const password = sanitizePassword(payload?.password);
+580:     if (!username || !password) {
+581:       if (typeof ack === 'function') ack({ ok: false, error: 'Use 3-20 letters/numbers for username and min 4-char password.' });
+582:       return;
+583:     }
+584:     if (accounts.has(username)) {
+585:       if (typeof ack === 'function') ack({ ok: false, error: 'Username already exists.' });
+586:       return;
+587:     }
+588:     const { salt, hash } = hashPassword(password);
+589:     const profileId = `acct-${username}`;
+590:     accounts.set(username, { username, salt, hash, profileId });
+591:     scheduleAccountSave();
+592:     ensureProfileExists(profileId, username);
+593:     spawnPlayer(socket, profileId, username);
+594:     if (typeof ack === 'function') ack({ ok: true, username });
+595:   });
+596: 
+597:   socket.on('auth:login', (payload, ack) => {
+598:     const username = sanitizeUsername(payload?.username);
+599:     const password = sanitizePassword(payload?.password);
+600:     if (!username || !password) {
+601:       if (typeof ack === 'function') ack({ ok: false, error: 'Invalid username or password.' });
+602:       return;
+603:     }
+604:     const account = accounts.get(username);
+605:     if (!account || !verifyPassword(password, account.salt, account.hash)) {
+606:       if (typeof ack === 'function') ack({ ok: false, error: 'Invalid username or password.' });
+607:       return;
+608:     }
+609:     ensureProfileExists(account.profileId, username);
+610:     spawnPlayer(socket, account.profileId, username);
+611:     if (typeof ack === 'function') ack({ ok: true, username });
+612:   });
+613: 
+614:   socket.on('auth:logout', () => {
+615:     removeAuthenticatedPlayer(socket);
+616:   });
+617: 
+618:   socket.on('move', (payload) => {
+619:     const current = players.get(socket.id);
+620:     if (!current || !payload) return;
+621: 
+622:     const x = Number(payload.x);
+623:     const y = Number(payload.y);
+624:     const z = Number(payload.z);
+625:     const nextX = Number.isFinite(x) ? x : current.x;
+626:     const nextY = Number.isFinite(y) ? y : current.y;
+627:     const nextZ = Number.isFinite(z) ? z : current.z;
+628:     const boundedX = clamp(nextX, -PLAYABLE_BOUND, PLAYABLE_BOUND);
+629:     const boundedZ = clamp(nextZ, -PLAYABLE_BOUND, PLAYABLE_BOUND);
+630:     const inMine = payload?.inMine === true;
+631:     const next = clampToPlayableGround(boundedX, boundedZ, inMine);
+632: 
+633:     current.x = next.x;
+634:     current.y = clamp(nextY, SWIM_MIN_Y, 30);
+635:     current.z = next.z;
+636:     players.set(socket.id, current);
+637:     persistPlayerProgress(current);
+638: 
+639:     socket.broadcast.emit('playerMoved', {
+640:       id: socket.id,
+641:       x: current.x,
+642:       y: current.y,
+643:       z: current.z,
+644:       name: current.name,
+645:       color: current.color,
+646:       appearance: current.appearance
+647:     });
+648:   });
+649: 
+650:   socket.on('quest:accept', (payload, ack) => {
+651:     const actor = players.get(socket.id);
+652:     if (!actor?.progress?.quest) {
+653:       if (typeof ack === 'function') ack({ ok: false, error: 'Quest system unavailable.' });
+654:       return;
+655:     }
+656:     const quest = actor.progress.quest;
+657:     if (quest.status === 'ready') {
+658:       if (typeof ack === 'function') ack({ ok: false, error: 'Claim your current quest reward first.' });
+659:       return;
+660:     }
+661:     if (quest.status === 'active') {
+662:       if (typeof ack === 'function') ack({ ok: true, quest, alreadyActive: true });
+663:       return;
+664:     }
+665:     quest.status = 'active';
+666:     persistPlayerProgress(actor);
+667:     emitProgress(socket, actor);
+668:     if (typeof ack === 'function') ack({ ok: true, quest });
+669:   });
+670: 
+671:   socket.on('quest:claim', (payload, ack) => {
+672:     const actor = players.get(socket.id);
+673:     const progress = actor?.progress;
+674:     const quest = progress?.quest;
+675:     if (!actor || !progress || !quest || quest.status !== 'ready') {
+676:       if (typeof ack === 'function') ack({ ok: false, error: 'No completed quest to claim.' });
+677:       return;
+678:     }
+679:     progress.coins += quest.rewardCoins;
+680:     if (quest.rewardDiamonds > 0) {
+681:       progress.inventory.diamond += quest.rewardDiamonds;
+682:     }
+683:     const title = quest.title;
+684:     const coins = quest.rewardCoins;
+685:     const bonus = quest.rewardDiamonds;
+686:     nextQuest(progress);
+687:     persistPlayerProgress(actor);
+688:     emitProgress(socket, actor);
+689:     io.emit('chat', {
+690:       fromName: 'System',
+691:       text: `${actor.name} completed "${title}" for ${coins} coins${bonus ? ` and ${bonus} diamond` : ''}.`,
+692:       sentAt: Date.now()
+693:     });
+694:     if (typeof ack === 'function') ack({ ok: true });
+695:   });
+696: 
+697:   socket.on('mine:collect', (payload, ack) => {
+698:     const actor = players.get(socket.id);
+699:     const progress = actor?.progress;
+700:     if (!actor || !progress) {
+701:       if (typeof ack === 'function') ack({ ok: false });
+702:       return;
+703:     }
+704:     const nearMine = Math.hypot(actor.x - MINE_POS.x, actor.z - MINE_POS.z) <= MINE_RADIUS + 4.5;
+705:     if (!nearMine) {
+706:       if (typeof ack === 'function') ack({ ok: false, error: 'Go to the mine to collect ore.' });
+707:       return;
+708:     }
+709:     const resource = ORE_TYPES.has(payload?.resource) ? payload.resource : null;
+710:     const amount = clamp(Math.floor(Number(payload?.amount) || 0), 1, 20);
+711:     if (!resource) {
+712:       if (typeof ack === 'function') ack({ ok: false, error: 'Invalid ore type.' });
+713:       return;
+714:     }
+715:     progress.inventory[resource] = clamp((progress.inventory[resource] || 0) + amount, 0, 1_000_000);
+716:     const quest = progress.quest;
+717:     let questProgressed = false;
+718:     if (quest?.status === 'active' && quest.type === 'mine') {
+719:       quest.progress = clamp(quest.progress + amount, 0, quest.targetCount);
+720:       questProgressed = true;
+721:       if (quest.progress >= quest.targetCount) {
+722:         quest.status = 'ready';
+723:       }
+724:     }
+725:     persistPlayerProgress(actor);
+726:     emitProgress(socket, actor);
+727:     if (typeof ack === 'function') ack({ ok: true, progress: progressSnapshot(progress), questProgressed });
+728:   });
+729: 
+730:   socket.on('shop:buyPickaxe', (payload, ack) => {
+731:     const actor = players.get(socket.id);
+732:     const progress = actor?.progress;
+733:     if (!actor || !progress) {
+734:       if (typeof ack === 'function') ack({ ok: false, error: 'Not authenticated.' });
+735:       return;
+736:     }
+737:     const requested = sanitizePickaxe(payload?.tier, '');
+738:     if (!requested || requested === 'wood') {
+739:       if (typeof ack === 'function') ack({ ok: false, error: 'Invalid pickaxe tier.' });
+740:       return;
+741:     }
+742:     const currentIdx = PICKAXE_ORDER.indexOf(progress.pickaxe);
+743:     const requestedIdx = PICKAXE_ORDER.indexOf(requested);
+744:     if (requestedIdx !== currentIdx + 1) {
+745:       if (typeof ack === 'function') ack({ ok: false, error: 'Buy pickaxes in order.' });
+746:       return;
+747:     }
+748:     const price = PICKAXE_PRICE[requested] || 0;
+749:     if (progress.coins < price) {
+750:       if (typeof ack === 'function') ack({ ok: false, error: `Need ${price} coins.` });
+751:       return;
+752:     }
+753:     progress.coins -= price;
+754:     progress.pickaxe = requested;
+755:     persistPlayerProgress(actor);
+756:     emitProgress(socket, actor);
+757:     if (typeof ack === 'function') ack({ ok: true, tier: requested });
+758:   });
+759: 
+760:   socket.on('interact', (payload) => {
+761:     const actor = players.get(socket.id);
+762:     if (!actor || !payload || payload.id !== 'beacon') return;
+763: 
+764:     const beacon = interactables.get('beacon');
+765:     if (!beacon) return;
+766: 
+767:     const distance = Math.hypot(actor.x - beacon.x, actor.z - beacon.z);
+768:     if (distance > INTERACT_RANGE) return;
+769: 
+770:     beacon.active = !beacon.active;
+771:     beacon.lastBy = actor.name;
+772:     interactables.set(beacon.id, beacon);
+773: 
+774:     io.emit('interactableUpdated', beacon);
+775:     io.emit('chat', {
+776:       fromName: 'System',
+777:       text: beacon.active ? `${actor.name} activated the island beacon.` : `${actor.name} cooled the island beacon.`,
+778:       sentAt: Date.now()
+779:     });
+780:   });
+781: 
+782:   socket.on('chat', (payload) => {
+783:     const sender = players.get(socket.id);
+784:     if (!sender || !payload) return;
+785: 
+786:     const rawText = typeof payload.text === 'string' ? payload.text : '';
+787:     const text = filterChatText(rawText.trim().slice(0, CHAT_MAX_LEN));
+788:     if (!text) return;
+789: 
+790:     io.emit('chat', {
+791:       fromId: socket.id,
+792:       fromName: sender.name,
+793:       text,
+794:       sentAt: Date.now()
+795:     })
+
+  socket.on('private:send', (payload, ack) => {
+    const sender = players.get(socket.id);
+    if (!sender || !payload) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Not authenticated or invalid payload.' });
+      return;
+    }
+
+    const rawText = typeof payload.text === 'string' ? payload.text : '';
+    const text = filterChatText(rawText.trim().slice(0, CHAT_MAX_LEN));
+    if (!text) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Message cannot be empty.' });
+      return;
+    }
+
+    const targetUsername = sanitizeUsername(payload.target);
+    if (!targetUsername) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Invalid recipient.' });
+      return;
+    }
+
+    // Find target player by username
+    let targetSocket = null;
+    for (const [playerSocketId, player] of players.entries()) {
+      if (player.name.toLowerCase() === targetUsername.toLowerCase()) {
+        targetSocket = io.sockets.sockets.get(playerSocketId);
+        break;
+      }
+    }
+
+    if (!targetSocket) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Player not found or offline.' });
+      return;
+    }
+
+    // Send private message to target
+    targetSocket.emit('private:message', {
+      fromId: socket.id,
+      fromName: sender.name,
+      text: text,
+      sentAt: Date.now(),
+      private: true
+    });
+
+    // Send confirmation to sender
+    if (typeof ack === 'function') ack({ 
+      ok: true, 
+      to: targetPlayer.name,
+      message: text 
+    });
+
+    // Store message for potential replay/history (optional)
+    // You could add this to player profiles if you want chat history
+  });
+
+  socket.on('private:typing', (payload) => {
+    const sender = players.get(socket.id);
+    if (!sender || !payload || !payload.target) return;
+
+    const targetUsername = sanitizeUsername(payload.target);
+    if (!targetUsername) return;
+
+    // Find target player
+    for (const [playerSocketId, player] of players.entries()) {
+      if (player.name.toLowerCase() === targetUsername.toLowerCase()) {
+        const targetSocket = io.sockets.sockets.get(playerSocketId);
+        if (targetSocket) {
+          targetSocket.emit('private:typing', {
+            fromId: socket.id,
+            fromName: sender.name,
+            typing: payload.typing || false
+          });
+        }
+        break;
+      }
+    }
+  });
+;
+796:   });
+797: 
+798:   socket.on('customize', (payload, ack) => {
+799:     const current = players.get(socket.id);
+800:     if (!current || !payload) {
+801:       if (typeof ack === 'function') ack({ ok: false });
+802:       return;
+803:     }
+804: 
+805:     const previousName = current.name;
+806:     current.name = sanitizeName(payload.name, current.name);
+807:     current.appearance = sanitizeAppearance(payload.appearance, {
+808:       ...current.appearance,
+809:       shirt: sanitizeColor(payload.color, current.color)
+810:     });
+811:     current.color = current.appearance.shirt;
+812:     players.set(socket.id, current);
+813:     persistPlayerProgress(current);
+814: 
+815:     io.emit('playerCustomized', {
+816:       id: current.id,
+817:       name: current.name,
+818:       color: current.color,
+819:       appearance: current.appearance
+820:     });
+821: 
+822:     if (typeof ack === 'function') {
+823:       ack({
+824:         ok: true,
+825:         name: current.name,
+826:         color: current.color,
+827:         appearance: current.appearance
+828:       });
+829:     }
+830: 
+831:     if (previousName !== current.name) {
+832:       io.emit('chat', {
+833:         fromName: 'System',
+834:         text: `${previousName} is now ${current.name}.`,
+835:         sentAt: Date.now()
+836:       });
+837:     }
+838:   });
+839: 
+840:   socket.on('emote', (payload) => {
+841:     const actor = players.get(socket.id);
+842:     const type = payload?.type;
+843:     if (!actor || !['wave', 'dance', 'cheer'].includes(type)) return;
+844: 
+845:     io.emit('playerEmote', {
+846:       id: socket.id,
+847:       type,
+848:       sentAt: Date.now()
+849:     });
+850:   });
+851: 
+852:   socket.on('voice:join', () => {
+853:     if (!players.has(socket.id)) return;
+854:     if (voiceParticipants.has(socket.id)) {
+855:       socket.emit('voice:participants', [...voiceParticipants].filter((id) => id !== socket.id));
+856:       return;
+857:     }
+858:     voiceParticipants.add(socket.id);
+859:     socket.emit('voice:participants', [...voiceParticipants].filter((id) => id !== socket.id));
+860:     socket.broadcast.emit('voice:user-joined', socket.id);
+861:   });
+862: 
+863:   socket.on('voice:leave', () => {
+864:     const deleted = voiceParticipants.delete(socket.id);
+865:     if (!deleted) return;
+866:     socket.broadcast.emit('voice:user-left', socket.id);
+867:   });
+868: 
+869:   socket.on('voice:offer', (payload) => {
+870:     if (!voiceParticipants.has(socket.id)) return;
+871:     const to = typeof payload?.to === 'string' ? payload.to : '';
+872:     const offer = payload?.offer;
+873:     if (!to || !offer || !voiceParticipants.has(to)) return;
+874:     io.to(to).emit('voice:offer', { from: socket.id, offer });
+875:   });
+876: 
+877:   socket.on('voice:answer', (payload) => {
+878:     if (!voiceParticipants.has(socket.id)) return;
+879:     const to = typeof payload?.to === 'string' ? payload.to : '';
+880:     const answer = payload?.answer;
+881:     if (!to || !answer || !voiceParticipants.has(to)) return;
+882:     io.to(to).emit('voice:answer', { from: socket.id, answer });
+883:   });
+884: 
+885:   socket.on('voice:ice', (payload) => {
+886:     if (!voiceParticipants.has(socket.id)) return;
+887:     const to = typeof payload?.to === 'string' ? payload.to : '';
+888:     const candidate = payload?.candidate;
+889:     if (!to || !candidate || !voiceParticipants.has(to)) return;
+890:     io.to(to).emit('voice:ice', { from: socket.id, candidate });
+891:   });
+892: 
+893:   socket.on('disconnect', () => {
+894:     removeAuthenticatedPlayer(socket);
+895:   });
+896: });
+897: 
+898: server.listen(PORT, () => {
+899:   console.log(`Server running at http://localhost:${PORT}`);
+900: });
+```
