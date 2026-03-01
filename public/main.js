@@ -2752,6 +2752,7 @@ function addMineArea() {
     canopyB: 0xf8fafc,
     vendor: mineShopVendor
   });
+  mineShopVendor.position.z = -0.42;
   const mineShopLocalPos = new THREE.Vector3(
     MINE_SHOP_NPC_POS.x - MINE_POS.x,
     0,

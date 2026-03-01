@@ -133,10 +133,13 @@
 
       #inventory-bar {
         position: fixed;
-        left: 16px;
+        left: 50% !important;
+        right: auto !important;
         bottom: 16px;
-        transform: none;
+        transform: translateX(-50%);
         z-index: 16;
+        width: max-content;
+        max-width: calc(100vw - 24px);
         display: grid;
         grid-auto-flow: column;
         gap: 10px;
@@ -874,13 +877,14 @@
       }
 
       body.mobile-ui #inventory-bar {
-        left: max(8px, env(safe-area-inset-left));
-        right: auto;
-        transform: none;
+        left: 50% !important;
+        right: auto !important;
+        transform: translateX(-50%);
         bottom: calc(88px + env(safe-area-inset-bottom));
         gap: 8px;
         padding: 6px 8px;
         z-index: 20;
+        max-width: calc(100vw - 16px);
       }
 
       body.mobile-ui .inventory-slot {
