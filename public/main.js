@@ -4716,7 +4716,7 @@ function questInteract(local) {
     });
     return true;
   }
-  if (quest.status === 'new') {
+  if (quest.status === 'available' || quest.status === 'new') {
     openNpcDialogue({
       name: 'Quest Giver',
       text: `${quest.description} Return here when you are done.`,
