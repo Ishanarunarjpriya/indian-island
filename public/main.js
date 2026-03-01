@@ -122,6 +122,7 @@ const wheelButtons = Array.from(document.querySelectorAll('[data-wheel-emote]'))
 const nameTagsEl = document.getElementById('name-tags');
 const emoteButtons = Array.from(document.querySelectorAll('[data-emote]'));
 const inventoryBarEl = document.getElementById('inventory-bar');
+const inventoryCoinsEl = document.getElementById('inventory-coins');
 const inventoryPickaxeEl = document.getElementById('inventory-pickaxe');
 const inventoryTorchEl = document.getElementById('inventory-torch');
 const inventoryTorchSlotEl = inventoryTorchEl?.closest('.inventory-slot') || null;
@@ -2229,44 +2230,143 @@ function populateMainIslandNature() {
   addFlowerPatch(-worldLimit * 0.12, -worldLimit * 0.46, 13, 4.6);
 }
 
-function addQuestNpc(parentGroup = scene, localPosition = null) {
+function createVendorNpc({
+  shirtColor = 0x7c3aed,
+  skinColor = 0xe0b18f,
+  hairColor = 0x111827,
+  hatColor = null
+} = {}) {
   const npc = new THREE.Group();
-  if (localPosition) {
-    npc.position.copy(localPosition);
-  } else {
-    npc.position.copy(QUEST_NPC_POS);
-  }
-  const npcScale = 1.34;
+  const npcScale = 1.72;
+
+  const legsMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.84 });
+  const shirtMat = new THREE.MeshStandardMaterial({ color: shirtColor, roughness: 0.8 });
+  const skinMat = new THREE.MeshStandardMaterial({ color: skinColor, roughness: 0.75 });
+  const hairMat = new THREE.MeshStandardMaterial({ color: hairColor, roughness: 0.78 });
+
+  const legGeo = new THREE.BoxGeometry(0.22 * npcScale, 0.92 * npcScale, 0.24 * npcScale);
+  const legL = new THREE.Mesh(legGeo, legsMat);
+  legL.position.set(-0.16 * npcScale, 0.46 * npcScale, 0);
+  const legR = legL.clone();
+  legR.position.x = 0.16 * npcScale;
+
   const body = new THREE.Mesh(
-    new THREE.BoxGeometry(0.72 * npcScale, 1.05 * npcScale, 0.46 * npcScale),
-    new THREE.MeshStandardMaterial({ color: 0x7c3aed, roughness: 0.82 })
+    new THREE.BoxGeometry(0.76 * npcScale, 1.14 * npcScale, 0.5 * npcScale),
+    shirtMat
   );
-  body.position.y = 0.95 * npcScale;
+  body.position.y = 1.48 * npcScale;
+
   const head = new THREE.Mesh(
-    new THREE.BoxGeometry(0.46 * npcScale, 0.46 * npcScale, 0.46 * npcScale),
-    new THREE.MeshStandardMaterial({ color: 0xe0b18f, roughness: 0.74 })
+    new THREE.BoxGeometry(0.48 * npcScale, 0.52 * npcScale, 0.48 * npcScale),
+    skinMat
   );
-  head.position.y = 1.73 * npcScale;
+  head.position.y = 2.38 * npcScale;
+
   const hair = new THREE.Mesh(
-    new THREE.BoxGeometry(0.5 * npcScale, 0.2 * npcScale, 0.5 * npcScale),
-    new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.78 })
+    new THREE.BoxGeometry(0.54 * npcScale, 0.2 * npcScale, 0.54 * npcScale),
+    hairMat
   );
-  hair.position.y = 1.98 * npcScale;
-  const armL = new THREE.Mesh(
-    new THREE.BoxGeometry(0.18 * npcScale, 0.74 * npcScale, 0.18 * npcScale),
-    new THREE.MeshStandardMaterial({ color: 0xe0b18f, roughness: 0.76 })
+  hair.position.y = 2.72 * npcScale;
+
+  const arm = new THREE.Mesh(
+    new THREE.BoxGeometry(0.2 * npcScale, 0.82 * npcScale, 0.2 * npcScale),
+    skinMat
   );
-  armL.position.set(-0.48 * npcScale, 1.0 * npcScale, 0);
-  const armR = armL.clone();
-  armR.position.x = 0.48 * npcScale;
-  npc.add(body, head, hair, armL, armR);
-  npc.rotation.y = -0.55;
+  arm.position.set(-0.5 * npcScale, 1.5 * npcScale, 0);
+  const armR = arm.clone();
+  armR.position.x = 0.5 * npcScale;
+
+  npc.add(legL, legR, body, head, hair, arm, armR);
+
+  if (hatColor !== null) {
+    const hat = new THREE.Mesh(
+      new THREE.BoxGeometry(0.58 * npcScale, 0.14 * npcScale, 0.58 * npcScale),
+      new THREE.MeshStandardMaterial({ color: hatColor, roughness: 0.78 })
+    );
+    hat.position.y = 2.86 * npcScale;
+    npc.add(hat);
+  }
+
   npc.traverse((obj) => {
-    if (obj.isMesh) obj.castShadow = true;
+    if (obj.isMesh) {
+      obj.castShadow = true;
+      obj.receiveShadow = true;
+    }
   });
-  parentGroup.add(npc);
-  addWorldCollider(QUEST_NPC_POS.x, QUEST_NPC_POS.z, 0.78, 'npc');
-  questNpcMesh = npc;
+  return npc;
+}
+
+function createVendorStall({
+  label = 'Shop',
+  signColor = '#2d3748',
+  canopyA = 0x4f46e5,
+  canopyB = 0xf8fafc,
+  vendor = null
+} = {}) {
+  const stall = new THREE.Group();
+  const width = 4.6;
+  const depth = 2.8;
+  const postHeight = 3.5;
+  const roofY = 3.84;
+
+  const woodMat = new THREE.MeshStandardMaterial({ color: 0x4a2f1f, roughness: 0.9 });
+  const trimMat = new THREE.MeshStandardMaterial({ color: 0x2f1e14, roughness: 0.92 });
+
+  for (const px of [-1, 1]) {
+    for (const pz of [-1, 1]) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.2, postHeight, 0.2), woodMat);
+      post.position.set(px * (width * 0.5 - 0.14), postHeight * 0.5, pz * (depth * 0.5 - 0.14));
+      stall.add(post);
+    }
+  }
+
+  const roof = new THREE.Mesh(new THREE.BoxGeometry(width + 0.52, 0.16, depth + 0.34), trimMat);
+  roof.position.y = roofY;
+  stall.add(roof);
+
+  const stripeCount = 6;
+  for (let i = 0; i < stripeCount; i += 1) {
+    const stripe = new THREE.Mesh(
+      new THREE.BoxGeometry((width + 0.36) / stripeCount, 0.11, 0.6),
+      new THREE.MeshStandardMaterial({ color: i % 2 ? canopyA : canopyB, roughness: 0.72 })
+    );
+    const x = -((width + 0.36) * 0.5) + (i + 0.5) * ((width + 0.36) / stripeCount);
+    stripe.position.set(x, roofY - 0.14, depth * 0.5 + 0.04);
+    stall.add(stripe);
+  }
+
+  const counterTop = new THREE.Mesh(new THREE.BoxGeometry(width - 0.44, 0.15, 0.78), woodMat);
+  counterTop.position.set(0, 1.36, depth * 0.24);
+  const counterFront = new THREE.Mesh(new THREE.BoxGeometry(width - 0.58, 0.7, 0.12), woodMat);
+  counterFront.position.set(0, 1.01, depth * 0.58);
+  const counterRail = new THREE.Mesh(new THREE.BoxGeometry(width - 0.2, 0.12, 0.14), trimMat);
+  counterRail.position.set(0, 1.69, depth * 0.58);
+  stall.add(counterTop, counterFront, counterRail);
+
+  const sideRailL = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.64, depth - 0.62), woodMat);
+  sideRailL.position.set(-(width * 0.5 - 0.24), 1.06, 0);
+  const sideRailR = sideRailL.clone();
+  sideRailR.position.x = width * 0.5 - 0.24;
+  stall.add(sideRailL, sideRailR);
+
+  const sign = makeTextSign(label, 3.28, 0.62, signColor, '#ecfeff');
+  sign.position.set(0, roofY + 0.54, depth * 0.5 + 0.15);
+  sign.rotation.x = -0.14;
+  stall.add(sign);
+
+  if (vendor) {
+    vendor.position.set(0, 0, -0.08);
+    stall.add(vendor);
+  }
+
+  stall.traverse((obj) => {
+    if (obj.isMesh) {
+      obj.castShadow = true;
+      obj.receiveShadow = true;
+    }
+  });
+
+  return stall;
 }
 
 function addMineArea() {
@@ -2639,48 +2739,53 @@ function addMineArea() {
   scene.add(mineEntrance);
   mineEntranceMesh = mineEntrance;
 
-  const merchant = new THREE.Group();
-  merchant.position.set(MINE_SHOP_NPC_POS.x - MINE_POS.x, 0, MINE_SHOP_NPC_POS.z - MINE_POS.z);
-  const merchBody = new THREE.Mesh(
-    new THREE.BoxGeometry(0.74, 1.05, 0.46),
-    new THREE.MeshStandardMaterial({ color: 0xb45309, roughness: 0.8 })
-  );
-  merchBody.position.y = 0.95;
-  const merchHead = new THREE.Mesh(
-    new THREE.BoxGeometry(0.46, 0.46, 0.46),
-    new THREE.MeshStandardMaterial({ color: 0xd6a581, roughness: 0.75 })
-  );
-  merchHead.position.y = 1.73;
-  const merchHat = new THREE.Mesh(
-    new THREE.BoxGeometry(0.56, 0.18, 0.56),
-    new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.8 })
-  );
-  merchHat.position.y = 1.99;
-  const stand = new THREE.Mesh(
-    new THREE.BoxGeometry(2.8, 1.05, 1.15),
-    new THREE.MeshStandardMaterial({ color: 0x6b4423, roughness: 0.92 })
-  );
-  stand.position.set(0, 0.56, 0.82);
-  const standTop = new THREE.Mesh(
-    new THREE.BoxGeometry(3.0, 0.12, 1.35),
-    new THREE.MeshStandardMaterial({ color: 0x3f2a1a, roughness: 0.9 })
-  );
-  standTop.position.set(0, 1.08, 0.82);
-  const standSign = makeTextSign('Quests & Picks', 2.6, 0.62, '#7b4f2d', '#fef3c7');
-  standSign.position.set(0, 1.95, 1.42);
-  standSign.rotation.x = -0.24;
-  merchant.add(merchBody, merchHead, merchHat, stand, standTop, standSign);
-  merchant.rotation.y = 0.5;
-  merchant.traverse((obj) => {
-    if (obj.isMesh) {
-      obj.castShadow = true;
-      obj.receiveShadow = true;
-    }
+  const mineShopVendor = createVendorNpc({
+    shirtColor: 0xb45309,
+    skinColor: 0xd6a581,
+    hairColor: 0x1f2937,
+    hatColor: 0x111827
   });
-  mine.add(merchant);
-  mineShopNpcMesh = merchant;
+  const mineShopStall = createVendorStall({
+    label: 'Pick Axes',
+    signColor: '#2a1b10',
+    canopyA: 0x16a34a,
+    canopyB: 0xf8fafc,
+    vendor: mineShopVendor
+  });
+  const mineShopLocalPos = new THREE.Vector3(
+    MINE_SHOP_NPC_POS.x - MINE_POS.x,
+    0,
+    MINE_SHOP_NPC_POS.z - MINE_POS.z
+  );
+  mineShopStall.position.copy(mineShopLocalPos);
+  mineShopStall.rotation.y = Math.atan2(-mineShopLocalPos.x, -mineShopLocalPos.z);
+  mine.add(mineShopStall);
+  mineShopNpcMesh = mineShopVendor;
+  addWorldCollider(MINE_SHOP_NPC_POS.x, MINE_SHOP_NPC_POS.z, 1.04, 'npc');
 
-  addQuestNpc(mine, new THREE.Vector3(QUEST_NPC_POS.x - MINE_POS.x, 0, QUEST_NPC_POS.z - MINE_POS.z));
+  const questVendor = createVendorNpc({
+    shirtColor: 0x7c3aed,
+    skinColor: 0xe0b18f,
+    hairColor: 0x0f172a,
+    hatColor: 0x1e293b
+  });
+  const questStall = createVendorStall({
+    label: 'Quests',
+    signColor: '#1f2937',
+    canopyA: 0x4f46e5,
+    canopyB: 0xffffff,
+    vendor: questVendor
+  });
+  const questLocalPos = new THREE.Vector3(
+    QUEST_NPC_POS.x - MINE_POS.x,
+    0,
+    QUEST_NPC_POS.z - MINE_POS.z
+  );
+  questStall.position.copy(questLocalPos);
+  questStall.rotation.y = Math.atan2(-questLocalPos.x, -questLocalPos.z);
+  mine.add(questStall);
+  questNpcMesh = questVendor;
+  addWorldCollider(QUEST_NPC_POS.x, QUEST_NPC_POS.z, 1.04, 'npc');
 }
 
 function addLandmarks() {
@@ -4327,6 +4432,9 @@ function getPickaxePower() {
 
 function renderInventoryBar() {
   if (inventoryBarEl) inventoryBarEl.classList.remove('hidden');
+  if (inventoryCoinsEl) {
+    inventoryCoinsEl.textContent = Math.max(0, Math.floor(Number(questState.coins) || 0)).toLocaleString();
+  }
   if (inventoryPickaxeEl) {
     inventoryPickaxeEl.textContent = capitalizeWord(questState.pickaxe || 'wood');
   }
@@ -6673,12 +6781,6 @@ function updateMineVisuals(nowMs, delta) {
   if (mineExitMesh) {
     minePortalPulse += delta * 2.2;
     mineExitMesh.position.y = (MINE_EXIT_POS.y - MINE_POS.y) + 0.08 + Math.sin(minePortalPulse) * 0.06;
-  }
-  if (questNpcMesh) {
-    questNpcMesh.rotation.y = -0.55;
-  }
-  if (mineShopNpcMesh) {
-    mineShopNpcMesh.rotation.y = 0.5;
   }
   if (mineEntranceMesh) {
     mineEntranceMesh.rotation.y = MINE_ENTRY_YAW;

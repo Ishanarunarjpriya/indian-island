@@ -133,9 +133,9 @@
 
       #inventory-bar {
         position: fixed;
-        left: 50%;
+        left: 16px;
         bottom: 16px;
-        transform: translateX(-50%);
+        transform: none;
         z-index: 16;
         display: grid;
         grid-auto-flow: column;
@@ -874,9 +874,9 @@
       }
 
       body.mobile-ui #inventory-bar {
-        left: 50%;
+        left: max(8px, env(safe-area-inset-left));
         right: auto;
-        transform: translateX(-50%);
+        transform: none;
         bottom: calc(88px + env(safe-area-inset-bottom));
         gap: 8px;
         padding: 6px 8px;
@@ -1001,6 +1001,10 @@
     </section>
 
     <section id="inventory-bar" class="panel">
+      <div class="inventory-slot">
+        <span class="label">Coins</span>
+        <span class="value" id="inventory-coins">0</span>
+      </div>
       <div class="inventory-slot">
         <span class="label">Pickaxe</span>
         <span class="value" id="inventory-pickaxe">Wood</span>
