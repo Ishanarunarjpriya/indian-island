@@ -123,11 +123,9 @@ const gameplayPanels = ['hud', 'mini-panel', 'chat-panel', 'world-state', 'top-l
   .filter(Boolean);
 
 const questTrackerEl = document.createElement('section');
+questTrackerEl.id = 'quest-tracker';
 questTrackerEl.className = 'panel';
-questTrackerEl.style.marginTop = '8px';
-questTrackerEl.style.padding = '8px 10px';
 questTrackerEl.style.display = 'none';
-questTrackerEl.style.gap = '4px';
 questTrackerEl.innerHTML = `
   <div id="quest-title" style="font-weight:700;font-size:12px;letter-spacing:.2px;color:#fde68a;">Current Quest</div>
   <div id="quest-progress" style="font-size:11px;color:#f8fafc;">Progress: 0/0</div>

@@ -81,6 +81,16 @@
         min-width: 240px;
       }
 
+      #quest-tracker {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: calc(100% + 8px);
+        padding: 8px 10px;
+        display: none;
+        gap: 4px;
+      }
+
       #hud .title {
         margin: 0 0 8px;
         font-size: 15px;
@@ -753,6 +763,11 @@
         width: min(52vw, 220px);
         padding: 8px 10px;
         z-index: 12;
+      }
+
+      body.mobile-ui #quest-tracker {
+        top: calc(100% + 8px);
+        bottom: auto;
       }
 
       body.mobile-ui #hud .title {
