@@ -6,6 +6,16 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
+app.get("/db-test", async (req, res) => {
+  try {
+    const result = await pool.query("SELECT NOW()");
+    res.json(result.rows);
+  } catch (err) {
+    console.error("DB ERROR:", err);
+    res.status(500).send(err.message);
+  }
+});
+
 
 import express from 'express';
 import crypto from 'crypto';
