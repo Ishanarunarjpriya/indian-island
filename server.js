@@ -740,8 +740,9 @@ async function bootstrapPersistence() {
 
 await bootstrapPersistence();
 
-function ensureProfileExists(profileId, username) {
-  if (!profileId || profiles.has(profileId)) return;
+function ensureProfileExists(profileId, username, options = {}) {
+  if (!profileId) return false;
+  if (profiles.has(profileId)) return false;
   const shirt = randomHexColor();
   profiles.set(profileId, {
     name: sanitizeName(username, username || `Player-${profileId.slice(0, 4)}`),
@@ -752,7 +753,10 @@ function ensureProfileExists(profileId, username) {
     z: null,
     progress: defaultProgress()
   });
-  scheduleProfileSave();
+  if (!options.deferSave) {
+    scheduleProfileSave();
+  }
+  return true;
 }
 
 function spawnPlayer(socket, profileId, username) {
@@ -836,7 +840,7 @@ function removeAuthenticatedPlayer(socket) {
 io.on('connection', (socket) => {
   socket.emit('auth:required');
 
-  socket.on('auth:register', (payload, ack) => {
+  socket.on('auth:register', async (payload, ack) => {
     const username = sanitizeUsername(payload?.username);
     const password = sanitizePassword(payload?.password);
     if (!username || !password) {
@@ -853,9 +857,27 @@ io.on('connection', (socket) => {
     }
     const { salt, hash } = hashPassword(password);
     const profileId = `acct-${username}`;
-    accounts.set(username, { username, salt, hash, profileId });
-    scheduleAccountSave();
-    ensureProfileExists(profileId, username);
+    const profileWasCreated = ensureProfileExists(profileId, username, { deferSave: true });
+    const account = { username, salt, hash, profileId };
+    accounts.set(username, account);
+    try {
+      if (dbReady) {
+        await saveProfileToDb(profileId, profiles.get(profileId));
+        await saveAccountToDb(username, account);
+      } else {
+        await saveProfilesNow();
+        await saveAccountsNow();
+      }
+    } catch (error) {
+      accounts.delete(username);
+      if (profileWasCreated) {
+        profiles.delete(profileId);
+      }
+      if (typeof ack === 'function') {
+        ack({ ok: false, error: 'Could not save account. Please try again.' });
+      }
+      return;
+    }
     spawnPlayer(socket, profileId, username);
     if (typeof ack === 'function') ack({ ok: true, username });
   });
