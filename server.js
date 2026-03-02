@@ -1,22 +1,3 @@
-import pkg from 'pg';
-const { Pool } = pkg;
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
-});
-
-app.get("/db-test", async (req, res) => {
-  try {
-    const result = await pool.query("SELECT NOW()");
-    res.json(result.rows);
-  } catch (err) {
-    console.error("DB ERROR:", err);
-    res.status(500).send(err.message);
-  }
-});
-
-
 import express from 'express';
 import crypto from 'crypto';
 import fs from 'fs';
@@ -29,6 +10,21 @@ import { Server } from 'socket.io';
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
+
+app.get('/db-test', async (req, res) => {
+  if (!USE_POSTGRES) {
+    res.status(400).json({ ok: false, error: 'DATABASE_URL not configured.' });
+    return;
+  }
+  try {
+    const pool = getDbPool();
+    const result = await pool.query('select now() as now');
+    res.json({ ok: true, now: result.rows?.[0]?.now || null });
+  } catch (err) {
+    console.error('[db-test] DB ERROR:', err);
+    res.status(500).json({ ok: false, error: String(err?.message || err) });
+  }
+});
 
 const PORT = process.env.PORT || 3000;
 const DATABASE_URL = typeof process.env.DATABASE_URL === 'string' ? process.env.DATABASE_URL.trim() : '';
