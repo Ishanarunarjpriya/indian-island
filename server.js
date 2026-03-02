@@ -1,3 +1,12 @@
+import pkg from 'pg';
+const { Pool } = pkg;
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
+});
+
+
 import express from 'express';
 import crypto from 'crypto';
 import fs from 'fs';
