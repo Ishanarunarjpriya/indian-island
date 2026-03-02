@@ -23,6 +23,7 @@ import fs from 'fs';
 import http from 'http';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { Pool } from 'pg';
 import { Server } from 'socket.io';
 
 const app = express();
@@ -30,6 +31,8 @@ const server = http.createServer(app);
 const io = new Server(server);
 
 const PORT = process.env.PORT || 3000;
+const DATABASE_URL = typeof process.env.DATABASE_URL === 'string' ? process.env.DATABASE_URL.trim() : '';
+const USE_POSTGRES = DATABASE_URL.length > 0;
 const WORLD_LIMIT = 40;
 const ISLAND_SURFACE_Y = 1.35;
 const LIGHTHOUSE_POS = {
@@ -104,6 +107,8 @@ const interactables = new Map([
 let saveTimer = null;
 let accountSaveTimer = null;
 let shuttingDown = false;
+let dbPool = null;
+let dbReady = false;
 
 app.use(express.static('public'));
 
@@ -415,6 +420,137 @@ function verifyPassword(password, salt, expectedHash) {
   }
 }
 
+function getDbPool() {
+  if (!USE_POSTGRES) return null;
+  if (dbPool) return dbPool;
+  const sslMode = String(process.env.PGSSLMODE || '').toLowerCase();
+  const needsSsl = sslMode === 'require' || /sslmode=require/i.test(DATABASE_URL);
+  dbPool = new Pool({
+    connectionString: DATABASE_URL,
+    ssl: needsSsl ? { rejectUnauthorized: false } : undefined
+  });
+  return dbPool;
+}
+
+async function initDatabase() {
+  if (!USE_POSTGRES) return false;
+  try {
+    const pool = getDbPool();
+    await pool.query(`
+      create table if not exists profiles (
+        profile_id text primary key,
+        name text not null,
+        color text not null,
+        appearance jsonb not null default '{}'::jsonb,
+        x double precision,
+        y double precision,
+        z double precision,
+        progress jsonb not null default '{}'::jsonb,
+        updated_at timestamptz not null default now()
+      );
+    `);
+    await pool.query(`
+      create table if not exists accounts (
+        username text primary key,
+        salt text not null,
+        hash text not null,
+        profile_id text not null references profiles(profile_id) on delete cascade,
+        updated_at timestamptz not null default now()
+      );
+    `);
+    await pool.query('create index if not exists idx_accounts_profile_id on accounts(profile_id);');
+    dbReady = true;
+    return true;
+  } catch (error) {
+    console.error('[db] Postgres init failed, falling back to JSON storage:', error?.message || error);
+    dbReady = false;
+    return false;
+  }
+}
+
+async function loadProfilesFromDb() {
+  if (!dbReady) return;
+  const pool = getDbPool();
+  const { rows } = await pool.query(
+    `select profile_id, name, color, appearance, x, y, z, progress from profiles`
+  );
+  profiles.clear();
+  for (const row of rows) {
+    const profileId = sanitizeProfileId(row.profile_id);
+    if (!profileId) continue;
+    const name = sanitizeName(row.name, `Player-${profileId.slice(0, 4)}`);
+    const color = sanitizeColor(row.color, randomHexColor());
+    const appearance = sanitizeAppearance(row.appearance, { ...defaultAppearance(), shirt: color });
+    profiles.set(profileId, {
+      name,
+      color: appearance.shirt,
+      appearance,
+      x: Number.isFinite(Number(row.x)) ? Number(row.x) : null,
+      y: Number.isFinite(Number(row.y)) ? Number(row.y) : null,
+      z: Number.isFinite(Number(row.z)) ? Number(row.z) : null,
+      progress: sanitizeProgress(row.progress)
+    });
+  }
+}
+
+async function loadAccountsFromDb() {
+  if (!dbReady) return;
+  const pool = getDbPool();
+  const { rows } = await pool.query(`select username, salt, hash, profile_id from accounts`);
+  accounts.clear();
+  for (const row of rows) {
+    const username = sanitizeUsername(row.username);
+    const salt = typeof row.salt === 'string' ? row.salt : '';
+    const hash = typeof row.hash === 'string' ? row.hash : '';
+    const profileId = sanitizeProfileId(row.profile_id) || `acct-${username}`;
+    if (!username || !salt || !hash) continue;
+    accounts.set(username, { username, salt, hash, profileId });
+  }
+}
+
+async function saveProfileToDb(profileId, profile) {
+  if (!dbReady || !profileId || !profile) return;
+  const pool = getDbPool();
+  await pool.query(
+    `insert into profiles (profile_id, name, color, appearance, x, y, z, progress, updated_at)
+     values ($1, $2, $3, $4::jsonb, $5, $6, $7, $8::jsonb, now())
+     on conflict (profile_id) do update
+     set name = excluded.name,
+         color = excluded.color,
+         appearance = excluded.appearance,
+         x = excluded.x,
+         y = excluded.y,
+         z = excluded.z,
+         progress = excluded.progress,
+         updated_at = now()`,
+    [
+      profileId,
+      profile.name,
+      profile.color,
+      JSON.stringify(profile.appearance || defaultAppearance()),
+      Number.isFinite(profile.x) ? profile.x : null,
+      Number.isFinite(profile.y) ? profile.y : null,
+      Number.isFinite(profile.z) ? profile.z : null,
+      JSON.stringify(sanitizeProgress(profile.progress))
+    ]
+  );
+}
+
+async function saveAccountToDb(username, account) {
+  if (!dbReady || !username || !account) return;
+  const pool = getDbPool();
+  await pool.query(
+    `insert into accounts (username, salt, hash, profile_id, updated_at)
+     values ($1, $2, $3, $4, now())
+     on conflict (username) do update
+     set salt = excluded.salt,
+         hash = excluded.hash,
+         profile_id = excluded.profile_id,
+         updated_at = now()`,
+    [username, account.salt, account.hash, account.profileId]
+  );
+}
+
 function readProfiles() {
   try {
     if (!fs.existsSync(PROFILE_FILE)) {
@@ -497,7 +633,19 @@ function serializeAccounts() {
   return serialized;
 }
 
-function saveProfilesNow() {
+async function saveProfilesNow() {
+  if (dbReady) {
+    try {
+      const writes = [];
+      for (const [profileId, profile] of profiles.entries()) {
+        writes.push(saveProfileToDb(profileId, profile));
+      }
+      await Promise.all(writes);
+    } catch (error) {
+      console.error('[db] Failed to save profiles:', error?.message || error);
+    }
+    return;
+  }
   try {
     fs.writeFileSync(PROFILE_FILE, JSON.stringify(serializeProfiles(), null, 2));
   } catch {
@@ -505,7 +653,19 @@ function saveProfilesNow() {
   }
 }
 
-function saveAccountsNow() {
+async function saveAccountsNow() {
+  if (dbReady) {
+    try {
+      const writes = [];
+      for (const [username, account] of accounts.entries()) {
+        writes.push(saveAccountToDb(username, account));
+      }
+      await Promise.all(writes);
+    } catch (error) {
+      console.error('[db] Failed to save accounts:', error?.message || error);
+    }
+    return;
+  }
   try {
     fs.writeFileSync(ACCOUNT_FILE, JSON.stringify(serializeAccounts(), null, 2));
   } catch {
@@ -513,7 +673,7 @@ function saveAccountsNow() {
   }
 }
 
-function flushPendingSaves() {
+async function flushPendingSaves() {
   if (saveTimer) {
     clearTimeout(saveTimer);
     saveTimer = null;
@@ -522,8 +682,7 @@ function flushPendingSaves() {
     clearTimeout(accountSaveTimer);
     accountSaveTimer = null;
   }
-  saveProfilesNow();
-  saveAccountsNow();
+  await Promise.all([saveProfilesNow(), saveAccountsNow()]);
 }
 
 function scheduleProfileSave() {
@@ -532,7 +691,7 @@ function scheduleProfileSave() {
   }
   saveTimer = setTimeout(() => {
     saveTimer = null;
-    saveProfilesNow();
+    void saveProfilesNow();
   }, 250);
 }
 
@@ -542,7 +701,7 @@ function scheduleAccountSave() {
   }
   accountSaveTimer = setTimeout(() => {
     accountSaveTimer = null;
-    saveAccountsNow();
+    void saveAccountsNow();
   }, 250);
 }
 
@@ -570,8 +729,20 @@ function findAccountByUsernameLikeName(name, excludeProfileId = null) {
   return null;
 }
 
-readProfiles();
-readAccounts();
+async function bootstrapPersistence() {
+  const dbOk = await initDatabase();
+  if (dbOk) {
+    await loadProfilesFromDb();
+    await loadAccountsFromDb();
+    console.log('[db] Using Postgres persistence.');
+    return;
+  }
+  readProfiles();
+  readAccounts();
+  console.log('[db] Using JSON file persistence.');
+}
+
+await bootstrapPersistence();
 
 function ensureProfileExists(profileId, username) {
   if (!profileId || profiles.has(profileId)) return;
@@ -645,7 +816,7 @@ function persistPlayerProgress(player, options = {}) {
     progress: sanitizeProgress(player.progress)
   });
   if (options.immediate) {
-    saveProfilesNow();
+    void saveProfilesNow();
     return;
   }
   scheduleProfileSave();
@@ -1077,15 +1248,24 @@ server.listen(PORT, () => {
 function handleShutdown() {
   if (shuttingDown) return;
   shuttingDown = true;
-  flushPendingSaves();
-  server.close(() => {
-    process.exit(0);
-  });
-  setTimeout(() => process.exit(0), 2000).unref();
+  void (async () => {
+    await flushPendingSaves();
+    if (dbPool) {
+      try {
+        await dbPool.end();
+      } catch {
+        // Ignore close failures during shutdown.
+      }
+    }
+    server.close(() => {
+      process.exit(0);
+    });
+    setTimeout(() => process.exit(0), 2500).unref();
+  })();
 }
 
 process.on('SIGINT', handleShutdown);
 process.on('SIGTERM', handleShutdown);
 process.on('beforeExit', () => {
-  flushPendingSaves();
+  void flushPendingSaves();
 });
