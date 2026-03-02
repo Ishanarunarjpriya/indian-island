@@ -806,6 +806,7 @@ io.on('connection', (socket) => {
     }
     persistPlayerProgress(actor);
     emitProgress(socket, actor);
+    io.emit('player:mined', { id: socket.id, sentAt: Date.now() });
     if (typeof ack === 'function') ack({ ok: true, progress: progressSnapshot(progress), questProgressed });
   });
 

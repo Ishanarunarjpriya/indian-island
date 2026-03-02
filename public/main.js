@@ -16,6 +16,7 @@ let menuOpen = false;
 let isAuthenticated = false;
 const CHAT_BUBBLE_MS = 4500;
 let lastMineAt = 0;
+const MINE_SWING_MS = 340;
 let torchEquipped = false;
 
 const questState = {
@@ -62,6 +63,7 @@ const MINE_ENTRY_POS = new THREE.Vector3(
   MINE_ENTRY_ISLAND_POS.z - (toMainFromMineEntryZ / toMainFromMineEntryLen) * 2.4
 );
 const MINE_EXIT_POS = new THREE.Vector3(MINE_POS.x + 2.6, 1.35, MINE_POS.z + 23.2);
+const MINE_CRYSTAL_INTERACT_RADIUS = 3.0;
 const QUEST_NPC_POS = new THREE.Vector3(MINE_POS.x + 19.5, 1.35, MINE_POS.z + 8.1);
 const MINE_SHOP_NPC_POS = new THREE.Vector3(MINE_POS.x - 18.2, 1.35, MINE_POS.z - 9.2);
 const MINE_ENTRY_YAW = Math.atan2(MINE_ENTRY_DOCK_POS.x - MINE_ENTRY_POS.x, MINE_ENTRY_DOCK_POS.z - MINE_ENTRY_POS.z);
@@ -71,6 +73,7 @@ let questNpcMesh = null;
 let mineShopNpcMesh = null;
 let mineEntranceMesh = null;
 let mineExitMesh = null;
+let mineCentralCrystalMesh = null;
 let mineGroup = null;
 let minePortalPulse = 0;
 const oreNodes = [];
@@ -2199,42 +2202,42 @@ function createVendorNpc({
   hatColor = null
 } = {}) {
   const npc = new THREE.Group();
-  const npcScale = 1.72;
+  const npcScale = 1.52;
 
   const legsMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.84 });
   const shirtMat = new THREE.MeshStandardMaterial({ color: shirtColor, roughness: 0.8 });
   const skinMat = new THREE.MeshStandardMaterial({ color: skinColor, roughness: 0.75 });
   const hairMat = new THREE.MeshStandardMaterial({ color: hairColor, roughness: 0.78 });
 
-  const legGeo = new THREE.BoxGeometry(0.22 * npcScale, 0.92 * npcScale, 0.24 * npcScale);
+  const legGeo = new THREE.BoxGeometry(0.2 * npcScale, 0.9 * npcScale, 0.22 * npcScale);
   const legL = new THREE.Mesh(legGeo, legsMat);
   legL.position.set(-0.16 * npcScale, 0.46 * npcScale, 0);
   const legR = legL.clone();
   legR.position.x = 0.16 * npcScale;
 
   const body = new THREE.Mesh(
-    new THREE.BoxGeometry(0.76 * npcScale, 1.14 * npcScale, 0.5 * npcScale),
+    new THREE.BoxGeometry(0.68 * npcScale, 1.08 * npcScale, 0.44 * npcScale),
     shirtMat
   );
-  body.position.y = 1.48 * npcScale;
+  body.position.y = 1.44 * npcScale;
 
   const head = new THREE.Mesh(
-    new THREE.BoxGeometry(0.48 * npcScale, 0.52 * npcScale, 0.48 * npcScale),
+    new THREE.BoxGeometry(0.44 * npcScale, 0.5 * npcScale, 0.44 * npcScale),
     skinMat
   );
-  head.position.y = 2.38 * npcScale;
+  head.position.y = 2.28 * npcScale;
 
   const hair = new THREE.Mesh(
-    new THREE.BoxGeometry(0.54 * npcScale, 0.2 * npcScale, 0.54 * npcScale),
+    new THREE.BoxGeometry(0.48 * npcScale, 0.18 * npcScale, 0.48 * npcScale),
     hairMat
   );
-  hair.position.y = 2.72 * npcScale;
+  hair.position.y = 2.58 * npcScale;
 
   const arm = new THREE.Mesh(
-    new THREE.BoxGeometry(0.2 * npcScale, 0.82 * npcScale, 0.2 * npcScale),
+    new THREE.BoxGeometry(0.18 * npcScale, 0.78 * npcScale, 0.18 * npcScale),
     skinMat
   );
-  arm.position.set(-0.5 * npcScale, 1.5 * npcScale, 0);
+  arm.position.set(-0.45 * npcScale, 1.46 * npcScale, 0);
   const armR = arm.clone();
   armR.position.x = 0.5 * npcScale;
 
@@ -2242,10 +2245,10 @@ function createVendorNpc({
 
   if (hatColor !== null) {
     const hat = new THREE.Mesh(
-      new THREE.BoxGeometry(0.58 * npcScale, 0.14 * npcScale, 0.58 * npcScale),
+      new THREE.BoxGeometry(0.52 * npcScale, 0.13 * npcScale, 0.52 * npcScale),
       new THREE.MeshStandardMaterial({ color: hatColor, roughness: 0.78 })
     );
-    hat.position.y = 2.86 * npcScale;
+    hat.position.y = 2.73 * npcScale;
     npc.add(hat);
   }
 
@@ -2268,8 +2271,8 @@ function createVendorStall({
   const stall = new THREE.Group();
   const width = 4.6;
   const depth = 2.8;
-  const postHeight = 3.5;
-  const roofY = 3.84;
+  const postHeight = 3.9;
+  const roofY = 4.24;
 
   const woodMat = new THREE.MeshStandardMaterial({ color: 0x4a2f1f, roughness: 0.9 });
   const trimMat = new THREE.MeshStandardMaterial({ color: 0x2f1e14, roughness: 0.92 });
@@ -2298,21 +2301,21 @@ function createVendorStall({
   }
 
   const counterTop = new THREE.Mesh(new THREE.BoxGeometry(width - 0.44, 0.15, 0.78), woodMat);
-  counterTop.position.set(0, 1.36, depth * 0.24);
+  counterTop.position.set(0, 1.66, depth * 0.24);
   const counterFront = new THREE.Mesh(new THREE.BoxGeometry(width - 0.58, 0.7, 0.12), woodMat);
-  counterFront.position.set(0, 1.01, depth * 0.58);
+  counterFront.position.set(0, 1.31, depth * 0.58);
   const counterRail = new THREE.Mesh(new THREE.BoxGeometry(width - 0.2, 0.12, 0.14), trimMat);
-  counterRail.position.set(0, 1.69, depth * 0.58);
+  counterRail.position.set(0, 1.99, depth * 0.58);
   stall.add(counterTop, counterFront, counterRail);
 
   const sideRailL = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.64, depth - 0.62), woodMat);
-  sideRailL.position.set(-(width * 0.5 - 0.24), 1.06, 0);
+  sideRailL.position.set(-(width * 0.5 - 0.24), 1.36, 0);
   const sideRailR = sideRailL.clone();
   sideRailR.position.x = width * 0.5 - 0.24;
   stall.add(sideRailL, sideRailR);
 
   const sign = makeTextSign(label, 3.28, 0.62, signColor, '#ecfeff');
-  sign.position.set(0, roofY + 0.54, depth * 0.5 + 0.15);
+  sign.position.set(0, roofY + 0.84, depth * 0.5 + 0.15);
   sign.rotation.x = -0.14;
   stall.add(sign);
 
@@ -2437,6 +2440,7 @@ function addMineArea() {
   centralCrystal.rotation.y = Math.PI * 0.14;
   centralCrystal.castShadow = true;
   mine.add(centralCrystal);
+  mineCentralCrystalMesh = centralCrystal;
   const centralCrystalLight = new THREE.PointLight(0x60a5fa, 2.3, 34, 2);
   centralCrystalLight.position.set(0, 3.5, 0);
   mine.add(centralCrystalLight);
@@ -3804,14 +3808,14 @@ function makePlayerMesh(appearance) {
   rightArmPivot.add(rightHand);
 
   const heldTorch = createHeldTorchMesh(UNIT);
-  heldTorch.position.set(-0.03 * UNIT, -0.42 * UNIT, 0.05 * UNIT);
-  heldTorch.rotation.set(0.22, 0.08, -0.38);
+  heldTorch.position.set(0.04 * UNIT, 0.14 * UNIT, 0.16 * UNIT);
+  heldTorch.rotation.set(-1.04, -0.06, -0.18);
   heldTorch.visible = false;
   leftHand.add(heldTorch);
 
   const heldPickaxe = createHeldPickaxeMesh(UNIT);
-  heldPickaxe.position.set(0.03 * UNIT, -0.2 * UNIT, 0.05 * UNIT);
-  heldPickaxe.rotation.set(0.35, 0.1, -0.88);
+  heldPickaxe.position.set(0.14 * UNIT, 0.18 * UNIT, 0.12 * UNIT);
+  heldPickaxe.rotation.set(-1.08, 0.18, 0.42);
   rightHand.add(heldPickaxe);
 
   const leftLegPivot = new THREE.Group();
@@ -4274,6 +4278,8 @@ function addPlayer(data) {
     isLocal: data.id === localPlayerId,
     heldPickaxe: normalizePickaxeTier(data.pickaxe, 'wood'),
     torchEquipped: Boolean(data.torchEquipped),
+    mineSwingStartedAt: 0,
+    mineSwingUntil: 0,
     label: tag,
     bubble,
     bubbleUntil: 0
@@ -4952,6 +4958,45 @@ function updateCliffWaterfall(nowMs, delta) {
   updateCliffWaterfallVisibility();
 }
 
+function applyHeldToolArmPose(player, speed, now) {
+  const parts = player?.mesh?.userData?.parts;
+  if (!parts) return;
+  const stride = Math.sin((player.animPhase || 0) * 1.2 + now * 0.0016);
+  const torchActive = Boolean(player.torchEquipped);
+  const rightX = -1.08 + stride * 0.08 * speed;
+  const rightY = 0.2;
+  const rightZ = 0.68;
+  const leftX = (torchActive ? -1.16 : -0.64) + stride * 0.05 * speed;
+  const leftY = torchActive ? -0.14 : -0.06;
+  const leftZ = torchActive ? -0.58 : -0.3;
+  const blend = 0.72;
+
+  parts.rightArmPivot.rotation.x = THREE.MathUtils.lerp(parts.rightArmPivot.rotation.x, rightX, blend);
+  parts.rightArmPivot.rotation.y = THREE.MathUtils.lerp(parts.rightArmPivot.rotation.y, rightY, blend);
+  parts.rightArmPivot.rotation.z = THREE.MathUtils.lerp(parts.rightArmPivot.rotation.z, rightZ, blend);
+
+  parts.leftArmPivot.rotation.x = THREE.MathUtils.lerp(parts.leftArmPivot.rotation.x, leftX, blend);
+  parts.leftArmPivot.rotation.y = THREE.MathUtils.lerp(parts.leftArmPivot.rotation.y, leftY, blend);
+  parts.leftArmPivot.rotation.z = THREE.MathUtils.lerp(parts.leftArmPivot.rotation.z, leftZ, blend);
+}
+
+function applyMineSwingPose(player, body, parts, baseBodyY, now) {
+  const startAt = Number(player.mineSwingStartedAt) || now;
+  const progress = THREE.MathUtils.clamp((now - startAt) / MINE_SWING_MS, 0, 1);
+  const strike = Math.sin(progress * Math.PI);
+  body.position.y = baseBodyY + strike * 0.08;
+  body.rotation.x = -0.06 + strike * 0.22;
+  body.rotation.y = Math.sin(progress * Math.PI * 2) * 0.05;
+
+  parts.rightArmPivot.rotation.x = -1.16 + strike * 1.48;
+  parts.rightArmPivot.rotation.y = 0.26;
+  parts.rightArmPivot.rotation.z = 0.76 - strike * 0.7;
+
+  parts.leftArmPivot.rotation.x = -0.9 + strike * 0.2;
+  parts.leftArmPivot.rotation.y = -0.1;
+  parts.leftArmPivot.rotation.z = -0.46;
+}
+
 function updatePlayerEmotes(now, delta) {
   players.forEach((player) => {
     const body = player.mesh.userData.body;
@@ -4982,13 +5027,15 @@ function updatePlayerEmotes(now, delta) {
       return;
     }
 
+    const mineSwingUntil = Number(player.mineSwingUntil) || 0;
+    const hasMineSwing = mineSwingUntil > now;
     const hasEmote = Boolean(player.emoteType && now <= player.emoteUntil);
     player.animPhase += delta * (4 + player.animSpeed * 13);
     const stride = Math.sin(player.animPhase);
     const strideAbs = Math.abs(stride);
     const speed = Math.min(1, player.animSpeed);
 
-    if (!hasEmote && inDeepWater(player)) {
+    if (!hasMineSwing && !hasEmote && inDeepWater(player)) {
       if (shouldUseWaterIdle(player, speed)) {
         applyWaterIdlePose(player, body, parts, baseBodyY, now, delta);
       } else {
@@ -5000,7 +5047,7 @@ function updatePlayerEmotes(now, delta) {
     resetForGround();
 
     // Roblox-like locomotion: strong arm-leg opposition and blocky posture.
-    if (!hasEmote && speed > 0.04) {
+    if (!hasMineSwing && !hasEmote && speed > 0.04) {
       const legSwing = 0.96 * speed;
       const armSwing = 1.08 * speed;
 
@@ -5012,7 +5059,7 @@ function updatePlayerEmotes(now, delta) {
       body.position.y = baseBodyY + strideAbs * (0.06 + speed * 0.05);
       body.rotation.x = -0.08 - speed * 0.12;
       body.rotation.y = Math.sin(player.animPhase * 0.5) * 0.03;
-    } else if (!hasEmote) {
+    } else if (!hasMineSwing && !hasEmote) {
       // Idle has a subtle toy-like sway.
       const idle = Math.sin(now * 0.0042 + player.animPhase) * 0.03;
       body.position.y = baseBodyY + idle;
@@ -5021,7 +5068,7 @@ function updatePlayerEmotes(now, delta) {
       parts.rightArmPivot.rotation.x = 0.03 - Math.sin(now * 0.0035 + player.animPhase) * 0.04;
     }
 
-    if (!hasEmote && player.y > GROUND_Y + 0.08) {
+    if (!hasMineSwing && !hasEmote && player.y > GROUND_Y + 0.08) {
       // In-air pose: arms up, legs slightly tucked.
       body.rotation.x = -0.2;
       parts.leftArmPivot.rotation.x = -0.45;
@@ -5030,7 +5077,18 @@ function updatePlayerEmotes(now, delta) {
       parts.rightLegPivot.rotation.x = 0.28;
     }
 
+    if (hasMineSwing) {
+      applyMineSwingPose(player, body, parts, baseBodyY, now);
+      if (!hasEmote) {
+        player.emoteType = null;
+      }
+      return;
+    }
+
+    player.mineSwingUntil = 0;
+
     if (!hasEmote) {
+      applyHeldToolArmPose(player, speed, now);
       player.emoteType = null;
       return;
     }
@@ -5251,6 +5309,30 @@ function mineAmountForPickaxe(resource) {
   return power;
 }
 
+function isNearMineCrystal(local) {
+  if (!local || !inMine || !mineCentralCrystalMesh) return false;
+  const world = mineCentralCrystalMesh.getWorldPosition(new THREE.Vector3());
+  return Math.hypot(local.x - world.x, local.z - world.z) <= MINE_CRYSTAL_INTERACT_RADIUS;
+}
+
+function exitMineToEntrance(local) {
+  inMine = false;
+  const outDX = Math.sin(MINE_ENTRY_YAW) * 11.5;
+  const outDZ = Math.cos(MINE_ENTRY_YAW) * 11.5;
+  teleportLocal(
+    local,
+    { x: MINE_ENTRY_POS.x + outDX, y: GROUND_Y, z: MINE_ENTRY_POS.z + outDZ },
+    MINE_ENTRY_YAW + Math.PI
+  );
+}
+
+function startMineSwing(id, nowMs = Date.now()) {
+  const player = players.get(id);
+  if (!player) return;
+  player.mineSwingStartedAt = nowMs;
+  player.mineSwingUntil = Math.max(Number(player.mineSwingUntil) || 0, nowMs + MINE_SWING_MS);
+}
+
 function tryMineNode(local) {
   if (!local || !inMine) return false;
   const node = getNearbyOreNode(local);
@@ -5271,6 +5353,7 @@ function tryMineNode(local) {
     if (resp.progress) {
       applyProgressState(resp.progress);
     }
+    startMineSwing(localPlayerId, Date.now());
     node.readyAt = now + node.cooldownMs;
     node.mesh.visible = false;
     const questMsg = resp.questProgressed ? ' Quest progress updated.' : '';
@@ -5316,6 +5399,7 @@ function hasManualInteractTarget(local) {
 
   const nearMineExit = inMine && distance2D(local, MINE_EXIT_POS) < 3.1;
   if (nearMineExit) return true;
+  if (inMine && isNearMineCrystal(local)) return true;
   if (inMine && getNearbyOreNode(local)) return true;
   if (inMine && distance2D(local, MINE_SHOP_NPC_POS) <= 3.2) return true;
   if (distance2D(local, QUEST_NPC_POS) <= 3.2) return true;
@@ -5355,19 +5439,21 @@ function tryInteract() {
   if (!local || isTeleporting) return;
   if (tryAutoTeleport(local, now)) return;
   const nearMineExit = inMine && distance2D(local, MINE_EXIT_POS) < 3.1;
+  const nearMineCrystal = inMine && isNearMineCrystal(local);
   const nearInteriorPortal = inLighthouseInterior && distance2D(local, INTERIOR_EXIT_PORTAL_POS) < 3.1;
   const nearTopPortal = !inLighthouseInterior && !local.onBoat && distance2D(local, LIGHTHOUSE_TOP_POS) < 1.25 && local.y > 11.6;
 
   if (nearMineExit) {
     runTeleportTransition('exit-mine', () => {
-      inMine = false;
-      const outDX = Math.sin(MINE_ENTRY_YAW) * 11.5;
-      const outDZ = Math.cos(MINE_ENTRY_YAW) * 11.5;
-      teleportLocal(
-        local,
-        { x: MINE_ENTRY_POS.x + outDX, y: GROUND_Y, z: MINE_ENTRY_POS.z + outDZ },
-        MINE_ENTRY_YAW + Math.PI
-      );
+      exitMineToEntrance(local);
+    });
+    lastInteractAt = now;
+    return;
+  }
+
+  if (nearMineCrystal) {
+    runTeleportTransition('exit-mine', () => {
+      exitMineToEntrance(local);
     });
     lastInteractAt = now;
     return;
@@ -5539,6 +5625,11 @@ socket.on('playerGear', ({ id, pickaxe, torchEquipped: nextTorchEquipped }) => {
     }
   }
   applyHeldGearVisual(player);
+});
+
+socket.on('player:mined', ({ id, sentAt } = {}) => {
+  if (typeof id !== 'string') return;
+  startMineSwing(id, Number.isFinite(sentAt) ? sentAt : Date.now());
 });
 
 socket.on('playerCustomized', ({ id, name, color, appearance }) => {
@@ -6713,6 +6804,10 @@ function updateInteractionHint() {
   if (inMine) {
     if (distance2D(local, MINE_EXIT_POS) < 3.1) {
       interactHintEl.textContent = 'Press E at the glowing marker to exit mine';
+      return;
+    }
+    if (isNearMineCrystal(local)) {
+      interactHintEl.textContent = 'Press E at the crystal to return to mine entrance';
       return;
     }
     if (distance2D(local, QUEST_NPC_POS) < 3.4) {
