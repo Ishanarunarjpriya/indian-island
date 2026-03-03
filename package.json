@@ -6,9 +6,11 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "migrate:postgres": "node scripts/migrate-json-to-postgres.mjs"
+    "migrate:turso": "node scripts/migrate-json-to-turso.mjs",
+    "migrate:postgres": "node scripts/migrate-json-to-turso.mjs"
   },
   "dependencies": {
+    "@libsql/client": "^0.15.15",
     "express": "^4.19.2",
     "pg": "^8.19.0",
     "socket.io": "^4.8.1"

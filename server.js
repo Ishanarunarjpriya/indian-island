@@ -4,7 +4,7 @@ import fs from 'fs';
 import http from 'http';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { Pool } from 'pg';
+import { createClient } from '@libsql/client';
 import { Server } from 'socket.io';
 
 const app = express();
@@ -12,13 +12,13 @@ const server = http.createServer(app);
 const io = new Server(server);
 
 app.get('/db-test', async (req, res) => {
-  if (!USE_POSTGRES) {
-    res.status(400).json({ ok: false, error: 'DATABASE_URL not configured.' });
+  if (!USE_TURSO) {
+    res.status(400).json({ ok: false, error: 'TURSO_DATABASE_URL not configured.' });
     return;
   }
   try {
-    const pool = getDbPool();
-    const result = await pool.query('select now() as now');
+    const client = getDbClient();
+    const result = await client.execute('select datetime(\'now\') as now');
     res.json({ ok: true, now: result.rows?.[0]?.now || null });
   } catch (err) {
     console.error('[db-test] DB ERROR:', err);
@@ -27,8 +27,13 @@ app.get('/db-test', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-const DATABASE_URL = typeof process.env.DATABASE_URL === 'string' ? process.env.DATABASE_URL.trim() : '';
-const USE_POSTGRES = DATABASE_URL.length > 0;
+const TURSO_DATABASE_URL = typeof process.env.TURSO_DATABASE_URL === 'string'
+  ? process.env.TURSO_DATABASE_URL.trim()
+  : '';
+const TURSO_AUTH_TOKEN = typeof process.env.TURSO_AUTH_TOKEN === 'string'
+  ? process.env.TURSO_AUTH_TOKEN.trim()
+  : '';
+const USE_TURSO = TURSO_DATABASE_URL.length > 0;
 const WORLD_LIMIT = 40;
 const ISLAND_SURFACE_Y = 1.35;
 const LIGHTHOUSE_POS = {
@@ -103,7 +108,7 @@ const interactables = new Map([
 let saveTimer = null;
 let accountSaveTimer = null;
 let shuttingDown = false;
-let dbPool = null;
+let dbClient = null;
 let dbReady = false;
 
 app.use(express.static('public'));
@@ -416,49 +421,58 @@ function verifyPassword(password, salt, expectedHash) {
   }
 }
 
-function getDbPool() {
-  if (!USE_POSTGRES) return null;
-  if (dbPool) return dbPool;
-  const sslMode = String(process.env.PGSSLMODE || '').toLowerCase();
-  const needsSsl = sslMode === 'require' || /sslmode=require/i.test(DATABASE_URL);
-  dbPool = new Pool({
-    connectionString: DATABASE_URL,
-    ssl: needsSsl ? { rejectUnauthorized: false } : undefined
+function parseMaybeJson(value, fallback = {}) {
+  if (!value || typeof value !== 'string') return fallback;
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' ? parsed : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function getDbClient() {
+  if (!USE_TURSO) return null;
+  if (dbClient) return dbClient;
+  dbClient = createClient({
+    url: TURSO_DATABASE_URL,
+    authToken: TURSO_AUTH_TOKEN || undefined
   });
-  return dbPool;
+  return dbClient;
 }
 
 async function initDatabase() {
-  if (!USE_POSTGRES) return false;
+  if (!USE_TURSO) return false;
   try {
-    const pool = getDbPool();
-    await pool.query(`
+    const client = getDbClient();
+    await client.execute('pragma foreign_keys = on');
+    await client.execute(`
       create table if not exists profiles (
         profile_id text primary key,
         name text not null,
         color text not null,
-        appearance jsonb not null default '{}'::jsonb,
-        x double precision,
-        y double precision,
-        z double precision,
-        progress jsonb not null default '{}'::jsonb,
-        updated_at timestamptz not null default now()
-      );
+        appearance text not null default '{}',
+        x real,
+        y real,
+        z real,
+        progress text not null default '{}',
+        updated_at text not null default (datetime('now'))
+      )
     `);
-    await pool.query(`
+    await client.execute(`
       create table if not exists accounts (
         username text primary key,
         salt text not null,
         hash text not null,
         profile_id text not null references profiles(profile_id) on delete cascade,
-        updated_at timestamptz not null default now()
-      );
+        updated_at text not null default (datetime('now'))
+      )
     `);
-    await pool.query('create index if not exists idx_accounts_profile_id on accounts(profile_id);');
+    await client.execute('create index if not exists idx_accounts_profile_id on accounts(profile_id)');
     dbReady = true;
     return true;
   } catch (error) {
-    console.error('[db] Postgres init failed, falling back to JSON storage:', error?.message || error);
+    console.error('[db] Turso init failed, falling back to JSON storage:', error?.message || error);
     dbReady = false;
     return false;
   }
@@ -466,17 +480,18 @@ async function initDatabase() {
 
 async function loadProfilesFromDb() {
   if (!dbReady) return;
-  const pool = getDbPool();
-  const { rows } = await pool.query(
-    `select profile_id, name, color, appearance, x, y, z, progress from profiles`
+  const client = getDbClient();
+  const result = await client.execute(
+    'select profile_id, name, color, appearance, x, y, z, progress from profiles'
   );
+  const rows = Array.isArray(result.rows) ? result.rows : [];
   profiles.clear();
   for (const row of rows) {
     const profileId = sanitizeProfileId(row.profile_id);
     if (!profileId) continue;
     const name = sanitizeName(row.name, `Player-${profileId.slice(0, 4)}`);
     const color = sanitizeColor(row.color, randomHexColor());
-    const appearance = sanitizeAppearance(row.appearance, { ...defaultAppearance(), shirt: color });
+    const appearance = sanitizeAppearance(parseMaybeJson(row.appearance), { ...defaultAppearance(), shirt: color });
     profiles.set(profileId, {
       name,
       color: appearance.shirt,
@@ -484,15 +499,16 @@ async function loadProfilesFromDb() {
       x: Number.isFinite(Number(row.x)) ? Number(row.x) : null,
       y: Number.isFinite(Number(row.y)) ? Number(row.y) : null,
       z: Number.isFinite(Number(row.z)) ? Number(row.z) : null,
-      progress: sanitizeProgress(row.progress)
+      progress: sanitizeProgress(parseMaybeJson(row.progress))
     });
   }
 }
 
 async function loadAccountsFromDb() {
   if (!dbReady) return;
-  const pool = getDbPool();
-  const { rows } = await pool.query(`select username, salt, hash, profile_id from accounts`);
+  const client = getDbClient();
+  const result = await client.execute('select username, salt, hash, profile_id from accounts');
+  const rows = Array.isArray(result.rows) ? result.rows : [];
   accounts.clear();
   for (const row of rows) {
     const username = sanitizeUsername(row.username);
@@ -506,20 +522,20 @@ async function loadAccountsFromDb() {
 
 async function saveProfileToDb(profileId, profile) {
   if (!dbReady || !profileId || !profile) return;
-  const pool = getDbPool();
-  await pool.query(
-    `insert into profiles (profile_id, name, color, appearance, x, y, z, progress, updated_at)
-     values ($1, $2, $3, $4::jsonb, $5, $6, $7, $8::jsonb, now())
-     on conflict (profile_id) do update
-     set name = excluded.name,
-         color = excluded.color,
-         appearance = excluded.appearance,
-         x = excluded.x,
-         y = excluded.y,
-         z = excluded.z,
-         progress = excluded.progress,
-         updated_at = now()`,
-    [
+  const client = getDbClient();
+  await client.execute({
+    sql: `insert into profiles (profile_id, name, color, appearance, x, y, z, progress, updated_at)
+          values (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+          on conflict(profile_id) do update
+          set name = excluded.name,
+              color = excluded.color,
+              appearance = excluded.appearance,
+              x = excluded.x,
+              y = excluded.y,
+              z = excluded.z,
+              progress = excluded.progress,
+              updated_at = datetime('now')`,
+    args: [
       profileId,
       profile.name,
       profile.color,
@@ -529,22 +545,22 @@ async function saveProfileToDb(profileId, profile) {
       Number.isFinite(profile.z) ? profile.z : null,
       JSON.stringify(sanitizeProgress(profile.progress))
     ]
-  );
+  });
 }
 
 async function saveAccountToDb(username, account) {
   if (!dbReady || !username || !account) return;
-  const pool = getDbPool();
-  await pool.query(
-    `insert into accounts (username, salt, hash, profile_id, updated_at)
-     values ($1, $2, $3, $4, now())
-     on conflict (username) do update
-     set salt = excluded.salt,
-         hash = excluded.hash,
-         profile_id = excluded.profile_id,
-         updated_at = now()`,
-    [username, account.salt, account.hash, account.profileId]
-  );
+  const client = getDbClient();
+  await client.execute({
+    sql: `insert into accounts (username, salt, hash, profile_id, updated_at)
+          values (?, ?, ?, ?, datetime('now'))
+          on conflict(username) do update
+          set salt = excluded.salt,
+              hash = excluded.hash,
+              profile_id = excluded.profile_id,
+              updated_at = datetime('now')`,
+    args: [username, account.salt, account.hash, account.profileId]
+  });
 }
 
 function readProfiles() {
@@ -730,7 +746,7 @@ async function bootstrapPersistence() {
   if (dbOk) {
     await loadProfilesFromDb();
     await loadAccountsFromDb();
-    console.log('[db] Using Postgres persistence.');
+    console.log('[db] Using Turso persistence.');
     return;
   }
   readProfiles();
@@ -1268,9 +1284,9 @@ function handleShutdown() {
   shuttingDown = true;
   void (async () => {
     await flushPendingSaves();
-    if (dbPool) {
+    if (dbClient && typeof dbClient.close === 'function') {
       try {
-        await dbPool.end();
+        await dbClient.close();
       } catch {
         // Ignore close failures during shutdown.
       }
