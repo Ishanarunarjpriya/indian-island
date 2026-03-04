@@ -147,7 +147,7 @@
       }
 
       .inventory-slot {
-        min-width: 120px;
+        min-width: 108px;
         border-radius: 10px;
         border: 1px solid rgba(255, 255, 255, 0.18);
         background: rgba(0, 0, 0, 0.18);
@@ -888,7 +888,7 @@
       }
 
       body.mobile-ui .inventory-slot {
-        min-width: 96px;
+        min-width: 76px;
         padding: 5px 8px;
       }
 
@@ -931,6 +931,7 @@
             <li>Drag mouse to orbit camera, scroll to zoom</li>
             <li>`E` interact / get off boat</li>
             <li>`T` toggle torch</li>
+            <li>`R` consume fish</li>
             <li>`1`,`2`,`3` emotes or hold `Q`</li>
           </ul>
         </section>
@@ -1016,6 +1017,10 @@
       <div class="inventory-slot">
         <span class="label">Torch</span>
         <span class="value" id="inventory-torch">1</span>
+      </div>
+      <div class="inventory-slot">
+        <span class="label">Fish</span>
+        <span class="value" id="inventory-fish">0</span>
       </div>
     </section>
 
@@ -1120,6 +1125,7 @@
       <div id="mobile-actions">
         <button id="btn-jump" class="mobile-btn" type="button">Jump</button>
         <button id="btn-use" class="mobile-btn" type="button">Use</button>
+        <button id="btn-consume" class="mobile-btn hidden" type="button">Consume</button>
         <button id="btn-emote" class="mobile-btn" type="button">Emote</button>
       </div>
     </section>

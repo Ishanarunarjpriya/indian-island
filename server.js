@@ -53,6 +53,10 @@ const MINE_PLAY_RADIUS = MINE_RADIUS - 3;
 const MINE_SWIM_BLOCK_RADIUS = MINE_RADIUS + 34;
 const MINE_ENTRY_ISLAND_POS = { x: -WORLD_LIMIT * 1.95, z: -WORLD_LIMIT * 1.2 };
 const MINE_ENTRY_ISLAND_RADIUS = 11.4;
+const FISHING_ISLAND_POS = { x: WORLD_LIMIT * 2.2, z: WORLD_LIMIT * 1.85 };
+const FISHING_ISLAND_RADIUS = 11.9;
+const MARKET_ISLAND_POS = { x: -WORLD_LIMIT * 2.35, z: WORLD_LIMIT * 1.2 };
+const MARKET_ISLAND_RADIUS = 11.5;
 const INTERACT_RANGE = 4;
 const CHAT_MAX_LEN = 220;
 const NAME_MAX_LEN = 18;
@@ -83,6 +87,11 @@ const PICKAXE_PRICE = {
   iron: 280,
   diamond: 620
 };
+const FISHING_ROD_PRICE = 260;
+const FISH_SELL_PRICE = 20;
+const MAX_STAMINA_BONUS_PCT = 50;
+const FISH_STAMINA_GAIN_PER_FISH = 1;
+const FISH_CATCH_COOLDOWN_MS = 1800;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -130,16 +139,20 @@ function clampToIsland(x, z, limit) {
 function clampToPlayableGround(x, z, allowMine = false) {
   const MAIN_RADIUS = WORLD_LIMIT * 1.14;
   const MINE_ENTRY_RADIUS = MINE_ENTRY_ISLAND_RADIUS;
+  const FISHING_RADIUS = FISHING_ISLAND_RADIUS;
+  const MARKET_RADIUS = MARKET_ISLAND_RADIUS;
   const mineDist = Math.hypot(x - MINE_POS.x, z - MINE_POS.z);
   const mineSwimBlocked = allowMine && mineDist <= MINE_SWIM_BLOCK_RADIUS;
   const onMain = Math.hypot(x, z) <= MAIN_RADIUS;
   const onLighthouse = Math.hypot(x - LIGHTHOUSE_POS.x, z - LIGHTHOUSE_POS.z) <= LIGHTHOUSE_RADIUS;
   const onMineEntryIsland = Math.hypot(x - MINE_ENTRY_ISLAND_POS.x, z - MINE_ENTRY_ISLAND_POS.z) <= MINE_ENTRY_RADIUS;
+  const onFishingIsland = Math.hypot(x - FISHING_ISLAND_POS.x, z - FISHING_ISLAND_POS.z) <= FISHING_RADIUS;
+  const onMarketIsland = Math.hypot(x - MARKET_ISLAND_POS.x, z - MARKET_ISLAND_POS.z) <= MARKET_RADIUS;
   const onInterior = Math.hypot(x - INTERIOR_POS.x, z - INTERIOR_POS.z) <= INTERIOR_RADIUS;
   const onMine = allowMine && mineDist <= MINE_PLAY_RADIUS;
   const radius = Math.hypot(x, z);
   const onSwimRing = radius >= SWIM_MIN_RADIUS && radius <= SWIM_MAX_RADIUS && !mineSwimBlocked;
-  if (onMain || onLighthouse || onMineEntryIsland || onInterior || onMine || onSwimRing) {
+  if (onMain || onLighthouse || onMineEntryIsland || onFishingIsland || onMarketIsland || onInterior || onMine || onSwimRing) {
     return { x, z };
   }
 
@@ -162,6 +175,22 @@ function clampToPlayableGround(x, z, allowMine = false) {
     z: MINE_ENTRY_ISLAND_POS.z + (dzE / lenE) * MINE_ENTRY_RADIUS
   };
   const distMineEntry = Math.hypot(x - toMineEntry.x, z - toMineEntry.z);
+  const dxF = x - FISHING_ISLAND_POS.x;
+  const dzF = z - FISHING_ISLAND_POS.z;
+  const lenF = Math.hypot(dxF, dzF) || 1;
+  const toFishing = {
+    x: FISHING_ISLAND_POS.x + (dxF / lenF) * FISHING_RADIUS,
+    z: FISHING_ISLAND_POS.z + (dzF / lenF) * FISHING_RADIUS
+  };
+  const distFishing = Math.hypot(x - toFishing.x, z - toFishing.z);
+  const dxK = x - MARKET_ISLAND_POS.x;
+  const dzK = z - MARKET_ISLAND_POS.z;
+  const lenK = Math.hypot(dxK, dzK) || 1;
+  const toMarket = {
+    x: MARKET_ISLAND_POS.x + (dxK / lenK) * MARKET_RADIUS,
+    z: MARKET_ISLAND_POS.z + (dzK / lenK) * MARKET_RADIUS
+  };
+  const distMarket = Math.hypot(x - toMarket.x, z - toMarket.z);
 
   const dxI = x - INTERIOR_POS.x;
   const dzI = z - INTERIOR_POS.z;
@@ -187,9 +216,32 @@ function clampToPlayableGround(x, z, allowMine = false) {
   })();
   const distSwim = mineSwimBlocked ? Number.POSITIVE_INFINITY : Math.hypot(x - toSwim.x, z - toSwim.z);
 
-  if (distMain <= distLighthouse && distMain <= distMineEntry && distMain <= distInterior && distMain <= distSwim && distMain <= distMine) return toMain;
-  if (distLighthouse <= distMineEntry && distLighthouse <= distInterior && distLighthouse <= distSwim && distLighthouse <= distMine) return toLighthouse;
-  if (distMineEntry <= distInterior && distMineEntry <= distSwim && distMineEntry <= distMine) return toMineEntry;
+  if (
+    distMain <= distLighthouse
+    && distMain <= distMineEntry
+    && distMain <= distFishing
+    && distMain <= distMarket
+    && distMain <= distInterior
+    && distMain <= distSwim
+    && distMain <= distMine
+  ) return toMain;
+  if (
+    distLighthouse <= distMineEntry
+    && distLighthouse <= distFishing
+    && distLighthouse <= distMarket
+    && distLighthouse <= distInterior
+    && distLighthouse <= distSwim
+    && distLighthouse <= distMine
+  ) return toLighthouse;
+  if (
+    distMineEntry <= distFishing
+    && distMineEntry <= distMarket
+    && distMineEntry <= distInterior
+    && distMineEntry <= distSwim
+    && distMineEntry <= distMine
+  ) return toMineEntry;
+  if (distFishing <= distMarket && distFishing <= distInterior && distFishing <= distSwim && distFishing <= distMine) return toFishing;
+  if (distMarket <= distInterior && distMarket <= distSwim && distMarket <= distMine) return toMarket;
   if (distInterior <= distSwim && distInterior <= distMine) return toInterior;
   if (distMine <= distSwim) return toMine;
   return toSwim;
@@ -245,7 +297,8 @@ function defaultInventory() {
     iron: 0,
     gold: 0,
     diamond: 0,
-    torch: 1
+    torch: 1,
+    fish: 0
   };
 }
 
@@ -280,6 +333,8 @@ function defaultProgress() {
     coins: 0,
     pickaxe: 'wood',
     inventory: defaultInventory(),
+    hasFishingRod: false,
+    maxStaminaBonusPct: 0,
     questSeed: 1,
     quest: defaultQuest(1)
   };
@@ -330,10 +385,13 @@ function sanitizeProgress(value) {
   if (!value || typeof value !== 'object') return base;
   const questSeed = clamp(Math.floor(Number(value.questSeed) || 1), 1, 1_000_000);
   const quest = sanitizeQuest(value.quest, questSeed);
+  const maxStaminaBonusPct = clamp(Math.floor(Number(value.maxStaminaBonusPct) || 0), 0, MAX_STAMINA_BONUS_PCT);
   return {
     coins: clamp(Math.floor(Number(value.coins) || 0), 0, 100_000_000),
     pickaxe: sanitizePickaxe(value.pickaxe, 'wood'),
     inventory: sanitizeInventory(value.inventory),
+    hasFishingRod: value.hasFishingRod === true,
+    maxStaminaBonusPct,
     questSeed,
     quest
   };
@@ -349,6 +407,8 @@ function progressSnapshot(progress) {
     coins: progress.coins,
     pickaxe: progress.pickaxe,
     inventory: { ...progress.inventory },
+    hasFishingRod: progress.hasFishingRod === true,
+    maxStaminaBonusPct: clamp(Math.floor(Number(progress.maxStaminaBonusPct) || 0), 0, MAX_STAMINA_BONUS_PCT),
     questSeed: progress.questSeed,
     quest: { ...progress.quest },
     shop: {
@@ -854,6 +914,7 @@ function removeAuthenticatedPlayer(socket) {
 }
 
 io.on('connection', (socket) => {
+  socket.data.lastFishCatchAt = 0;
   socket.emit('auth:required');
 
   socket.on('auth:register', async (payload, ack) => {
@@ -1068,6 +1129,130 @@ io.on('connection', (socket) => {
       torchEquipped: actor.torchEquipped === true
     });
     if (typeof ack === 'function') ack({ ok: true, tier: requested });
+  });
+
+  socket.on('shop:buyFishingRod', (payload, ack) => {
+    const actor = players.get(socket.id);
+    const progress = actor?.progress;
+    if (!actor || !progress) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Not authenticated.' });
+      return;
+    }
+    if (progress.hasFishingRod === true) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'You already own a fishing rod.' });
+      return;
+    }
+    if (progress.coins < FISHING_ROD_PRICE) {
+      if (typeof ack === 'function') ack({ ok: false, error: `Need ${FISHING_ROD_PRICE} coins.` });
+      return;
+    }
+    progress.coins -= FISHING_ROD_PRICE;
+    progress.hasFishingRod = true;
+    persistPlayerProgress(actor, { immediate: true });
+    emitProgress(socket, actor);
+    if (typeof ack === 'function') ack({ ok: true, hasFishingRod: true, progress: progressSnapshot(progress) });
+  });
+
+  socket.on('fish:catch', (payload, ack) => {
+    const actor = players.get(socket.id);
+    const progress = actor?.progress;
+    if (!actor || !progress) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Not authenticated.' });
+      return;
+    }
+    if (progress.hasFishingRod !== true) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Buy a fishing rod first.' });
+      return;
+    }
+    const now = Date.now();
+    const lastCatchAt = Number(socket.data.lastFishCatchAt) || 0;
+    if (now - lastCatchAt < FISH_CATCH_COOLDOWN_MS) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Fish are not biting yet. Try again in a moment.' });
+      return;
+    }
+    socket.data.lastFishCatchAt = now;
+    progress.inventory.fish = clamp((progress.inventory.fish || 0) + 1, 0, 1_000_000);
+    persistPlayerProgress(actor, { immediate: true });
+    emitProgress(socket, actor);
+    if (typeof ack === 'function') ack({ ok: true, caught: 1, fish: progress.inventory.fish, progress: progressSnapshot(progress) });
+  });
+
+  socket.on('fish:sell', (payload, ack) => {
+    const actor = players.get(socket.id);
+    const progress = actor?.progress;
+    if (!actor || !progress) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Not authenticated.' });
+      return;
+    }
+    const fishOwned = clamp(Math.floor(Number(progress.inventory.fish) || 0), 0, 1_000_000);
+    if (fishOwned <= 0) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'No fish to sell.' });
+      return;
+    }
+    const rawAmount = Number(payload?.amount);
+    const wantsAll = !Number.isFinite(rawAmount) || rawAmount <= 0;
+    const amount = wantsAll ? fishOwned : clamp(Math.floor(rawAmount), 1, fishOwned);
+    const coinsEarned = amount * FISH_SELL_PRICE;
+    progress.inventory.fish = fishOwned - amount;
+    progress.coins = clamp((progress.coins || 0) + coinsEarned, 0, 100_000_000);
+    persistPlayerProgress(actor, { immediate: true });
+    emitProgress(socket, actor);
+    if (typeof ack === 'function') {
+      ack({
+        ok: true,
+        sold: amount,
+        coinsEarned,
+        fish: progress.inventory.fish,
+        coins: progress.coins,
+        progress: progressSnapshot(progress)
+      });
+    }
+  });
+
+  socket.on('fish:consume', (payload, ack) => {
+    const actor = players.get(socket.id);
+    const progress = actor?.progress;
+    if (!actor || !progress) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Not authenticated.' });
+      return;
+    }
+    const fishOwned = clamp(Math.floor(Number(progress.inventory.fish) || 0), 0, 1_000_000);
+    if (fishOwned <= 0) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'No fish to consume.' });
+      return;
+    }
+    const currentBonus = clamp(Math.floor(Number(progress.maxStaminaBonusPct) || 0), 0, MAX_STAMINA_BONUS_PCT);
+    const remainingBonus = Math.max(0, MAX_STAMINA_BONUS_PCT - currentBonus);
+    if (remainingBonus <= 0) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Max stamina bonus already reached.' });
+      return;
+    }
+    const rawAmount = Number(payload?.amount);
+    const requested = Number.isFinite(rawAmount) ? Math.max(1, Math.floor(rawAmount)) : 1;
+    const byFish = clamp(requested, 1, fishOwned);
+    const byCap = clamp(Math.floor(remainingBonus / FISH_STAMINA_GAIN_PER_FISH), 0, byFish);
+    const amount = Math.max(0, byCap);
+    if (amount <= 0) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'No stamina gain available from fish.' });
+      return;
+    }
+    progress.inventory.fish = fishOwned - amount;
+    progress.maxStaminaBonusPct = clamp(
+      currentBonus + amount * FISH_STAMINA_GAIN_PER_FISH,
+      0,
+      MAX_STAMINA_BONUS_PCT
+    );
+    persistPlayerProgress(actor, { immediate: true });
+    emitProgress(socket, actor);
+    if (typeof ack === 'function') {
+      ack({
+        ok: true,
+        consumed: amount,
+        fish: progress.inventory.fish,
+        maxStaminaBonusPct: progress.maxStaminaBonusPct,
+        progress: progressSnapshot(progress)
+      });
+    }
   });
 
   socket.on('player:gear', (payload) => {

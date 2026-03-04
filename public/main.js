@@ -17,12 +17,15 @@ let isAuthenticated = false;
 const CHAT_BUBBLE_MS = 4500;
 let lastMineAt = 0;
 const MINE_SWING_MS = 340;
+const STAMINA_BASE_MAX = 100;
 let torchEquipped = false;
 
 const questState = {
   coins: 0,
   pickaxe: 'wood',
-  inventory: { stone: 0, iron: 0, gold: 0, diamond: 0, torch: 1 },
+  inventory: { stone: 0, iron: 0, gold: 0, diamond: 0, torch: 1, fish: 0 },
+  hasFishingRod: false,
+  maxStaminaBonusPct: 0,
   quest: null,
   shop: {
     order: ['wood', 'stone', 'iron', 'diamond'],
@@ -48,6 +51,10 @@ const MINE_SWIM_BLOCK_RADIUS = MINE_RADIUS + 34;
 const HOUSE_POS = new THREE.Vector3(-worldLimit * 0.33, 1.35, worldLimit * 0.12);
 const MINE_ENTRY_ISLAND_POS = new THREE.Vector3(-worldLimit * 1.95, 0, -worldLimit * 1.2);
 const MINE_ENTRY_ISLAND_RADIUS = 11.4;
+const FISHING_ISLAND_POS = new THREE.Vector3(worldLimit * 2.2, 0, worldLimit * 1.85);
+const FISHING_ISLAND_RADIUS = 11.9;
+const MARKET_ISLAND_POS = new THREE.Vector3(-worldLimit * 2.35, 0, worldLimit * 1.2);
+const MARKET_ISLAND_RADIUS = 11.5;
 const toMainFromMineEntryX = -MINE_ENTRY_ISLAND_POS.x;
 const toMainFromMineEntryZ = -MINE_ENTRY_ISLAND_POS.z;
 const toMainFromMineEntryLen = Math.hypot(toMainFromMineEntryX, toMainFromMineEntryZ) || 1;
@@ -57,6 +64,24 @@ const MINE_ENTRY_DOCK_POS = new THREE.Vector3(
   MINE_ENTRY_ISLAND_POS.z + (toMainFromMineEntryZ / toMainFromMineEntryLen) * 10.1
 );
 const MINE_ENTRY_DOCK_YAW = Math.atan2(-(MINE_ENTRY_DOCK_POS.z - MINE_ENTRY_ISLAND_POS.z), MINE_ENTRY_DOCK_POS.x - MINE_ENTRY_ISLAND_POS.x);
+const toMainFromFishingX = -FISHING_ISLAND_POS.x;
+const toMainFromFishingZ = -FISHING_ISLAND_POS.z;
+const toMainFromFishingLen = Math.hypot(toMainFromFishingX, toMainFromFishingZ) || 1;
+const FISHING_DOCK_POS = new THREE.Vector3(
+  FISHING_ISLAND_POS.x + (toMainFromFishingX / toMainFromFishingLen) * 10.8,
+  1.36,
+  FISHING_ISLAND_POS.z + (toMainFromFishingZ / toMainFromFishingLen) * 10.8
+);
+const FISHING_DOCK_YAW = Math.atan2(-(FISHING_DOCK_POS.z - FISHING_ISLAND_POS.z), FISHING_DOCK_POS.x - FISHING_ISLAND_POS.x);
+const toMainFromMarketX = -MARKET_ISLAND_POS.x;
+const toMainFromMarketZ = -MARKET_ISLAND_POS.z;
+const toMainFromMarketLen = Math.hypot(toMainFromMarketX, toMainFromMarketZ) || 1;
+const MARKET_DOCK_POS = new THREE.Vector3(
+  MARKET_ISLAND_POS.x + (toMainFromMarketX / toMainFromMarketLen) * 10.6,
+  1.36,
+  MARKET_ISLAND_POS.z + (toMainFromMarketZ / toMainFromMarketLen) * 10.6
+);
+const MARKET_DOCK_YAW = Math.atan2(-(MARKET_DOCK_POS.z - MARKET_ISLAND_POS.z), MARKET_DOCK_POS.x - MARKET_ISLAND_POS.x);
 const MINE_ENTRY_POS = new THREE.Vector3(
   MINE_ENTRY_ISLAND_POS.x - (toMainFromMineEntryX / toMainFromMineEntryLen) * 2.4,
   1.35,
@@ -67,6 +92,15 @@ const MINE_EXIT_POS = new THREE.Vector3(MINE_POS.x + 2.6, 1.35, MINE_POS.z + 23.
 const MINE_CRYSTAL_INTERACT_RADIUS = 3.0;
 const QUEST_NPC_POS = new THREE.Vector3(MINE_POS.x + 19.5, 1.35, MINE_POS.z + 8.1);
 const MINE_SHOP_NPC_POS = new THREE.Vector3(MINE_POS.x - 18.2, 1.35, MINE_POS.z - 9.2);
+const FISHING_VENDOR_POS = new THREE.Vector3(FISHING_ISLAND_POS.x - 1.3, 1.35, FISHING_ISLAND_POS.z + 1.2);
+const MARKET_VENDOR_POS = new THREE.Vector3(MARKET_ISLAND_POS.x + 1.5, 1.35, MARKET_ISLAND_POS.z - 1.2);
+const FISHING_SPOT_RADIUS = 3.2;
+const FISHING_ROD_PRICE = 260;
+const FISH_SELL_PRICE = 20;
+const FISH_BITE_MIN_MS = 650;
+const FISH_BITE_MAX_MS = 1750;
+const FISH_HIT_WINDOW_MS = 520;
+const FISH_MINIGAME_EXPIRE_MS = 3200;
 const MINE_ENTRY_YAW = Math.atan2(MINE_ENTRY_DOCK_POS.x - MINE_ENTRY_POS.x, MINE_ENTRY_DOCK_POS.z - MINE_ENTRY_POS.z);
 
 let inMine = false;
@@ -78,6 +112,15 @@ let mineCentralCrystalMesh = null;
 let mineGroup = null;
 let minePortalPulse = 0;
 const oreNodes = [];
+const fishingSpots = [];
+const fishingMiniGame = {
+  active: false,
+  spotId: null,
+  biteAt: 0,
+  windowStart: 0,
+  windowEnd: 0,
+  expireAt: 0
+};
 let npcDialogueOpen = false;
 let npcDialoguePrimaryAction = null;
 let npcDialogueSecondaryAction = null;
@@ -139,6 +182,7 @@ const inventoryBarEl = document.getElementById('inventory-bar');
 const inventoryCoinsEl = document.getElementById('inventory-coins');
 const inventoryPickaxeEl = document.getElementById('inventory-pickaxe');
 const inventoryTorchEl = document.getElementById('inventory-torch');
+const inventoryFishEl = document.getElementById('inventory-fish');
 const inventoryTorchSlotEl = inventoryTorchEl?.closest('.inventory-slot') || null;
 const gameplayPanels = ['hud', 'mini-panel', 'chat-panel', 'world-state', 'top-left-toolbar', 'inventory-bar']
   .map((id) => document.getElementById(id))
@@ -475,7 +519,9 @@ function clearSessionWorld() {
   boatState.onboard = false;
   inMine = false;
   torchEquipped = false;
+  resetFishingMiniGame();
   closeMineWarningDialog();
+  refreshConsumeActionVisibility(null);
 }
 
 function setAuthModalOpen(open, statusText = '') {
@@ -522,6 +568,7 @@ const joystickEl = document.getElementById('joystick');
 const joystickStickEl = document.getElementById('joystick-stick');
 const mobileJumpEl = document.getElementById('btn-jump');
 const mobileUseEl = document.getElementById('btn-use');
+const mobileConsumeEl = document.getElementById('btn-consume');
 const mobileEmoteEl = document.getElementById('btn-emote');
 
 let localVoiceStream = null;
@@ -1107,6 +1154,8 @@ const boatState = {
 const BOAT_CLEARANCE_MAIN = worldLimit + 3.4;
 const BOAT_CLEARANCE_LIGHTHOUSE = 12.6;
 const BOAT_CLEARANCE_MINE_ENTRY = MINE_ENTRY_ISLAND_RADIUS + 1.8;
+const BOAT_CLEARANCE_FISHING = FISHING_ISLAND_RADIUS + 1.9;
+const BOAT_CLEARANCE_MARKET = MARKET_ISLAND_RADIUS + 1.9;
 addWorldCollider(LIGHTHOUSE_POS.x, LIGHTHOUSE_POS.z, 2.32, 'lighthouse-shell');
 
 function dockOffsetPosition(dock, yaw, forward = 0, side = 0) {
@@ -1134,7 +1183,9 @@ function dockSlots() {
   return [
     { dock: ISLAND_DOCK_POS, yaw: ISLAND_DOCK_YAW },
     { dock: LIGHTHOUSE_DOCK_POS, yaw: LIGHTHOUSE_DOCK_YAW },
-    { dock: MINE_ENTRY_DOCK_POS, yaw: MINE_ENTRY_DOCK_YAW }
+    { dock: MINE_ENTRY_DOCK_POS, yaw: MINE_ENTRY_DOCK_YAW },
+    { dock: FISHING_DOCK_POS, yaw: FISHING_DOCK_YAW },
+    { dock: MARKET_DOCK_POS, yaw: MARKET_DOCK_YAW }
   ];
 }
 
@@ -1464,6 +1515,123 @@ function addMineEntryIsland() {
     rock.receiveShadow = true;
     scene.add(rock);
   }
+}
+
+function addFishingIsland() {
+  const base = new THREE.Mesh(
+    new THREE.CylinderGeometry(FISHING_ISLAND_RADIUS + 1.8, FISHING_ISLAND_RADIUS + 3.4, 3.2, 34),
+    new THREE.MeshStandardMaterial({ color: 0x8c6a4c, roughness: 0.94 })
+  );
+  base.position.set(FISHING_ISLAND_POS.x, -0.35, FISHING_ISLAND_POS.z);
+  base.receiveShadow = true;
+  scene.add(base);
+
+  const top = new THREE.Mesh(
+    new THREE.CylinderGeometry(FISHING_ISLAND_RADIUS, FISHING_ISLAND_RADIUS + 1.1, 1.2, 34),
+    new THREE.MeshStandardMaterial({ color: 0x6f9b62, roughness: 0.9 })
+  );
+  top.position.set(FISHING_ISLAND_POS.x, 1.35, FISHING_ISLAND_POS.z);
+  top.receiveShadow = true;
+  scene.add(top);
+
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(FISHING_ISLAND_RADIUS - 1.2, FISHING_ISLAND_RADIUS + 0.2, 38),
+    new THREE.MeshStandardMaterial({ color: 0xc5a273, roughness: 0.94 })
+  );
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.set(FISHING_ISLAND_POS.x, 1.38, FISHING_ISLAND_POS.z);
+  ring.receiveShadow = true;
+  scene.add(ring);
+
+  const vendor = createVendorNpc({
+    shirtColor: 0x0891b2,
+    skinColor: 0xd6a581,
+    hairColor: 0x1f2937,
+    hatColor: 0x0f172a
+  });
+  const stall = createVendorStall({
+    label: 'Fishing',
+    signColor: '#0b2940',
+    canopyA: 0x0ea5e9,
+    canopyB: 0xffffff,
+    vendor
+  });
+  vendor.position.z = -0.46;
+  stall.position.set(FISHING_VENDOR_POS.x, 0, FISHING_VENDOR_POS.z);
+  stall.rotation.y = Math.atan2(-FISHING_VENDOR_POS.x, -FISHING_VENDOR_POS.z);
+  scene.add(stall);
+  addWorldCollider(FISHING_VENDOR_POS.x, FISHING_VENDOR_POS.z, 1.04, 'npc');
+
+  const spotDefs = [
+    { id: 'fish-north', x: FISHING_ISLAND_POS.x + 0.8, z: FISHING_ISLAND_POS.z - (FISHING_ISLAND_RADIUS + 0.65) },
+    { id: 'fish-east', x: FISHING_ISLAND_POS.x + (FISHING_ISLAND_RADIUS + 0.55), z: FISHING_ISLAND_POS.z + 0.9 },
+    { id: 'fish-west', x: FISHING_ISLAND_POS.x - (FISHING_ISLAND_RADIUS + 0.48), z: FISHING_ISLAND_POS.z - 0.6 }
+  ];
+  for (const spot of spotDefs) {
+    const marker = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.26, 0.26, 0.08, 16),
+      new THREE.MeshStandardMaterial({ color: 0x22d3ee, emissive: 0x0e7490, emissiveIntensity: 0.65, roughness: 0.32 })
+    );
+    marker.position.set(spot.x, 0.43, spot.z);
+    marker.castShadow = true;
+    scene.add(marker);
+    fishingSpots.push({
+      id: spot.id,
+      x: spot.x,
+      z: spot.z,
+      marker
+    });
+  }
+}
+
+function addMarketIsland() {
+  const base = new THREE.Mesh(
+    new THREE.CylinderGeometry(MARKET_ISLAND_RADIUS + 1.8, MARKET_ISLAND_RADIUS + 3.4, 3.2, 34),
+    new THREE.MeshStandardMaterial({ color: 0x8b6b4f, roughness: 0.95 })
+  );
+  base.position.set(MARKET_ISLAND_POS.x, -0.35, MARKET_ISLAND_POS.z);
+  base.receiveShadow = true;
+  scene.add(base);
+
+  const top = new THREE.Mesh(
+    new THREE.CylinderGeometry(MARKET_ISLAND_RADIUS, MARKET_ISLAND_RADIUS + 1.1, 1.2, 34),
+    new THREE.MeshStandardMaterial({ color: 0x739a62, roughness: 0.9 })
+  );
+  top.position.set(MARKET_ISLAND_POS.x, 1.35, MARKET_ISLAND_POS.z);
+  top.receiveShadow = true;
+  scene.add(top);
+
+  const crateMat = new THREE.MeshStandardMaterial({ color: 0x8b5a2b, roughness: 0.88 });
+  for (let i = 0; i < 6; i += 1) {
+    const crate = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.52, 0.72), crateMat);
+    crate.position.set(
+      MARKET_ISLAND_POS.x - 2.1 + (i % 3) * 0.9,
+      1.62 + (i > 2 ? 0.45 : 0),
+      MARKET_ISLAND_POS.z + 2.7 - Math.floor(i / 3) * 0.9
+    );
+    crate.castShadow = true;
+    crate.receiveShadow = true;
+    scene.add(crate);
+  }
+
+  const vendor = createVendorNpc({
+    shirtColor: 0xa16207,
+    skinColor: 0xe0b18f,
+    hairColor: 0x111827,
+    hatColor: 0x3f2a1a
+  });
+  const stall = createVendorStall({
+    label: 'Fish Market',
+    signColor: '#2f2417',
+    canopyA: 0xf59e0b,
+    canopyB: 0xffffff,
+    vendor
+  });
+  vendor.position.z = -0.5;
+  stall.position.set(MARKET_VENDOR_POS.x, 0, MARKET_VENDOR_POS.z);
+  stall.rotation.y = Math.atan2(-MARKET_VENDOR_POS.x, -MARKET_VENDOR_POS.z);
+  scene.add(stall);
+  addWorldCollider(MARKET_VENDOR_POS.x, MARKET_VENDOR_POS.z, 1.04, 'npc');
 }
 
 function addLighthouseInterior() {
@@ -2778,6 +2946,7 @@ function addMineArea() {
     canopyB: 0xffffff,
     vendor: questVendor
   });
+  questVendor.position.z = -0.52;
   const questLocalPos = new THREE.Vector3(
     QUEST_NPC_POS.x - MINE_POS.x,
     0,
@@ -2796,6 +2965,10 @@ function addLandmarks() {
   addDock(LIGHTHOUSE_DOCK_POS, LIGHTHOUSE_DOCK_YAW, { segments: 12, plankLength: 2.8, plankWidth: 2.2, spacing: 1.1 });
   addMineEntryIsland();
   addDock(MINE_ENTRY_DOCK_POS, MINE_ENTRY_DOCK_YAW, { segments: 11, plankLength: 2.7, plankWidth: 2.1, spacing: 1.1 });
+  addFishingIsland();
+  addDock(FISHING_DOCK_POS, FISHING_DOCK_YAW, { segments: 11, plankLength: 2.8, plankWidth: 2.2, spacing: 1.05 });
+  addMarketIsland();
+  addDock(MARKET_DOCK_POS, MARKET_DOCK_YAW, { segments: 11, plankLength: 2.8, plankWidth: 2.2, spacing: 1.05 });
   addLighthouseInterior();
   populateMainIslandNature();
   addBeaconIslandLights();
@@ -2947,7 +3120,9 @@ function resolveBoatShoreCollision(x, z) {
   const circles = [
     { cx: 0, cz: 0, radius: BOAT_CLEARANCE_MAIN },
     { cx: LIGHTHOUSE_POS.x, cz: LIGHTHOUSE_POS.z, radius: BOAT_CLEARANCE_LIGHTHOUSE },
-    { cx: MINE_ENTRY_ISLAND_POS.x, cz: MINE_ENTRY_ISLAND_POS.z, radius: BOAT_CLEARANCE_MINE_ENTRY }
+    { cx: MINE_ENTRY_ISLAND_POS.x, cz: MINE_ENTRY_ISLAND_POS.z, radius: BOAT_CLEARANCE_MINE_ENTRY },
+    { cx: FISHING_ISLAND_POS.x, cz: FISHING_ISLAND_POS.z, radius: BOAT_CLEARANCE_FISHING },
+    { cx: MARKET_ISLAND_POS.x, cz: MARKET_ISLAND_POS.z, radius: BOAT_CLEARANCE_MARKET }
   ];
   for (const circle of circles) {
     const dx = nextX - circle.cx;
@@ -3166,6 +3341,8 @@ function clampToPlayableGround(x, z, allowMine = false) {
   const MAIN_RADIUS = worldLimit * 1.14;
   const LIGHTHOUSE_RADIUS = 10.9;
   const MINE_ENTRY_RADIUS = MINE_ENTRY_ISLAND_RADIUS;
+  const FISHING_RADIUS = FISHING_ISLAND_RADIUS;
+  const MARKET_RADIUS = MARKET_ISLAND_RADIUS;
   const INTERIOR_RADIUS = INTERIOR_PLAY_RADIUS;
   const mineSwimBlocked = allowMine && blocksMineEscapeSwim(x, z);
   const inSwim = isSwimZone(x, z) && !mineSwimBlocked;
@@ -3177,13 +3354,19 @@ function clampToPlayableGround(x, z, allowMine = false) {
   const dxE = x - MINE_ENTRY_ISLAND_POS.x;
   const dzE = z - MINE_ENTRY_ISLAND_POS.z;
   const inMineEntryIsland = Math.hypot(dxE, dzE) <= MINE_ENTRY_RADIUS;
+  const dxF = x - FISHING_ISLAND_POS.x;
+  const dzF = z - FISHING_ISLAND_POS.z;
+  const inFishingIsland = Math.hypot(dxF, dzF) <= FISHING_RADIUS;
+  const dxK = x - MARKET_ISLAND_POS.x;
+  const dzK = z - MARKET_ISLAND_POS.z;
+  const inMarketIsland = Math.hypot(dxK, dzK) <= MARKET_RADIUS;
   const dxI = x - LIGHTHOUSE_INTERIOR_BASE.x;
   const dzI = z - LIGHTHOUSE_INTERIOR_BASE.z;
   const inInterior = Math.hypot(dxI, dzI) <= INTERIOR_RADIUS;
   const dxM = x - MINE_POS.x;
   const dzM = z - MINE_POS.z;
   const inMine = allowMine && mineDistance(x, z) <= MINE_PLAY_RADIUS;
-  if (inMain || inLighthouse || inMineEntryIsland || inInterior || inMine || inSwim) {
+  if (inMain || inLighthouse || inMineEntryIsland || inFishingIsland || inMarketIsland || inInterior || inMine || inSwim) {
     return { x, z };
   }
 
@@ -3201,6 +3384,18 @@ function clampToPlayableGround(x, z, allowMine = false) {
     z: MINE_ENTRY_ISLAND_POS.z + (dzE / lenE) * MINE_ENTRY_RADIUS
   };
   const distMineEntry = Math.hypot(x - toMineEntry.x, z - toMineEntry.z);
+  const lenF = Math.hypot(dxF, dzF) || 1;
+  const toFishing = {
+    x: FISHING_ISLAND_POS.x + (dxF / lenF) * FISHING_RADIUS,
+    z: FISHING_ISLAND_POS.z + (dzF / lenF) * FISHING_RADIUS
+  };
+  const distFishing = Math.hypot(x - toFishing.x, z - toFishing.z);
+  const lenK = Math.hypot(dxK, dzK) || 1;
+  const toMarket = {
+    x: MARKET_ISLAND_POS.x + (dxK / lenK) * MARKET_RADIUS,
+    z: MARKET_ISLAND_POS.z + (dzK / lenK) * MARKET_RADIUS
+  };
+  const distMarket = Math.hypot(x - toMarket.x, z - toMarket.z);
   const lenI = Math.hypot(dxI, dzI) || 1;
   const toInterior = {
     x: LIGHTHOUSE_INTERIOR_BASE.x + (dxI / lenI) * INTERIOR_RADIUS,
@@ -3215,9 +3410,11 @@ function clampToPlayableGround(x, z, allowMine = false) {
   const distMine = allowMine ? Math.hypot(x - toMine.x, z - toMine.z) : Number.POSITIVE_INFINITY;
   const toSwim = clampToRing(x, z, SWIM_MIN_RADIUS, SWIM_MAX_RADIUS);
   const distSwim = mineSwimBlocked ? Number.POSITIVE_INFINITY : Math.hypot(x - toSwim.x, z - toSwim.z);
-  if (distMain <= distLight && distMain <= distMineEntry && distMain <= distInterior && distMain <= distMine && distMain <= distSwim) return toMain;
-  if (distLight <= distMineEntry && distLight <= distInterior && distLight <= distMine && distLight <= distSwim) return toLight;
-  if (distMineEntry <= distInterior && distMineEntry <= distMine && distMineEntry <= distSwim) return toMineEntry;
+  if (distMain <= distLight && distMain <= distMineEntry && distMain <= distFishing && distMain <= distMarket && distMain <= distInterior && distMain <= distMine && distMain <= distSwim) return toMain;
+  if (distLight <= distMineEntry && distLight <= distFishing && distLight <= distMarket && distLight <= distInterior && distLight <= distMine && distLight <= distSwim) return toLight;
+  if (distMineEntry <= distFishing && distMineEntry <= distMarket && distMineEntry <= distInterior && distMineEntry <= distMine && distMineEntry <= distSwim) return toMineEntry;
+  if (distFishing <= distMarket && distFishing <= distInterior && distFishing <= distMine && distFishing <= distSwim) return toFishing;
+  if (distMarket <= distInterior && distMarket <= distMine && distMarket <= distSwim) return toMarket;
   if (distInterior <= distMine && distInterior <= distSwim) return toInterior;
   if (distMine <= distSwim) return toMine;
   return toSwim;
@@ -3232,6 +3429,8 @@ function isWaterAt(x, z) {
   if (Math.hypot(x - ISLAND_DOCK_POS.x, z - ISLAND_DOCK_POS.z) <= 16) return false;
   if (Math.hypot(x - LIGHTHOUSE_DOCK_POS.x, z - LIGHTHOUSE_DOCK_POS.z) <= 14) return false;
   if (Math.hypot(x - MINE_ENTRY_DOCK_POS.x, z - MINE_ENTRY_DOCK_POS.z) <= 14) return false;
+  if (Math.hypot(x - FISHING_DOCK_POS.x, z - FISHING_DOCK_POS.z) <= 14) return false;
+  if (Math.hypot(x - MARKET_DOCK_POS.x, z - MARKET_DOCK_POS.z) <= 14) return false;
 
   // Hard land-safe radius for the main island footprint.
   if (radius <= worldLimit + 8.4) return false;
@@ -3257,6 +3456,14 @@ function isWaterAt(x, z) {
   const dzE = z - MINE_ENTRY_ISLAND_POS.z;
   const onMineEntryIslandLand = Math.hypot(dxE, dzE) <= MINE_ENTRY_ISLAND_RADIUS + 3.4;
   if (onMineEntryIslandLand) return false;
+  const dxF = x - FISHING_ISLAND_POS.x;
+  const dzF = z - FISHING_ISLAND_POS.z;
+  const onFishingIslandLand = Math.hypot(dxF, dzF) <= FISHING_ISLAND_RADIUS + 3.2;
+  if (onFishingIslandLand) return false;
+  const dxK = x - MARKET_ISLAND_POS.x;
+  const dzK = z - MARKET_ISLAND_POS.z;
+  const onMarketIslandLand = Math.hypot(dxK, dzK) <= MARKET_ISLAND_RADIUS + 3.2;
+  if (onMarketIslandLand) return false;
 
   if (isInDockWalkZone(x, z, 3.0, 2.5)) return false;
 
@@ -3515,6 +3722,8 @@ function canBoardBoat(local) {
     distance2D(local, ISLAND_DOCK_POS) < 5
     || distance2D(local, LIGHTHOUSE_DOCK_POS) < 5
     || distance2D(local, MINE_ENTRY_DOCK_POS) < 5
+    || distance2D(local, FISHING_DOCK_POS) < 5
+    || distance2D(local, MARKET_DOCK_POS) < 5
   );
   const nearBoat = Boolean(boatState.mesh) && distance2D(local, boatState) < 5.2;
   if (nearBoat) return true;
@@ -3681,15 +3890,19 @@ function isWithinPlayableWorld(x, z, allowMine = false) {
   const MAIN_RADIUS = worldLimit * 1.14;
   const LIGHTHOUSE_RADIUS = 11.7;
   const MINE_ENTRY_RADIUS = MINE_ENTRY_ISLAND_RADIUS;
+  const FISHING_RADIUS = FISHING_ISLAND_RADIUS;
+  const MARKET_RADIUS = MARKET_ISLAND_RADIUS;
   const INTERIOR_RADIUS = INTERIOR_PLAY_RADIUS;
   const mineSwimBlocked = allowMine && blocksMineEscapeSwim(x, z);
   const onMain = Math.hypot(x, z) <= MAIN_RADIUS;
   const onLighthouse = Math.hypot(x - LIGHTHOUSE_POS.x, z - LIGHTHOUSE_POS.z) <= LIGHTHOUSE_RADIUS;
   const onMineEntryIsland = Math.hypot(x - MINE_ENTRY_ISLAND_POS.x, z - MINE_ENTRY_ISLAND_POS.z) <= MINE_ENTRY_RADIUS;
+  const onFishingIsland = Math.hypot(x - FISHING_ISLAND_POS.x, z - FISHING_ISLAND_POS.z) <= FISHING_RADIUS;
+  const onMarketIsland = Math.hypot(x - MARKET_ISLAND_POS.x, z - MARKET_ISLAND_POS.z) <= MARKET_RADIUS;
   const inInterior = Math.hypot(x - LIGHTHOUSE_INTERIOR_BASE.x, z - LIGHTHOUSE_INTERIOR_BASE.z) <= INTERIOR_RADIUS;
   const inMine = allowMine && mineDistance(x, z) <= MINE_PLAY_RADIUS;
   const inSwim = isSwimZone(x, z) && !mineSwimBlocked;
-  return onMain || onLighthouse || onMineEntryIsland || inInterior || inMine || inSwim;
+  return onMain || onLighthouse || onMineEntryIsland || onFishingIsland || onMarketIsland || inInterior || inMine || inSwim;
 }
 
 function setBeaconVisual(active) {
@@ -4514,6 +4727,39 @@ function nextPickaxeTier() {
   return order[currentIdx + 1];
 }
 
+function getStaminaMax() {
+  const bonus = Math.max(0, Math.min(50, Math.floor(Number(questState.maxStaminaBonusPct) || 0)));
+  return STAMINA_BASE_MAX * (1 + bonus / 100);
+}
+
+function canConsumeFish() {
+  const fish = Math.max(0, Math.floor(Number(questState.inventory.fish) || 0));
+  const bonus = Math.max(0, Math.min(50, Math.floor(Number(questState.maxStaminaBonusPct) || 0)));
+  return fish > 0 && bonus < 50;
+}
+
+function refreshConsumeActionVisibility(local) {
+  if (!mobileConsumeEl) return;
+  const fish = Math.max(0, Math.floor(Number(questState.inventory.fish) || 0));
+  const visible = Boolean(local)
+    && isAuthenticated
+    && !mineWarningOpen
+    && !menuOpen
+    && authModalEl.classList.contains('hidden')
+    && customizeModalEl.classList.contains('hidden')
+    && fish > 0;
+  mobileConsumeEl.classList.toggle('hidden', !visible);
+}
+
+function resetFishingMiniGame() {
+  fishingMiniGame.active = false;
+  fishingMiniGame.spotId = null;
+  fishingMiniGame.biteAt = 0;
+  fishingMiniGame.windowStart = 0;
+  fishingMiniGame.windowEnd = 0;
+  fishingMiniGame.expireAt = 0;
+}
+
 function applyProgressState(progress) {
   if (!progress || typeof progress !== 'object') return;
   questState.coins = Math.max(0, Math.floor(Number(progress.coins) || 0));
@@ -4527,12 +4773,26 @@ function applyProgressState(progress) {
   questState.inventory.torch = Number.isFinite(torchCount)
     ? Math.max(0, Math.floor(torchCount))
     : 1;
+  const fishCount = Number(inv.fish);
+  questState.inventory.fish = Number.isFinite(fishCount)
+    ? Math.max(0, Math.floor(fishCount))
+    : 0;
+  questState.hasFishingRod = progress.hasFishingRod === true;
+  questState.maxStaminaBonusPct = Math.max(0, Math.min(50, Math.floor(Number(progress.maxStaminaBonusPct) || 0)));
   if (questState.inventory.torch <= 0) {
     torchEquipped = false;
+  }
+  const local = players.get(localPlayerId);
+  if (stamina > getStaminaMax()) {
+    stamina = getStaminaMax();
+  }
+  if (!questState.hasFishingRod) {
+    resetFishingMiniGame();
   }
   questState.quest = progress.quest ? { ...progress.quest } : null;
   syncLocalHeldGear();
   renderInventoryBar();
+  refreshConsumeActionVisibility(local);
   updateQuestPanel();
 }
 
@@ -4574,6 +4834,9 @@ function renderInventoryBar() {
   if (inventoryTorchSlotEl) {
     inventoryTorchSlotEl.classList.toggle('active', torchEquipped && torchCount > 0);
   }
+  if (inventoryFishEl) {
+    inventoryFishEl.textContent = String(Math.max(0, Math.floor(Number(questState.inventory.fish) || 0)));
+  }
 }
 
 function toggleTorchEquip() {
@@ -4589,6 +4852,30 @@ function toggleTorchEquip() {
   syncLocalHeldGear(true);
   renderInventoryBar();
   appendChatLine({ text: torchEquipped ? 'Torch equipped.' : 'Torch put away.', isSystem: true });
+}
+
+function consumeFish(amount = 1) {
+  if (!isAuthenticated) return;
+  if (!canConsumeFish()) {
+    appendChatLine({ text: 'No fish to consume or stamina bonus is maxed.', isSystem: true });
+    return;
+  }
+  const qty = Math.max(1, Math.floor(Number(amount) || 1));
+  socket.emit('fish:consume', { amount: qty }, (resp) => {
+    if (!resp?.ok) {
+      appendChatLine({ text: resp?.error || 'Could not consume fish.', isSystem: true });
+      return;
+    }
+    if (resp.progress) {
+      applyProgressState(resp.progress);
+    }
+    const gained = Number(resp?.consumed) || qty;
+    appendChatLine({
+      text: `Consumed ${gained} fish. Max stamina is now ${Math.round(getStaminaMax())}.`,
+      isSystem: true
+    });
+    updateQuestPanel(`Consumed fish. Max stamina: ${Math.round(getStaminaMax())}.`);
+  });
 }
 
 function updateTorchLight(local, nowMs) {
@@ -5236,6 +5523,186 @@ function exitBoat(local, forceAnywhere = false) {
   local.isSwimming = isWaterAt(outX, outZ);
 }
 
+function isNearFishingVendor(local) {
+  return Boolean(local) && distance2D(local, FISHING_VENDOR_POS) <= 3.3;
+}
+
+function isNearFishMarket(local) {
+  return Boolean(local) && distance2D(local, MARKET_VENDOR_POS) <= 3.3;
+}
+
+function nearestFishingSpot(local, radius = FISHING_SPOT_RADIUS) {
+  if (!local) return null;
+  let best = null;
+  for (const spot of fishingSpots) {
+    const dist = Math.hypot(local.x - spot.x, local.z - spot.z);
+    if (dist <= radius && (!best || dist < best.dist)) {
+      best = { spot, dist };
+    }
+  }
+  return best?.spot || null;
+}
+
+function findFishingSpotById(id) {
+  if (!id) return null;
+  return fishingSpots.find((spot) => spot.id === id) || null;
+}
+
+function startFishingMinigame(spot) {
+  resetFishingMiniGame();
+  const now = Date.now();
+  const biteDelay = FISH_BITE_MIN_MS + Math.random() * (FISH_BITE_MAX_MS - FISH_BITE_MIN_MS);
+  fishingMiniGame.active = true;
+  fishingMiniGame.spotId = spot.id;
+  fishingMiniGame.biteAt = now + biteDelay;
+  fishingMiniGame.windowStart = fishingMiniGame.biteAt;
+  fishingMiniGame.windowEnd = fishingMiniGame.biteAt + FISH_HIT_WINDOW_MS;
+  fishingMiniGame.expireAt = fishingMiniGame.windowEnd + FISH_MINIGAME_EXPIRE_MS;
+  updateQuestPanel('Cast line... press E when the fish bites.');
+  appendChatLine({ text: 'Cast line. Press E when you see a bite window.', isSystem: true });
+}
+
+function tryFishingSpotInteract(local) {
+  if (!local || inMine || inLighthouseInterior || local.onBoat) return false;
+  const spot = nearestFishingSpot(local);
+  if (!spot) return false;
+  if (!questState.hasFishingRod) {
+    appendChatLine({ text: 'You need a fishing rod first.', isSystem: true });
+    updateQuestPanel('Buy a fishing rod at the Fishing island vendor.');
+    return true;
+  }
+  const now = Date.now();
+  if (!fishingMiniGame.active || fishingMiniGame.spotId !== spot.id) {
+    startFishingMinigame(spot);
+    return true;
+  }
+  if (now < fishingMiniGame.windowStart) {
+    resetFishingMiniGame();
+    updateQuestPanel('Too early. The fish got spooked.');
+    appendChatLine({ text: 'Too early. Cast again and wait for the bite.', isSystem: true });
+    return true;
+  }
+  if (now > fishingMiniGame.windowEnd) {
+    resetFishingMiniGame();
+    updateQuestPanel('Too late. The fish got away.');
+    appendChatLine({ text: 'Too late. Cast again.', isSystem: true });
+    return true;
+  }
+
+  resetFishingMiniGame();
+  socket.emit('fish:catch', {}, (resp) => {
+    if (!resp?.ok) {
+      updateQuestPanel(resp?.error || 'Could not catch fish.');
+      appendChatLine({ text: resp?.error || 'Could not catch fish.', isSystem: true });
+      return;
+    }
+    if (resp.progress) {
+      applyProgressState(resp.progress);
+    }
+    updateQuestPanel('Caught fish successfully.');
+    appendChatLine({ text: 'Caught 1 fish.', isSystem: true });
+  });
+  return true;
+}
+
+function updateFishingMinigame(local, nowMs) {
+  const wallNow = Date.now();
+  for (const spot of fishingSpots) {
+    if (!spot.marker) continue;
+    const pulse = 0.9 + Math.sin(nowMs * 0.004 + spot.x * 0.03) * 0.1;
+    spot.marker.scale.setScalar(pulse);
+  }
+  if (!fishingMiniGame.active) return;
+  if (!local || !questState.hasFishingRod || inMine || inLighthouseInterior || local.onBoat) {
+    resetFishingMiniGame();
+    return;
+  }
+  const spot = findFishingSpotById(fishingMiniGame.spotId);
+  if (!spot) {
+    resetFishingMiniGame();
+    return;
+  }
+  if (distance2D(local, spot) > FISHING_SPOT_RADIUS + 2.8) {
+    resetFishingMiniGame();
+    updateQuestPanel('Fishing canceled. Move back to a fishing spot.');
+    return;
+  }
+  if (wallNow > fishingMiniGame.expireAt) {
+    resetFishingMiniGame();
+    updateQuestPanel('Fish got away. Cast again.');
+  }
+}
+
+function fishingVendorInteract(local) {
+  if (!isNearFishingVendor(local)) return false;
+  if (questState.hasFishingRod) {
+    openNpcDialogue({
+      name: 'Fishing Vendor',
+      text: 'You already own a fishing rod. Fish at the glowing spots near shore.',
+      primaryLabel: 'Okay',
+      secondaryLabel: 'Close'
+    });
+    return true;
+  }
+  openNpcDialogue({
+    name: 'Fishing Vendor',
+    text: `Fishing rod costs ${FISHING_ROD_PRICE} coins. You currently have ${questState.coins} coins.`,
+    primaryLabel: 'Buy Rod',
+    secondaryLabel: 'Cancel',
+    onPrimary: () => {
+      socket.emit('shop:buyFishingRod', {}, (resp) => {
+        if (!resp?.ok) {
+          updateQuestPanel(resp?.error || 'Could not buy fishing rod.');
+          return;
+        }
+        if (resp.progress) {
+          applyProgressState(resp.progress);
+        }
+        closeNpcDialogue();
+        updateQuestPanel('Bought fishing rod.');
+      });
+    },
+    onSecondary: closeNpcDialogue
+  });
+  return true;
+}
+
+function fishMarketInteract(local) {
+  if (!isNearFishMarket(local)) return false;
+  const fishCount = Math.max(0, Math.floor(Number(questState.inventory.fish) || 0));
+  if (fishCount <= 0) {
+    openNpcDialogue({
+      name: 'Market Trader',
+      text: 'Bring me fish and I will pay coins.',
+      primaryLabel: 'Okay',
+      secondaryLabel: 'Close'
+    });
+    return true;
+  }
+  const payout = fishCount * FISH_SELL_PRICE;
+  openNpcDialogue({
+    name: 'Market Trader',
+    text: `You have ${fishCount} fish. Sell all for ${payout} coins?`,
+    primaryLabel: 'Sell All',
+    secondaryLabel: 'Cancel',
+    onPrimary: () => {
+      socket.emit('fish:sell', {}, (resp) => {
+        if (!resp?.ok) {
+          updateQuestPanel(resp?.error || 'Could not sell fish.');
+          return;
+        }
+        if (resp.progress) {
+          applyProgressState(resp.progress);
+        }
+        closeNpcDialogue();
+        updateQuestPanel(`Sold ${resp?.sold || fishCount} fish for ${resp?.coinsEarned || payout} coins.`);
+      });
+    },
+    onSecondary: closeNpcDialogue
+  });
+  return true;
+}
+
 function questInteract(local) {
   if (!local) return false;
   if (distance2D(local, QUEST_NPC_POS) > 3.2) return false;
@@ -5469,6 +5936,9 @@ function hasManualInteractTarget(local) {
   if (inMine && getNearbyOreNode(local)) return true;
   if (inMine && distance2D(local, MINE_SHOP_NPC_POS) <= 3.2) return true;
   if (distance2D(local, QUEST_NPC_POS) <= 3.2) return true;
+  if (isNearFishingVendor(local)) return true;
+  if (isNearFishMarket(local)) return true;
+  if (!inMine && nearestFishingSpot(local)) return true;
 
   const nearInteriorPortal = inLighthouseInterior && distance2D(local, INTERIOR_EXIT_PORTAL_POS) < 3.1;
   if (nearInteriorPortal) return true;
@@ -5483,7 +5953,10 @@ function hasManualInteractTarget(local) {
 }
 
 function updateMobileUseButtonVisibility(local) {
-  if (!mobileUseEl) return;
+  if (!mobileUseEl) {
+    refreshConsumeActionVisibility(local);
+    return;
+  }
   const canUse = Boolean(local)
     && isAuthenticated
     && !mineWarningOpen
@@ -5492,6 +5965,7 @@ function updateMobileUseButtonVisibility(local) {
     && customizeModalEl.classList.contains('hidden')
     && hasManualInteractTarget(local);
   mobileUseEl.classList.toggle('hidden', !canUse);
+  refreshConsumeActionVisibility(local);
 }
 
 function tryInteract() {
@@ -5528,6 +6002,21 @@ function tryInteract() {
   }
 
   if (tryMineNode(local)) {
+    lastInteractAt = now;
+    return;
+  }
+
+  if (fishingVendorInteract(local)) {
+    lastInteractAt = now;
+    return;
+  }
+
+  if (fishMarketInteract(local)) {
+    lastInteractAt = now;
+    return;
+  }
+
+  if (tryFishingSpotInteract(local)) {
     lastInteractAt = now;
     return;
   }
@@ -5869,6 +6358,11 @@ window.addEventListener('keydown', (event) => {
   if (key === 't' && !event.repeat) {
     event.preventDefault();
     toggleTorchEquip();
+    return;
+  }
+  if (key === 'r' && !event.repeat) {
+    event.preventDefault();
+    consumeFish(1);
     return;
   }
   if (key === 'q') {
@@ -6438,6 +6932,7 @@ mobileJumpEl?.addEventListener('click', () => {
   pendingJump = true;
 });
 mobileUseEl?.addEventListener('click', tryInteract);
+mobileConsumeEl?.addEventListener('click', () => consumeFish(1));
 mobileEmoteEl?.addEventListener('click', () => {
   if (!isAuthenticated || menuOpen || !customizeModalEl.classList.contains('hidden')) return;
   triggerEmote('dance');
@@ -6452,12 +6947,11 @@ const JUMP_VELOCITY = 11;
 const SEND_EVERY_MS = 45;
 const TURN_SPEED = 14;
 const REMOTE_TURN_SPEED = 10;
-const STAMINA_MAX = 100;
 const STAMINA_DRAIN = 25;
 const STAMINA_REGEN = 18;
 const SLIDE_DURATION = 0.42;
 const SLIDE_SPEED = 20;
-let stamina = STAMINA_MAX;
+let stamina = STAMINA_BASE_MAX;
 let slideUntil = 0;
 let slideDirX = 0;
 let slideDirZ = 0;
@@ -6657,7 +7151,7 @@ function updateLocalPlayer(delta, nowMs) {
     if (shore.collided) {
       boatState.speed *= 0.55;
     }
-    const travelLimit = worldLimit * 2.9;
+    const travelLimit = worldLimit * 3.45;
     boatState.x = THREE.MathUtils.clamp(boatState.x, -travelLimit, travelLimit);
     boatState.z = THREE.MathUtils.clamp(boatState.z, -travelLimit, travelLimit);
     boatState.paddlePhase += delta * (3.2 + Math.abs(boatState.speed) * 0.45);
@@ -6688,8 +7182,8 @@ function updateLocalPlayer(delta, nowMs) {
     local.animSpeed = Math.min(1, Math.abs(boatState.speed) / 10);
 
     if (staminaFillEl) {
-      stamina = Math.min(STAMINA_MAX, stamina + STAMINA_REGEN * delta);
-      const pct = Math.round((stamina / STAMINA_MAX) * 100);
+      stamina = Math.min(getStaminaMax(), stamina + STAMINA_REGEN * delta);
+      const pct = Math.round((stamina / getStaminaMax()) * 100);
       staminaFillEl.style.width = `${pct}%`;
     }
     return;
@@ -6746,13 +7240,13 @@ function updateLocalPlayer(delta, nowMs) {
       speed *= SPRINT_MULTIPLIER;
       stamina = Math.max(0, stamina - STAMINA_DRAIN * delta);
     } else {
-      stamina = Math.min(STAMINA_MAX, stamina + STAMINA_REGEN * delta * 0.75);
+      stamina = Math.min(getStaminaMax(), stamina + STAMINA_REGEN * delta * 0.75);
     }
     local.x += worldX * speed * delta;
     local.z += worldZ * speed * delta;
     local.targetYaw = Math.atan2(worldX, worldZ);
   } else {
-    stamina = Math.min(STAMINA_MAX, stamina + STAMINA_REGEN * delta);
+    stamina = Math.min(getStaminaMax(), stamina + STAMINA_REGEN * delta);
   }
 
   if (runSlideAllowed(local, isSliding)) {
@@ -6778,7 +7272,7 @@ function updateLocalPlayer(delta, nowMs) {
     return;
   }
   if (staminaFillEl) {
-    const pct = Math.round((stamina / STAMINA_MAX) * 100);
+    const pct = Math.round((stamina / getStaminaMax()) * 100);
     staminaFillEl.style.width = `${pct}%`;
   }
 
@@ -6920,6 +7414,33 @@ function updateInteractionHint() {
     interactHintEl.textContent = swimHint;
     return;
   }
+  if (fishingMiniGame.active) {
+    const now = Date.now();
+    if (now >= fishingMiniGame.windowStart && now <= fishingMiniGame.windowEnd) {
+      interactHintEl.textContent = 'Fish biting now. Press E!';
+    } else if (now < fishingMiniGame.windowStart) {
+      interactHintEl.textContent = 'Fishing... wait for a bite then press E';
+    } else {
+      interactHintEl.textContent = 'Fishing window missed. Press E to cast again';
+    }
+    return;
+  }
+  if (isNearFishingVendor(local)) {
+    interactHintEl.textContent = questState.hasFishingRod
+      ? 'Press E to talk to Fishing Vendor'
+      : 'Press E to buy Fishing Rod';
+    return;
+  }
+  if (isNearFishMarket(local)) {
+    interactHintEl.textContent = 'Press E to sell fish at market';
+    return;
+  }
+  if (!inMine && nearestFishingSpot(local)) {
+    interactHintEl.textContent = questState.hasFishingRod
+      ? 'Press E to cast/reel fish'
+      : 'Need fishing rod to fish here';
+    return;
+  }
   if (distance2D(local, MINE_ENTRY_POS) < 2.45) {
     interactHintEl.textContent = 'Walk into the mine entrance to enter';
     return;
@@ -6955,6 +7476,8 @@ function updateInteractionHint() {
     distance2D(local, ISLAND_DOCK_POS) < 6
     || distance2D(local, LIGHTHOUSE_DOCK_POS) < 6
     || distance2D(local, MINE_ENTRY_DOCK_POS) < 6
+    || distance2D(local, FISHING_DOCK_POS) < 6
+    || distance2D(local, MARKET_DOCK_POS) < 6
   ) {
     interactHintEl.textContent = 'Press E to board boat';
     return;
@@ -7017,6 +7540,12 @@ function drawMinimap() {
   minimapCtx.beginPath();
   minimapCtx.arc(center + MINE_ENTRY_DOCK_POS.x * scale, center + MINE_ENTRY_DOCK_POS.z * scale, 3, 0, Math.PI * 2);
   minimapCtx.fill();
+  minimapCtx.beginPath();
+  minimapCtx.arc(center + FISHING_DOCK_POS.x * scale, center + FISHING_DOCK_POS.z * scale, 3, 0, Math.PI * 2);
+  minimapCtx.fill();
+  minimapCtx.beginPath();
+  minimapCtx.arc(center + MARKET_DOCK_POS.x * scale, center + MARKET_DOCK_POS.z * scale, 3, 0, Math.PI * 2);
+  minimapCtx.fill();
   minimapCtx.fillStyle = '#f8fafc';
   minimapCtx.beginPath();
   minimapCtx.arc(center + LIGHTHOUSE_POS.x * scale, center + LIGHTHOUSE_POS.z * scale, 4, 0, Math.PI * 2);
@@ -7030,6 +7559,14 @@ function drawMinimap() {
   minimapCtx.fillStyle = '#60a5fa';
   minimapCtx.beginPath();
   minimapCtx.arc(center + MINE_ENTRY_POS.x * scale, center + MINE_ENTRY_POS.z * scale, 3, 0, Math.PI * 2);
+  minimapCtx.fill();
+  minimapCtx.fillStyle = '#22d3ee';
+  minimapCtx.beginPath();
+  minimapCtx.arc(center + FISHING_ISLAND_POS.x * scale, center + FISHING_ISLAND_POS.z * scale, 3, 0, Math.PI * 2);
+  minimapCtx.fill();
+  minimapCtx.fillStyle = '#f59e0b';
+  minimapCtx.beginPath();
+  minimapCtx.arc(center + MARKET_ISLAND_POS.x * scale, center + MARKET_ISLAND_POS.z * scale, 3, 0, Math.PI * 2);
   minimapCtx.fill();
 
   if (boatState.mesh) {
@@ -7103,6 +7640,7 @@ function animate(nowMs) {
 
   updateLocalPlayer(delta, nowMs);
   updateRemotePlayers(delta);
+  updateFishingMinigame(players.get(localPlayerId), nowMs);
   updateInteractionHint();
   updatePlayerEmotes(Date.now(), delta);
   if (nowMs - _lastVoiceVolumeUpdate >= voiceUpdateIntervalMs) {
