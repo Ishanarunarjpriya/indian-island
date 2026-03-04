@@ -17,6 +17,14 @@ let isAuthenticated = false;
 const CHAT_BUBBLE_MS = 4500;
 let lastMineAt = 0;
 const MINE_SWING_MS = 340;
+const MINE_TIMING_HIT_COOLDOWN_MS = 120;
+const MINE_TIMING_TIMEOUT_FALLBACK_MS = 5200;
+const MINE_TIMING_PROFILES = {
+  stone: { speed: 0.9, zoneWidth: 0.3, timeoutMs: 5600 },
+  iron: { speed: 1.16, zoneWidth: 0.23, timeoutMs: 5000 },
+  gold: { speed: 1.42, zoneWidth: 0.17, timeoutMs: 4400 },
+  diamond: { speed: 1.78, zoneWidth: 0.12, timeoutMs: 3800 }
+};
 const STAMINA_BASE_MAX = 100;
 let torchEquipped = false;
 
@@ -39,6 +47,12 @@ const PICKAXE_HEAD_COLORS = {
   stone: 0x94a3b8,
   iron: 0xcbd5e1,
   diamond: 0x67e8f9
+};
+const ORE_RESOURCE_COLORS = {
+  stone: 0x9ca3af,
+  iron: 0xb45309,
+  gold: 0xf59e0b,
+  diamond: 0x22d3ee
 };
 
 const MINE_POS = new THREE.Vector3(140, 1.35, 140);
@@ -121,6 +135,18 @@ const fishingMiniGame = {
   windowEnd: 0,
   expireAt: 0
 };
+const miningAccuracyGame = {
+  active: false,
+  node: null,
+  pointer: 0,
+  direction: 1,
+  zoneCenter: 0.5,
+  zoneWidth: 0.2,
+  speed: 1.0,
+  timeoutAt: 0
+};
+let miningAccuracyUiTimer = null;
+const _mineNodeWorldPos = new THREE.Vector3();
 let npcDialogueOpen = false;
 let npcDialoguePrimaryAction = null;
 let npcDialogueSecondaryAction = null;
@@ -184,7 +210,13 @@ const inventoryPickaxeEl = document.getElementById('inventory-pickaxe');
 const inventoryTorchEl = document.getElementById('inventory-torch');
 const inventoryFishEl = document.getElementById('inventory-fish');
 const inventoryTorchSlotEl = inventoryTorchEl?.closest('.inventory-slot') || null;
-const gameplayPanels = ['hud', 'mini-panel', 'chat-panel', 'world-state', 'top-left-toolbar', 'inventory-bar']
+const miningMeterEl = document.getElementById('mining-meter');
+const miningOrePreviewEl = document.getElementById('mining-ore-preview');
+const miningPickaxeHeadEl = document.getElementById('mining-pickaxe-head');
+const miningMeterZoneEl = document.getElementById('mining-meter-green-zone');
+const miningMeterPointerEl = document.getElementById('mining-meter-pointer');
+const miningMeterStatusEl = document.getElementById('mining-meter-status');
+const gameplayPanels = ['hud', 'mini-panel', 'chat-panel', 'world-state', 'top-left-toolbar', 'inventory-bar', 'mining-meter']
   .map((id) => document.getElementById(id))
   .filter(Boolean);
 
@@ -519,6 +551,7 @@ function clearSessionWorld() {
   boatState.onboard = false;
   inMine = false;
   torchEquipped = false;
+  resetMiningAccuracyGame();
   resetFishingMiniGame();
   closeMineWarningDialog();
   refreshConsumeActionVisibility(null);
@@ -541,6 +574,7 @@ function setAuthModalOpen(open, statusText = '') {
     setCustomizeModal(false);
     menuOpen = false;
     menuOverlayEl?.classList.add('hidden');
+    resetMiningAccuracyGame();
   }
 }
 
@@ -553,6 +587,7 @@ function setMenuOpen(open) {
     emoteWheelOpen = false;
     emoteWheelEl?.classList.add('hidden');
     setCustomizeModal(false);
+    resetMiningAccuracyGame();
   }
   menuOverlayEl?.classList.toggle('hidden', !open);
 }
@@ -2693,7 +2728,7 @@ function addMineArea() {
   const oreDefs = [
     {
       resource: 'stone',
-      color: 0x9ca3af,
+      color: ORE_RESOURCE_COLORS.stone,
       reward: 1,
       cooldownMs: 2400,
       positions: [
@@ -2702,21 +2737,21 @@ function addMineArea() {
     },
     {
       resource: 'iron',
-      color: 0xb45309,
+      color: ORE_RESOURCE_COLORS.iron,
       reward: 2,
       cooldownMs: 4200,
       positions: [[-24, 8], [-16, -25], [-9, -15], [-2, 24], [8, -11], [14, 4], [19, 18], [25, -12], [4, 20]]
     },
     {
       resource: 'gold',
-      color: 0xf59e0b,
+      color: ORE_RESOURCE_COLORS.gold,
       reward: 3,
       cooldownMs: 6200,
       positions: [[-28, 15], [-12, 26], [3, 28], [14, -22], [24, 6], [20, 23], [-4, -26]]
     },
     {
       resource: 'diamond',
-      color: 0x22d3ee,
+      color: ORE_RESOURCE_COLORS.diamond,
       reward: 1,
       cooldownMs: 9800,
       positions: [[-30, -5], [-8, 4], [0, 0], [18, 14], [30, 10]]
@@ -2740,10 +2775,16 @@ function addMineArea() {
       oreNodes.push({
         id: `${def.resource}-${idx}`,
         resource: def.resource,
+        colorHex: def.color,
         reward: def.reward,
         cooldownMs: def.cooldownMs,
         mesh,
-        readyAt: 0
+        readyAt: 0,
+        baseY: 1.86,
+        baseScale: 1,
+        breaking: false,
+        breakStartAt: 0,
+        breakEndAt: 0
       });
     });
   });
@@ -4764,6 +4805,218 @@ function resetFishingMiniGame() {
   fishingMiniGame.expireAt = 0;
 }
 
+function hexToCss(value, fallback = '#9ca3af') {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return fallback;
+  const safe = Math.max(0, Math.min(0xffffff, Math.floor(num)));
+  return `#${safe.toString(16).padStart(6, '0')}`;
+}
+
+function mineTimingProfile(resource) {
+  return MINE_TIMING_PROFILES[resource] || {
+    speed: 1.0,
+    zoneWidth: 0.2,
+    timeoutMs: MINE_TIMING_TIMEOUT_FALLBACK_MS
+  };
+}
+
+function setMiningMeterStatus(text, color = '#fef3c7') {
+  if (!miningMeterStatusEl) return;
+  miningMeterStatusEl.textContent = text;
+  miningMeterStatusEl.style.color = color;
+}
+
+function resetMiningAccuracyGame() {
+  miningAccuracyGame.active = false;
+  miningAccuracyGame.node = null;
+  miningAccuracyGame.pointer = 0;
+  miningAccuracyGame.direction = 1;
+  miningAccuracyGame.zoneCenter = 0.5;
+  miningAccuracyGame.zoneWidth = 0.2;
+  miningAccuracyGame.speed = 1.0;
+  miningAccuracyGame.timeoutAt = 0;
+  if (miningAccuracyUiTimer) {
+    clearTimeout(miningAccuracyUiTimer);
+    miningAccuracyUiTimer = null;
+  }
+  if (miningOrePreviewEl) {
+    miningOrePreviewEl.classList.remove('cracked');
+  }
+  if (miningMeterEl) {
+    miningMeterEl.classList.add('hidden');
+  }
+}
+
+function scheduleMiningAccuracyClose(delayMs = 180) {
+  if (miningAccuracyUiTimer) {
+    clearTimeout(miningAccuracyUiTimer);
+    miningAccuracyUiTimer = null;
+  }
+  miningAccuracyUiTimer = setTimeout(() => {
+    miningAccuracyUiTimer = null;
+    resetMiningAccuracyGame();
+  }, delayMs);
+}
+
+function startMiningAccuracyGame(node) {
+  if (!node || !node.mesh?.visible || node.breaking) return false;
+  const profile = mineTimingProfile(node.resource);
+  const zoneWidth = THREE.MathUtils.clamp(profile.zoneWidth, 0.08, 0.34);
+  const half = zoneWidth * 0.5;
+  const minCenter = half + 0.06;
+  const maxCenter = 1 - half - 0.06;
+  const zoneCenter = minCenter + Math.random() * Math.max(0.01, maxCenter - minCenter);
+  const pickaxeHead = PICKAXE_HEAD_COLORS[normalizePickaxeTier(questState.pickaxe, 'wood')] || PICKAXE_HEAD_COLORS.wood;
+  const oreColor = node.colorHex ?? ORE_RESOURCE_COLORS[node.resource] ?? ORE_RESOURCE_COLORS.stone;
+
+  if (miningAccuracyUiTimer) {
+    clearTimeout(miningAccuracyUiTimer);
+    miningAccuracyUiTimer = null;
+  }
+  miningAccuracyGame.active = true;
+  miningAccuracyGame.node = node;
+  miningAccuracyGame.pointer = 0.08 + Math.random() * 0.84;
+  miningAccuracyGame.direction = Math.random() < 0.5 ? -1 : 1;
+  miningAccuracyGame.zoneCenter = zoneCenter;
+  miningAccuracyGame.zoneWidth = zoneWidth;
+  miningAccuracyGame.speed = Math.max(0.65, Number(profile.speed) || 1);
+  miningAccuracyGame.timeoutAt = performance.now() + Math.max(1200, Number(profile.timeoutMs) || MINE_TIMING_TIMEOUT_FALLBACK_MS);
+
+  if (miningOrePreviewEl) {
+    miningOrePreviewEl.classList.remove('cracked');
+    miningOrePreviewEl.style.setProperty('--ore-color', hexToCss(oreColor));
+  }
+  if (miningPickaxeHeadEl) {
+    miningPickaxeHeadEl.style.background = hexToCss(pickaxeHead, '#94a3b8');
+  }
+  if (miningMeterZoneEl) {
+    const left = (zoneCenter - half) * 100;
+    miningMeterZoneEl.style.left = `${left.toFixed(2)}%`;
+    miningMeterZoneEl.style.width = `${(zoneWidth * 100).toFixed(2)}%`;
+  }
+  if (miningMeterPointerEl) {
+    miningMeterPointerEl.style.left = `${(miningAccuracyGame.pointer * 100).toFixed(2)}%`;
+  }
+  setMiningMeterStatus(`Mine ${node.resource}: click or press E in green.`, '#fef3c7');
+  if (miningMeterEl) {
+    miningMeterEl.classList.remove('hidden');
+  }
+  return true;
+}
+
+function activeMiningNode(local) {
+  const node = miningAccuracyGame.node;
+  if (!local || !node || !node.mesh || !node.mesh.visible || node.breaking) return null;
+  node.mesh.getWorldPosition(_mineNodeWorldPos);
+  const dist = Math.hypot(local.x - _mineNodeWorldPos.x, local.z - _mineNodeWorldPos.z);
+  if (dist > 3.45) return null;
+  return node;
+}
+
+function beginOreBreak(node, nowMs = performance.now()) {
+  if (!node || !node.mesh) return;
+  node.breaking = true;
+  node.breakStartAt = nowMs;
+  node.breakEndAt = nowMs + 170;
+  node.readyAt = nowMs + node.cooldownMs;
+}
+
+function attemptMiningAccuracyHit(local) {
+  if (!miningAccuracyGame.active) return false;
+  const now = performance.now();
+  if (now - lastMineAt < MINE_TIMING_HIT_COOLDOWN_MS) return true;
+  lastMineAt = now;
+
+  if (!local || !inMine) {
+    resetMiningAccuracyGame();
+    return true;
+  }
+  const node = activeMiningNode(local);
+  if (!node) {
+    miningAccuracyGame.active = false;
+    setMiningMeterStatus('Mining canceled. Move closer to the ore.', '#fecaca');
+    scheduleMiningAccuracyClose(180);
+    return true;
+  }
+
+  const zoneHalf = miningAccuracyGame.zoneWidth * 0.5;
+  const zoneMin = miningAccuracyGame.zoneCenter - zoneHalf;
+  const zoneMax = miningAccuracyGame.zoneCenter + zoneHalf;
+  const hit = miningAccuracyGame.pointer >= zoneMin && miningAccuracyGame.pointer <= zoneMax;
+  miningAccuracyGame.active = false;
+
+  if (!hit) {
+    setMiningMeterStatus('Missed. Try again.', '#fecaca');
+    updateQuestPanel(`Missed timing on ${node.resource}.`);
+    scheduleMiningAccuracyClose(170);
+    return true;
+  }
+
+  if (miningOrePreviewEl) {
+    miningOrePreviewEl.classList.add('cracked');
+  }
+  setMiningMeterStatus('Hit! Ore cracking open...', '#86efac');
+  const amount = mineAmountForPickaxe(node.resource);
+  startMineSwing(localPlayerId, Date.now());
+  beginOreBreak(node, now);
+  scheduleMiningAccuracyClose(220);
+  socket.emit('mine:collect', { resource: node.resource, amount }, (resp) => {
+    if (!resp?.ok) {
+      node.breaking = false;
+      node.breakStartAt = 0;
+      node.breakEndAt = 0;
+      node.readyAt = performance.now() + 220;
+      node.mesh.visible = true;
+      node.mesh.scale.setScalar(node.baseScale || 1);
+      node.mesh.rotation.x = 0;
+      node.mesh.rotation.z = 0;
+      node.mesh.position.y = node.baseY || 1.86;
+      updateQuestPanel(resp?.error || 'Could not mine ore.');
+      return;
+    }
+    if (resp.progress) {
+      applyProgressState(resp.progress);
+    }
+    const questMsg = resp.questProgressed ? ' Quest progress updated.' : '';
+    updateQuestPanel(`Mined ${amount} ${node.resource}.${questMsg}`);
+  });
+  return true;
+}
+
+function updateMiningAccuracyGame(local, nowMs, delta) {
+  if (!miningAccuracyGame.active) return;
+  if (!local || !isAuthenticated || !inMine || menuOpen || mineWarningOpen || npcDialogueOpen || !customizeModalEl.classList.contains('hidden')) {
+    resetMiningAccuracyGame();
+    return;
+  }
+  const node = activeMiningNode(local);
+  if (!node) {
+    miningAccuracyGame.active = false;
+    setMiningMeterStatus('Mining canceled. Move closer to the ore.', '#fecaca');
+    scheduleMiningAccuracyClose(170);
+    return;
+  }
+  if (nowMs >= miningAccuracyGame.timeoutAt) {
+    miningAccuracyGame.active = false;
+    setMiningMeterStatus('Too slow. Mining canceled.', '#fecaca');
+    updateQuestPanel('Too slow. Start mining again.');
+    scheduleMiningAccuracyClose(170);
+    return;
+  }
+  let pointer = miningAccuracyGame.pointer + delta * miningAccuracyGame.speed * miningAccuracyGame.direction;
+  if (pointer > 1) {
+    pointer = 2 - pointer;
+    miningAccuracyGame.direction = -1;
+  } else if (pointer < 0) {
+    pointer = -pointer;
+    miningAccuracyGame.direction = 1;
+  }
+  miningAccuracyGame.pointer = THREE.MathUtils.clamp(pointer, 0, 1);
+  if (miningMeterPointerEl) {
+    miningMeterPointerEl.style.left = `${(miningAccuracyGame.pointer * 100).toFixed(2)}%`;
+  }
+}
+
 function applyProgressState(progress) {
   if (!progress || typeof progress !== 'object') return;
   questState.coins = Math.max(0, Math.floor(Number(progress.coins) || 0));
@@ -5807,7 +6060,7 @@ function mineShopInteract(local) {
 function getNearbyOreNode(local) {
   let best = null;
   for (const node of oreNodes) {
-    if (!node.mesh.visible) continue;
+    if (!node.mesh.visible || node.breaking) continue;
     const pos = node.mesh.getWorldPosition(new THREE.Vector3());
     const dist = Math.hypot(local.x - pos.x, local.z - pos.z);
     if (dist <= 3.2 && (!best || dist < best.dist)) {
@@ -5838,6 +6091,7 @@ function isNearMineCrystal(local) {
 
 function exitMineToEntrance(local) {
   inMine = false;
+  resetMiningAccuracyGame();
   const outDX = Math.sin(MINE_ENTRY_YAW) * 11.5;
   const outDZ = Math.cos(MINE_ENTRY_YAW) * 11.5;
   teleportLocal(
@@ -5855,31 +6109,28 @@ function startMineSwing(id, nowMs = Date.now()) {
 }
 
 function tryMineNode(local) {
-  if (!local || !inMine) return false;
+  if (!local || !inMine) {
+    if (miningAccuracyGame.active) resetMiningAccuracyGame();
+    return false;
+  }
   const node = getNearbyOreNode(local);
-  if (!node) return false;
+  if (!node) {
+    if (miningAccuracyGame.active) resetMiningAccuracyGame();
+    return false;
+  }
+  if (miningAccuracyGame.active) {
+    if (miningAccuracyGame.node?.id === node.id) {
+      return attemptMiningAccuracyHit(local);
+    }
+    resetMiningAccuracyGame();
+  }
   if (!canMineResource(node.resource)) {
     updateQuestPanel(`Need a better pickaxe for ${node.resource}.`);
     return true;
   }
-  const now = performance.now();
-  if (now - lastMineAt < 260) return true;
-  lastMineAt = now;
-  const amount = mineAmountForPickaxe(node.resource);
-  socket.emit('mine:collect', { resource: node.resource, amount }, (resp) => {
-    if (!resp?.ok) {
-      updateQuestPanel(resp?.error || 'Could not mine ore.');
-      return;
-    }
-    if (resp.progress) {
-      applyProgressState(resp.progress);
-    }
-    startMineSwing(localPlayerId, Date.now());
-    node.readyAt = now + node.cooldownMs;
-    node.mesh.visible = false;
-    const questMsg = resp.questProgressed ? ' Quest progress updated.' : '';
-    updateQuestPanel(`Mined ${amount} ${node.resource}.${questMsg}`);
-  });
+  if (startMiningAccuracyGame(node)) {
+    updateQuestPanel(`Mine ${node.resource}: click or press E when marker is in green.`);
+  }
   return true;
 }
 
@@ -6853,6 +7104,13 @@ mineWarningContinueEl?.addEventListener('click', () => {
 mineWarningCancelEl?.addEventListener('click', () => {
   closeMineWarningDialog();
 });
+miningMeterEl?.addEventListener('pointerdown', (event) => {
+  if (!miningAccuracyGame.active) return;
+  if (typeof event.button === 'number' && event.button !== 0) return;
+  event.preventDefault();
+  event.stopPropagation();
+  attemptMiningAccuracyHit(players.get(localPlayerId));
+});
 
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -6986,6 +7244,11 @@ function clampGameplayCameraPitch(value) {
 }
 
 renderer.domElement.addEventListener('pointerdown', (event) => {
+  if (event.button === 0 && miningAccuracyGame.active) {
+    event.preventDefault();
+    attemptMiningAccuracyHit(players.get(localPlayerId));
+    return;
+  }
   if (pointerLocked) return;
   if (event.button !== 0) return;
   isOrbiting = true;
@@ -7385,6 +7648,10 @@ function updateInteractionHint() {
     return;
   }
   if (inMine) {
+    if (miningAccuracyGame.active) {
+      interactHintEl.textContent = 'Mining meter active: click or press E when marker is in green';
+      return;
+    }
     if (distance2D(local, MINE_EXIT_POS) < 3.1) {
       interactHintEl.textContent = 'Press E at the glowing marker to exit mine';
       return;
@@ -7407,7 +7674,7 @@ function updateInteractionHint() {
       return;
     }
     if (getNearbyOreNode(local)) {
-      interactHintEl.textContent = 'Press E to mine ore';
+      interactHintEl.textContent = 'Press E to start mining meter';
       return;
     }
     interactHintEl.textContent = 'Mine ore and return to the quest giver';
@@ -7602,12 +7869,35 @@ function updateMineVisuals(nowMs, delta) {
     mineEntranceMesh.rotation.y = MINE_ENTRY_YAW;
   }
   oreNodes.forEach((node) => {
+    if (node.breaking) {
+      const duration = Math.max(1, node.breakEndAt - node.breakStartAt);
+      const t = THREE.MathUtils.clamp((nowMs - node.breakStartAt) / duration, 0, 1);
+      node.mesh.rotation.y += delta * 8.6;
+      node.mesh.rotation.x = Math.sin(t * Math.PI * 8) * (1 - t) * 0.32;
+      node.mesh.rotation.z = Math.sin(t * Math.PI * 5.4) * (1 - t) * 0.18;
+      const scale = (node.baseScale || 1) * (1 + t * 0.48);
+      node.mesh.scale.setScalar(scale);
+      node.mesh.position.y = (node.baseY || 1.86) + t * 0.32;
+      if (t >= 1) {
+        node.breaking = false;
+        node.mesh.visible = false;
+        node.mesh.rotation.x = 0;
+        node.mesh.rotation.z = 0;
+        node.mesh.scale.setScalar(node.baseScale || 1);
+        node.mesh.position.y = node.baseY || 1.86;
+      }
+      return;
+    }
     if (!node.mesh.visible && nowMs >= node.readyAt) {
       node.mesh.visible = true;
+      node.mesh.scale.setScalar(node.baseScale || 1);
+      node.mesh.rotation.x = 0;
+      node.mesh.rotation.z = 0;
+      node.mesh.position.y = node.baseY || 1.86;
     }
     if (node.mesh.visible) {
       node.mesh.rotation.y += delta * 0.9;
-      node.mesh.position.y = 1.86 + Math.sin(nowMs * 0.002 + node.mesh.position.x) * 0.06;
+      node.mesh.position.y = (node.baseY || 1.86) + Math.sin(nowMs * 0.002 + node.mesh.position.x) * 0.06;
     }
   });
 }
@@ -7644,7 +7934,9 @@ function animate(nowMs) {
 
   updateLocalPlayer(delta, nowMs);
   updateRemotePlayers(delta);
-  updateFishingMinigame(players.get(localPlayerId), nowMs);
+  const localForMinigames = players.get(localPlayerId);
+  updateFishingMinigame(localForMinigames, nowMs);
+  updateMiningAccuracyGame(localForMinigames, nowMs, delta);
   updateInteractionHint();
   updatePlayerEmotes(Date.now(), delta);
   if (nowMs - _lastVoiceVolumeUpdate >= voiceUpdateIntervalMs) {
