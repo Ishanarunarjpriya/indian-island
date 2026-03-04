@@ -62,6 +62,7 @@ const MINE_ENTRY_POS = new THREE.Vector3(
   1.35,
   MINE_ENTRY_ISLAND_POS.z - (toMainFromMineEntryZ / toMainFromMineEntryLen) * 2.4
 );
+const MINE_ENTRY_WARNING_PREF_KEY = 'island_skip_mine_warning';
 const MINE_EXIT_POS = new THREE.Vector3(MINE_POS.x + 2.6, 1.35, MINE_POS.z + 23.2);
 const MINE_CRYSTAL_INTERACT_RADIUS = 3.0;
 const QUEST_NPC_POS = new THREE.Vector3(MINE_POS.x + 19.5, 1.35, MINE_POS.z + 8.1);
@@ -80,6 +81,8 @@ const oreNodes = [];
 let npcDialogueOpen = false;
 let npcDialoguePrimaryAction = null;
 let npcDialogueSecondaryAction = null;
+let mineWarningOpen = false;
+let mineWarningContinueAction = null;
 
 const statusEl = document.getElementById('status');
 const playerCountEl = document.getElementById('player-count');
@@ -179,8 +182,39 @@ const npcDialogueTextEl = document.getElementById('npc-dialogue-text');
 const npcDialoguePrimaryEl = document.getElementById('npc-dialogue-primary');
 const npcDialogueSecondaryEl = document.getElementById('npc-dialogue-secondary');
 
+const mineWarningEl = document.createElement('div');
+mineWarningEl.className = 'panel';
+mineWarningEl.style.position = 'fixed';
+mineWarningEl.style.left = '50%';
+mineWarningEl.style.top = '50%';
+mineWarningEl.style.transform = 'translate(-50%, -50%)';
+mineWarningEl.style.width = 'min(560px, calc(100vw - 24px))';
+mineWarningEl.style.padding = '14px';
+mineWarningEl.style.display = 'none';
+mineWarningEl.style.zIndex = '74';
+mineWarningEl.innerHTML = `
+  <div style="font-size:14px;font-weight:700;color:#fde68a;margin-bottom:6px;">Mine Performance Warning</div>
+  <div style="font-size:13px;line-height:1.45;color:#f8fafc;">
+    When entering the mines, players on slower hardware may experience lag.
+    If needed, turn down graphics settings in the menu before continuing.
+  </div>
+  <label style="display:flex;align-items:center;gap:8px;margin-top:10px;color:#cbd5e1;font-size:12px;">
+    <input id="mine-warning-no-ask" type="checkbox" />
+    Do not ask again
+  </label>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;">
+    <button id="mine-warning-continue" type="button" style="height:34px;font-size:13px;">OK, continue</button>
+    <button id="mine-warning-cancel" type="button" style="height:34px;font-size:13px;">Cancel</button>
+  </div>
+`;
+document.body.appendChild(mineWarningEl);
+const mineWarningContinueEl = document.getElementById('mine-warning-continue');
+const mineWarningCancelEl = document.getElementById('mine-warning-cancel');
+const mineWarningNoAskEl = document.getElementById('mine-warning-no-ask');
+
 const cachedAuthUsername = localStorage.getItem('island_auth_username') || '';
 const cachedAuthPassword = localStorage.getItem('island_auth_password') || '';
+let skipMineEntryWarning = localStorage.getItem(MINE_ENTRY_WARNING_PREF_KEY) === '1';
 if (authUsernameEl) authUsernameEl.value = cachedAuthUsername;
 if (authPasswordEl) authPasswordEl.value = cachedAuthPassword;
 
@@ -441,6 +475,7 @@ function clearSessionWorld() {
   boatState.onboard = false;
   inMine = false;
   torchEquipped = false;
+  closeMineWarningDialog();
 }
 
 function setAuthModalOpen(open, statusText = '') {
@@ -4445,6 +4480,20 @@ function closeNpcDialogue() {
   if (npcDialogueEl) npcDialogueEl.style.display = 'none';
 }
 
+function closeMineWarningDialog() {
+  mineWarningOpen = false;
+  mineWarningContinueAction = null;
+  if (mineWarningEl) mineWarningEl.style.display = 'none';
+}
+
+function openMineWarningDialog(onContinue) {
+  if (!mineWarningEl || !mineWarningContinueEl || !mineWarningCancelEl) return;
+  mineWarningOpen = true;
+  mineWarningContinueAction = typeof onContinue === 'function' ? onContinue : null;
+  if (mineWarningNoAskEl) mineWarningNoAskEl.checked = skipMineEntryWarning;
+  mineWarningEl.style.display = 'block';
+}
+
 function openNpcDialogue({ name, text, primaryLabel = 'Okay', secondaryLabel = 'Close', onPrimary, onSecondary }) {
   if (!npcDialogueEl || !npcDialogueNameEl || !npcDialogueTextEl || !npcDialoguePrimaryEl || !npcDialogueSecondaryEl) return;
   npcDialogueOpen = true;
@@ -5371,10 +5420,26 @@ function tryAutoTeleport(local, now = performance.now()) {
   );
 
   if (nearMineEntrance) {
-    runTeleportTransition('enter-mine', () => {
-      inMine = true;
-      teleportLocal(local, { x: MINE_POS.x + 0.8, y: GROUND_Y, z: MINE_POS.z + 11.2 }, Math.PI);
-    });
+    const enterMine = () => {
+      runTeleportTransition('enter-mine', () => {
+        inMine = true;
+        teleportLocal(local, { x: MINE_POS.x + 0.8, y: GROUND_Y, z: MINE_POS.z + 11.2 }, Math.PI);
+      });
+    };
+    if (skipMineEntryWarning) {
+      enterMine();
+    } else {
+      openMineWarningDialog(() => {
+        if (mineWarningNoAskEl?.checked) {
+          skipMineEntryWarning = true;
+          localStorage.setItem(MINE_ENTRY_WARNING_PREF_KEY, '1');
+        } else {
+          skipMineEntryWarning = false;
+          localStorage.removeItem(MINE_ENTRY_WARNING_PREF_KEY);
+        }
+        enterMine();
+      });
+    }
     lastInteractAt = now;
     return true;
   }
@@ -5420,6 +5485,7 @@ function updateMobileUseButtonVisibility(local) {
   if (!mobileUseEl) return;
   const canUse = Boolean(local)
     && isAuthenticated
+    && !mineWarningOpen
     && !menuOpen
     && authModalEl.classList.contains('hidden')
     && customizeModalEl.classList.contains('hidden')
@@ -5429,6 +5495,7 @@ function updateMobileUseButtonVisibility(local) {
 
 function tryInteract() {
   if (!isAuthenticated || menuOpen || !customizeModalEl.classList.contains('hidden')) return;
+  if (mineWarningOpen) return;
   if (npcDialogueOpen) {
     if (typeof npcDialoguePrimaryAction === 'function') npcDialoguePrimaryAction();
     return;
@@ -5729,6 +5796,10 @@ window.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') {
     event.preventDefault();
     if (!authModalEl.classList.contains('hidden')) return;
+    if (mineWarningOpen) {
+      closeMineWarningDialog();
+      return;
+    }
     if (npcDialogueOpen) {
       closeNpcDialogue();
       return;
@@ -6274,6 +6345,14 @@ npcDialoguePrimaryEl?.addEventListener('click', () => {
 npcDialogueSecondaryEl?.addEventListener('click', () => {
   if (typeof npcDialogueSecondaryAction === 'function') npcDialogueSecondaryAction();
 });
+mineWarningContinueEl?.addEventListener('click', () => {
+  const action = mineWarningContinueAction;
+  closeMineWarningDialog();
+  if (typeof action === 'function') action();
+});
+mineWarningCancelEl?.addEventListener('click', () => {
+  closeMineWarningDialog();
+});
 
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -6794,6 +6873,10 @@ function updateInteractionHint() {
   updateMobileUseButtonVisibility(local);
   if (!local) {
     interactHintEl.textContent = 'Explore the island';
+    return;
+  }
+  if (mineWarningOpen) {
+    interactHintEl.textContent = 'Review mine warning: OK, continue or Cancel';
     return;
   }
 
