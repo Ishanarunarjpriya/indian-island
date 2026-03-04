@@ -4488,6 +4488,7 @@ function closeMineWarningDialog() {
 
 function openMineWarningDialog(onContinue) {
   if (!mineWarningEl || !mineWarningContinueEl || !mineWarningCancelEl) return;
+  if (mineWarningOpen) return;
   mineWarningOpen = true;
   mineWarningContinueAction = typeof onContinue === 'function' ? onContinue : null;
   if (mineWarningNoAskEl) mineWarningNoAskEl.checked = skipMineEntryWarning;
@@ -5412,7 +5413,7 @@ function tryMineNode(local) {
 }
 
 function tryAutoTeleport(local, now = performance.now()) {
-  if (!local || isTeleporting || now < teleportTriggerLockUntil) return false;
+  if (!local || isTeleporting || mineWarningOpen || now < teleportTriggerLockUntil) return false;
 
   const nearMineEntrance = !inMine && !inLighthouseInterior && !local.onBoat && distance2D(local, MINE_ENTRY_POS) < 2.2;
   const nearLighthouseEntry = !inMine && !inLighthouseInterior && !local.onBoat && (
@@ -5429,8 +5430,8 @@ function tryAutoTeleport(local, now = performance.now()) {
     if (skipMineEntryWarning) {
       enterMine();
     } else {
-      openMineWarningDialog(() => {
-        if (mineWarningNoAskEl?.checked) {
+      openMineWarningDialog((dontAskAgain) => {
+        if (dontAskAgain) {
           skipMineEntryWarning = true;
           localStorage.setItem(MINE_ENTRY_WARNING_PREF_KEY, '1');
         } else {
@@ -6346,9 +6347,10 @@ npcDialogueSecondaryEl?.addEventListener('click', () => {
   if (typeof npcDialogueSecondaryAction === 'function') npcDialogueSecondaryAction();
 });
 mineWarningContinueEl?.addEventListener('click', () => {
+  const dontAskAgain = Boolean(mineWarningNoAskEl?.checked);
   const action = mineWarningContinueAction;
   closeMineWarningDialog();
-  if (typeof action === 'function') action();
+  if (typeof action === 'function') action(dontAskAgain);
 });
 mineWarningCancelEl?.addEventListener('click', () => {
   closeMineWarningDialog();
