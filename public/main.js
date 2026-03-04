@@ -28,6 +28,9 @@ const MINE_TIMING_PROFILES = {
 const MINE_FOCUS_CAMERA_BACK = 3.15;
 const MINE_FOCUS_CAMERA_SIDE = 1.15;
 const MINE_FOCUS_CAMERA_HEIGHT = 2.4;
+const FISH_FOCUS_CAMERA_BACK = 2.95;
+const FISH_FOCUS_CAMERA_SIDE = 0.92;
+const FISH_FOCUS_CAMERA_HEIGHT = 2.15;
 const STAMINA_BASE_MAX = 100;
 let torchEquipped = false;
 
@@ -35,6 +38,7 @@ const questState = {
   coins: 0,
   pickaxe: 'wood',
   inventory: { stone: 0, iron: 0, gold: 0, diamond: 0, torch: 1, fish: 0 },
+  fishIndex: {},
   hasFishingRod: false,
   maxStaminaBonusPct: 0,
   quest: null,
@@ -114,10 +118,62 @@ const MARKET_VENDOR_POS = new THREE.Vector3(MARKET_ISLAND_POS.x + 1.5, 1.35, MAR
 const FISHING_SPOT_RADIUS = 3.2;
 const FISHING_ROD_PRICE = 260;
 const FISH_SELL_PRICE = 20;
-const FISH_BITE_MIN_MS = 650;
-const FISH_BITE_MAX_MS = 1750;
-const FISH_HIT_WINDOW_MS = 520;
-const FISH_MINIGAME_EXPIRE_MS = 3200;
+const FISH_TIMING_HIT_COOLDOWN_MS = 120;
+const FISH_TIMING_TIMEOUT_FALLBACK_MS = 5800;
+const FISH_CATCH_CARD_SHOW_MS = 2400;
+const FISH_TIMING_PROFILES = {
+  common: { speed: 0.82, zoneWidth: 0.3, timeoutMs: 6200 },
+  uncommon: { speed: 0.98, zoneWidth: 0.25, timeoutMs: 5900 },
+  rare: { speed: 1.16, zoneWidth: 0.21, timeoutMs: 5600 },
+  epic: { speed: 1.36, zoneWidth: 0.17, timeoutMs: 5200 },
+  legendary: { speed: 1.54, zoneWidth: 0.14, timeoutMs: 5000 },
+  mythic: { speed: 1.72, zoneWidth: 0.12, timeoutMs: 4600 }
+};
+const FISH_METER_RARITY_WEIGHTS = {
+  common: 48,
+  uncommon: 25,
+  rare: 14,
+  epic: 8,
+  legendary: 4,
+  mythic: 1
+};
+const FISH_RARITY_ORDER = ['common', 'uncommon', 'rare', 'epic', 'legendary', 'mythic'];
+const FISH_RARITY_COLORS = {
+  common: '#cbd5e1',
+  uncommon: '#86efac',
+  rare: '#93c5fd',
+  epic: '#c084fc',
+  legendary: '#fcd34d',
+  mythic: '#f472b6'
+};
+const FISH_CATALOG = [
+  { id: 'pond-minnow', name: 'Pond Minnow', rarity: 'common', chanceLabel: '1 in 5', color: '#7dc7ff', accent: '#d8f2ff' },
+  { id: 'river-darter', name: 'River Darter', rarity: 'common', chanceLabel: '1 in 6', color: '#60a5fa', accent: '#bfdbfe' },
+  { id: 'silver-gill', name: 'Silver Gill', rarity: 'common', chanceLabel: '1 in 7', color: '#94a3b8', accent: '#e2e8f0' },
+  { id: 'mud-carp', name: 'Mud Carp', rarity: 'common', chanceLabel: '1 in 8', color: '#84cc16', accent: '#d9f99d' },
+  { id: 'reed-snapper', name: 'Reed Snapper', rarity: 'common', chanceLabel: '1 in 10', color: '#22d3ee', accent: '#a5f3fc' },
+  { id: 'striped-koi', name: 'Striped Koi', rarity: 'common', chanceLabel: '1 in 13', color: '#fb923c', accent: '#fed7aa' },
+  { id: 'coral-perch', name: 'Coral Perch', rarity: 'uncommon', chanceLabel: '1 in 18', color: '#fb7185', accent: '#fecdd3' },
+  { id: 'moon-tilapia', name: 'Moon Tilapia', rarity: 'uncommon', chanceLabel: '1 in 22', color: '#a78bfa', accent: '#ddd6fe' },
+  { id: 'drift-trout', name: 'Drift Trout', rarity: 'uncommon', chanceLabel: '1 in 26', color: '#38bdf8', accent: '#bae6fd' },
+  { id: 'amber-flounder', name: 'Amber Flounder', rarity: 'uncommon', chanceLabel: '1 in 31', color: '#f59e0b', accent: '#fde68a' },
+  { id: 'glass-catfish', name: 'Glass Catfish', rarity: 'uncommon', chanceLabel: '1 in 37', color: '#67e8f9', accent: '#ecfeff' },
+  { id: 'thunder-pike', name: 'Thunder Pike', rarity: 'rare', chanceLabel: '1 in 53', color: '#818cf8', accent: '#c7d2fe' },
+  { id: 'lava-char', name: 'Lava Char', rarity: 'rare', chanceLabel: '1 in 74', color: '#f97316', accent: '#fdba74' },
+  { id: 'ghost-bass', name: 'Ghost Bass', rarity: 'rare', chanceLabel: '1 in 102', color: '#d1d5db', accent: '#f8fafc' },
+  { id: 'cobalt-ray', name: 'Cobalt Ray', rarity: 'rare', chanceLabel: '1 in 140', color: '#2563eb', accent: '#93c5fd' },
+  { id: 'sunblade-mako', name: 'Sunblade Mako', rarity: 'epic', chanceLabel: '1 in 220', color: '#facc15', accent: '#fef08a' },
+  { id: 'prism-swordfish', name: 'Prism Swordfish', rarity: 'epic', chanceLabel: '1 in 350', color: '#8b5cf6', accent: '#ddd6fe' },
+  { id: 'deepfin-marlin', name: 'Deepfin Marlin', rarity: 'epic', chanceLabel: '1 in 560', color: '#0ea5e9', accent: '#bae6fd' },
+  { id: 'void-whalelet', name: 'Void Whalelet', rarity: 'legendary', chanceLabel: '1 in 1650', color: '#6366f1', accent: '#c7d2fe' },
+  { id: 'crown-leviathan', name: 'Crown Leviathan', rarity: 'mythic', chanceLabel: '1 in 6500', color: '#f43f5e', accent: '#fecdd3' }
+];
+const FISH_BY_ID = new Map(FISH_CATALOG.map((fish) => [fish.id, fish]));
+const FISH_CATALOG_SORTED = [...FISH_CATALOG].sort((a, b) => {
+  const rarityGap = FISH_RARITY_ORDER.indexOf(a.rarity) - FISH_RARITY_ORDER.indexOf(b.rarity);
+  if (rarityGap !== 0) return rarityGap;
+  return a.name.localeCompare(b.name);
+});
 const MINE_ENTRY_YAW = Math.atan2(MINE_ENTRY_DOCK_POS.x - MINE_ENTRY_POS.x, MINE_ENTRY_DOCK_POS.z - MINE_ENTRY_POS.z);
 
 let inMine = false;
@@ -133,11 +189,19 @@ const fishingSpots = [];
 const fishingMiniGame = {
   active: false,
   spotId: null,
-  biteAt: 0,
-  windowStart: 0,
-  windowEnd: 0,
-  expireAt: 0
+  pointer: 0,
+  direction: 1,
+  zoneCenter: 0.5,
+  zoneWidth: 0.2,
+  speed: 1,
+  timeoutAt: 0,
+  rarity: 'common'
 };
+let fishingMiniGameUiTimer = null;
+let fishCatchCardTimer = null;
+const _fishSpotWorldPos = new THREE.Vector3();
+const _fishFocusLook = new THREE.Vector3();
+const _fishFocusCameraPos = new THREE.Vector3();
 const miningAccuracyGame = {
   active: false,
   node: null,
@@ -169,6 +233,7 @@ const minimapEl = document.getElementById('mini-map');
 const minimapCtx = minimapEl.getContext('2d');
 const minimapToggleEl = document.getElementById('minimap-toggle');
 const minimapQuickToggleEl = document.getElementById('minimap-quick-toggle');
+const fishIndexToggleEl = document.getElementById('fish-index-toggle');
 const performanceToggleEl = document.getElementById('performance-toggle');
 const chatLogEl = document.getElementById('chat-log');
 const chatFormEl = document.getElementById('chat-form');
@@ -221,7 +286,24 @@ const miningPickaxeHeadEl = document.getElementById('mining-pickaxe-head');
 const miningMeterZoneEl = document.getElementById('mining-meter-green-zone');
 const miningMeterPointerEl = document.getElementById('mining-meter-pointer');
 const miningMeterStatusEl = document.getElementById('mining-meter-status');
-const gameplayPanels = ['hud', 'mini-panel', 'chat-panel', 'world-state', 'top-left-toolbar', 'inventory-bar', 'mining-meter']
+const fishingMeterEl = document.getElementById('fishing-meter');
+const fishingMeterPreviewIconEl = document.getElementById('fishing-preview-icon');
+const fishingMeterPreviewNameEl = document.getElementById('fishing-preview-name');
+const fishingMeterPreviewRarityEl = document.getElementById('fishing-preview-rarity');
+const fishingMeterZoneEl = document.getElementById('fishing-meter-green-zone');
+const fishingMeterPointerEl = document.getElementById('fishing-meter-pointer');
+const fishingMeterStatusEl = document.getElementById('fishing-meter-status');
+const fishCatchCardEl = document.getElementById('fish-catch-card');
+const fishCatchRarityEl = document.getElementById('fish-catch-rarity');
+const fishCatchIconEl = document.getElementById('fish-catch-icon');
+const fishCatchNameEl = document.getElementById('fish-catch-name');
+const fishCatchChanceEl = document.getElementById('fish-catch-chance');
+const fishCatchCountEl = document.getElementById('fish-catch-count');
+const fishIndexModalEl = document.getElementById('fish-index-modal');
+const fishIndexCloseEl = document.getElementById('fish-index-close');
+const fishIndexSummaryEl = document.getElementById('fish-index-summary');
+const fishIndexListEl = document.getElementById('fish-index-list');
+const gameplayPanels = ['hud', 'mini-panel', 'chat-panel', 'world-state', 'top-left-toolbar', 'inventory-bar', 'mining-meter', 'fishing-meter', 'fish-catch-card', 'fish-index-modal']
   .map((id) => document.getElementById(id))
   .filter(Boolean);
 
@@ -344,6 +426,7 @@ let chatPanelOpen = cachedChatOpen === null ? true : cachedChatOpen === '1';
 let pointerLocked = false;
 let minimapExpanded = false;
 let minimapEnabled = localStorage.getItem('island_minimap_enabled') !== '0';
+let fishIndexOpen = false;
 const GRAPHICS_PRESETS = ['quality', 'balanced', 'performance'];
 const legacyLowPerformanceMode = localStorage.getItem('island_low_performance_mode') === '1';
 const storedGraphicsPreset = localStorage.getItem('island_graphics_preset');
@@ -410,6 +493,23 @@ function updateMinimapQuickToggleState() {
   if (!minimapQuickToggleEl) return;
   minimapQuickToggleEl.style.filter = minimapEnabled ? 'none' : 'grayscale(0.95) brightness(0.75)';
   minimapQuickToggleEl.title = minimapEnabled ? 'Hide minimap' : 'Show minimap';
+}
+
+function updateFishIndexToggleState() {
+  if (!fishIndexToggleEl) return;
+  fishIndexToggleEl.style.filter = fishIndexOpen ? 'none' : 'grayscale(0.1) brightness(0.92)';
+  fishIndexToggleEl.title = fishIndexOpen ? 'Close fish index' : 'Open fish index';
+}
+
+function setFishIndexOpen(open) {
+  if (!isAuthenticated && open) return;
+  fishIndexOpen = Boolean(open);
+  fishIndexModalEl?.classList.toggle('hidden', !fishIndexOpen);
+  if (fishIndexOpen) {
+    setMenuOpen(false);
+    renderFishIndex();
+  }
+  updateFishIndexToggleState();
 }
 
 function updatePerformanceToggleLabel() {
@@ -558,6 +658,8 @@ function clearSessionWorld() {
   torchEquipped = false;
   resetMiningAccuracyGame();
   resetFishingMiniGame();
+  hideFishCatchCard();
+  setFishIndexOpen(false);
   closeMineWarningDialog();
   refreshConsumeActionVisibility(null);
 }
@@ -577,9 +679,12 @@ function setAuthModalOpen(open, statusText = '') {
     emoteWheelOpen = false;
     emoteWheelEl?.classList.add('hidden');
     setCustomizeModal(false);
+    setFishIndexOpen(false);
     menuOpen = false;
     menuOverlayEl?.classList.add('hidden');
     resetMiningAccuracyGame();
+    resetFishingMiniGame();
+    hideFishCatchCard();
   }
 }
 
@@ -592,7 +697,9 @@ function setMenuOpen(open) {
     emoteWheelOpen = false;
     emoteWheelEl?.classList.add('hidden');
     setCustomizeModal(false);
+    setFishIndexOpen(false);
     resetMiningAccuracyGame();
+    resetFishingMiniGame();
   }
   menuOverlayEl?.classList.toggle('hidden', !open);
 }
@@ -601,6 +708,7 @@ setAuthModalOpen(true, 'Login or create an account to continue.');
 setChatPanelOpen(chatPanelOpen);
 updateVoiceButtonLabels();
 setMinimapEnabled(minimapEnabled);
+updateFishIndexToggleState();
 updatePerformanceToggleLabel();
 applyResponsiveLayout();
 
@@ -4798,6 +4906,7 @@ function refreshConsumeActionVisibility(local) {
     && isAuthenticated
     && !mineWarningOpen
     && !menuOpen
+    && !fishIndexOpen
     && authModalEl.classList.contains('hidden')
     && customizeModalEl.classList.contains('hidden')
     && fish > 0;
@@ -4807,10 +4916,170 @@ function refreshConsumeActionVisibility(local) {
 function resetFishingMiniGame() {
   fishingMiniGame.active = false;
   fishingMiniGame.spotId = null;
-  fishingMiniGame.biteAt = 0;
-  fishingMiniGame.windowStart = 0;
-  fishingMiniGame.windowEnd = 0;
-  fishingMiniGame.expireAt = 0;
+  fishingMiniGame.pointer = 0;
+  fishingMiniGame.direction = 1;
+  fishingMiniGame.zoneCenter = 0.5;
+  fishingMiniGame.zoneWidth = 0.2;
+  fishingMiniGame.speed = 1;
+  fishingMiniGame.timeoutAt = 0;
+  fishingMiniGame.rarity = 'common';
+  if (fishingMiniGameUiTimer) {
+    clearTimeout(fishingMiniGameUiTimer);
+    fishingMiniGameUiTimer = null;
+  }
+  if (fishingMeterEl) {
+    fishingMeterEl.classList.add('hidden');
+  }
+  setFishingFocusMode(false);
+}
+
+function scheduleFishingMiniGameClose(delayMs = 180) {
+  setFishingFocusMode(false);
+  if (fishingMiniGameUiTimer) {
+    clearTimeout(fishingMiniGameUiTimer);
+    fishingMiniGameUiTimer = null;
+  }
+  fishingMiniGameUiTimer = setTimeout(() => {
+    fishingMiniGameUiTimer = null;
+    resetFishingMiniGame();
+  }, delayMs);
+}
+
+function hideFishCatchCard() {
+  if (fishCatchCardTimer) {
+    clearTimeout(fishCatchCardTimer);
+    fishCatchCardTimer = null;
+  }
+  fishCatchCardEl?.classList.add('hidden');
+}
+
+function normalizeFishRarity(value, fallback = 'common') {
+  return FISH_RARITY_ORDER.includes(value) ? value : fallback;
+}
+
+function sanitizeHexColor(value, fallback) {
+  const raw = typeof value === 'string' ? value.trim() : '';
+  if (/^#[0-9a-fA-F]{6}$/.test(raw)) return raw.toLowerCase();
+  return fallback;
+}
+
+function fishTimingProfile(rarity) {
+  return FISH_TIMING_PROFILES[normalizeFishRarity(rarity, 'common')] || {
+    speed: 1,
+    zoneWidth: 0.2,
+    timeoutMs: FISH_TIMING_TIMEOUT_FALLBACK_MS
+  };
+}
+
+function normalizeFishIndexMap(value) {
+  const next = {};
+  if (!value || typeof value !== 'object') return next;
+  for (const [id, count] of Object.entries(value)) {
+    if (!FISH_BY_ID.has(id)) continue;
+    const n = Number(count);
+    if (!Number.isFinite(n) || n <= 0) continue;
+    next[id] = Math.max(0, Math.floor(n));
+  }
+  return next;
+}
+
+function caughtFishCount(fishId) {
+  return Math.max(0, Math.floor(Number(questState.fishIndex?.[fishId]) || 0));
+}
+
+function buildFishIconMarkup(fish, options = {}) {
+  const locked = options.locked === true;
+  const compact = options.compact === true;
+  const fishColor = sanitizeHexColor(fish?.color, '#60a5fa');
+  const fishAccent = sanitizeHexColor(fish?.accent, '#bfdbfe');
+  const classes = ['fish-icon'];
+  if (compact) classes.push('compact');
+  if (locked) classes.push('locked');
+  return `<div class="${classes.join(' ')}" style="--fish-main:${fishColor};--fish-accent:${fishAccent};"><span class="tail"></span><span class="body"></span><span class="fin"></span><span class="eye"></span></div>`;
+}
+
+function applyFishIcon(el, fish, options = {}) {
+  if (!el) return;
+  el.innerHTML = buildFishIconMarkup(fish, options);
+}
+
+function fishFromServerPayload(payload) {
+  const id = typeof payload?.id === 'string' ? payload.id : '';
+  const base = FISH_BY_ID.get(id);
+  if (!base) return null;
+  const rarity = normalizeFishRarity(payload?.rarity, base.rarity);
+  return {
+    ...base,
+    rarity,
+    chanceLabel: typeof payload?.chanceLabel === 'string' && payload.chanceLabel.trim()
+      ? payload.chanceLabel.trim().slice(0, 40)
+      : base.chanceLabel,
+    color: sanitizeHexColor(payload?.color, base.color),
+    accent: sanitizeHexColor(payload?.accent, base.accent)
+  };
+}
+
+function setFishingMeterStatus(text, color = '#fef3c7') {
+  if (!fishingMeterStatusEl) return;
+  fishingMeterStatusEl.textContent = text;
+  fishingMeterStatusEl.style.color = color;
+}
+
+function setFishingFocusMode(active) {
+  document.body.classList.toggle('fishing-focus', Boolean(active));
+}
+
+function renderFishIndex() {
+  if (!fishIndexListEl) return;
+  const discovered = FISH_CATALOG_SORTED.reduce((sum, fish) => sum + (caughtFishCount(fish.id) > 0 ? 1 : 0), 0);
+  if (fishIndexSummaryEl) {
+    fishIndexSummaryEl.textContent = `Fish discovered: ${discovered} / ${FISH_CATALOG_SORTED.length}`;
+  }
+  fishIndexListEl.innerHTML = '';
+  FISH_CATALOG_SORTED.forEach((fish) => {
+    const count = caughtFishCount(fish.id);
+    const isDiscovered = count > 0;
+    const entry = document.createElement('article');
+    entry.className = `fish-entry${isDiscovered ? '' : ' locked'}`;
+    const rarityLabel = capitalizeWord(fish.rarity);
+    entry.innerHTML = `
+      <div class="icon-wrap">${buildFishIconMarkup(fish, { compact: true, locked: !isDiscovered })}</div>
+      <div class="meta">
+        <div class="name">${isDiscovered ? fish.name : 'Unknown Fish'}</div>
+        <div class="sub">${rarityLabel}${isDiscovered ? ` - ${fish.chanceLabel}` : ''}</div>
+      </div>
+      <div class="count">${isDiscovered ? `x${count}` : '---'}</div>
+    `;
+    fishIndexListEl.appendChild(entry);
+  });
+}
+
+function showFishCatchCard(fish, amount = 1) {
+  if (!fish || !fishCatchCardEl) return;
+  const rarity = normalizeFishRarity(fish.rarity, 'common');
+  if (fishCatchRarityEl) {
+    fishCatchRarityEl.textContent = capitalizeWord(rarity);
+    fishCatchRarityEl.style.borderColor = `${FISH_RARITY_COLORS[rarity] || '#cbd5e1'}80`;
+    fishCatchRarityEl.style.color = FISH_RARITY_COLORS[rarity] || '#e2e8f0';
+  }
+  if (fishCatchNameEl) {
+    fishCatchNameEl.textContent = fish.name;
+  }
+  if (fishCatchChanceEl) {
+    fishCatchChanceEl.textContent = fish.chanceLabel;
+  }
+  if (fishCatchCountEl) {
+    fishCatchCountEl.textContent = `Caught x${Math.max(1, Math.floor(Number(amount) || 1))}`;
+  }
+  applyFishIcon(fishCatchIconEl, fish);
+  fishCatchCardEl.classList.remove('hidden');
+  if (fishCatchCardTimer) {
+    clearTimeout(fishCatchCardTimer);
+  }
+  fishCatchCardTimer = setTimeout(() => {
+    fishCatchCardTimer = null;
+    fishCatchCardEl.classList.add('hidden');
+  }, FISH_CATCH_CARD_SHOW_MS);
 }
 
 function hexToCss(value, fallback = '#9ca3af') {
@@ -5059,6 +5328,33 @@ function updateMiningFocusCamera(local, delta) {
   return true;
 }
 
+function updateFishingFocusCamera(local, delta) {
+  if (!local || !fishingMiniGame.active) return false;
+  const spot = activeFishingSpot(local);
+  if (!spot) return false;
+  _fishSpotWorldPos.set(spot.x, Math.max(local.y + 0.48, 1.9), spot.z);
+  const dx = _fishSpotWorldPos.x - local.x;
+  const dz = _fishSpotWorldPos.z - local.z;
+  const len = Math.hypot(dx, dz) || 1;
+  const dirX = dx / len;
+  const dirZ = dz / len;
+  const sideX = -dirZ;
+  const sideZ = dirX;
+  const desiredX = _fishSpotWorldPos.x - dirX * FISH_FOCUS_CAMERA_BACK + sideX * FISH_FOCUS_CAMERA_SIDE;
+  const desiredY = local.y + FISH_FOCUS_CAMERA_HEIGHT;
+  const desiredZ = _fishSpotWorldPos.z - dirZ * FISH_FOCUS_CAMERA_BACK + sideZ * FISH_FOCUS_CAMERA_SIDE;
+
+  _fishFocusCameraPos.set(desiredX, desiredY, desiredZ);
+  _fishFocusLook.set(_fishSpotWorldPos.x, _fishSpotWorldPos.y + 0.14, _fishSpotWorldPos.z);
+
+  camera.position.x += (_fishFocusCameraPos.x - camera.position.x) * Math.min(1, delta * 10.8);
+  camera.position.y += (_fishFocusCameraPos.y - camera.position.y) * Math.min(1, delta * 10.8);
+  camera.position.z += (_fishFocusCameraPos.z - camera.position.z) * Math.min(1, delta * 10.8);
+  camera.lookAt(_fishFocusLook);
+  local.mesh.visible = true;
+  return true;
+}
+
 function applyProgressState(progress) {
   if (!progress || typeof progress !== 'object') return;
   questState.coins = Math.max(0, Math.floor(Number(progress.coins) || 0));
@@ -5076,6 +5372,7 @@ function applyProgressState(progress) {
   questState.inventory.fish = Number.isFinite(fishCount)
     ? Math.max(0, Math.floor(fishCount))
     : 0;
+  questState.fishIndex = normalizeFishIndexMap(progress.fishIndex);
   questState.hasFishingRod = progress.hasFishingRod === true;
   questState.maxStaminaBonusPct = Math.max(0, Math.min(50, Math.floor(Number(progress.maxStaminaBonusPct) || 0)));
   if (questState.inventory.torch <= 0) {
@@ -5091,6 +5388,9 @@ function applyProgressState(progress) {
   questState.quest = progress.quest ? { ...progress.quest } : null;
   syncLocalHeldGear();
   renderInventoryBar();
+  if (fishIndexOpen) {
+    renderFishIndex();
+  }
   refreshConsumeActionVisibility(local);
   updateQuestPanel();
 }
@@ -5847,48 +6147,112 @@ function findFishingSpotById(id) {
   return fishingSpots.find((spot) => spot.id === id) || null;
 }
 
-function startFishingMinigame(spot) {
-  resetFishingMiniGame();
-  const now = Date.now();
-  const biteDelay = FISH_BITE_MIN_MS + Math.random() * (FISH_BITE_MAX_MS - FISH_BITE_MIN_MS);
-  fishingMiniGame.active = true;
-  fishingMiniGame.spotId = spot.id;
-  fishingMiniGame.biteAt = now + biteDelay;
-  fishingMiniGame.windowStart = fishingMiniGame.biteAt;
-  fishingMiniGame.windowEnd = fishingMiniGame.biteAt + FISH_HIT_WINDOW_MS;
-  fishingMiniGame.expireAt = fishingMiniGame.windowEnd + FISH_MINIGAME_EXPIRE_MS;
-  updateQuestPanel('Cast line... press E when the fish bites.');
-  appendChatLine({ text: 'Cast line. Press E when you see a bite window.', isSystem: true });
+function randomFishRarityForMeter() {
+  const entries = Object.entries(FISH_METER_RARITY_WEIGHTS);
+  const total = entries.reduce((sum, [, weight]) => sum + Math.max(0, Number(weight) || 0), 0) || 1;
+  let roll = Math.random() * total;
+  for (const [rarity, weight] of entries) {
+    roll -= Math.max(0, Number(weight) || 0);
+    if (roll <= 0) return normalizeFishRarity(rarity, 'common');
+  }
+  return 'common';
 }
 
-function tryFishingSpotInteract(local) {
-  if (!local || inMine || inLighthouseInterior || local.onBoat) return false;
-  const spot = nearestFishingSpot(local);
+function randomFishForRarity(rarity) {
+  const safeRarity = normalizeFishRarity(rarity, 'common');
+  const pool = FISH_CATALOG.filter((fish) => fish.rarity === safeRarity);
+  if (pool.length <= 0) return FISH_CATALOG[0];
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+function activeFishingSpot(local) {
+  if (!local || !fishingMiniGame.active) return null;
+  const spot = findFishingSpotById(fishingMiniGame.spotId);
+  if (!spot) return null;
+  if (distance2D(local, spot) > FISHING_SPOT_RADIUS + 2.8) return null;
+  return spot;
+}
+
+function startFishingMinigame(spot) {
   if (!spot) return false;
-  if (!questState.hasFishingRod) {
-    appendChatLine({ text: 'You need a fishing rod first.', isSystem: true });
-    updateQuestPanel('Buy a fishing rod at the Fishing island vendor.');
-    return true;
+  resetFishingMiniGame();
+  const rarity = randomFishRarityForMeter();
+  const profile = fishTimingProfile(rarity);
+  const zoneWidth = THREE.MathUtils.clamp(profile.zoneWidth, 0.09, 0.34);
+  const half = zoneWidth * 0.5;
+  const minCenter = half + 0.06;
+  const maxCenter = 1 - half - 0.06;
+  const zoneCenter = minCenter + Math.random() * Math.max(0.01, maxCenter - minCenter);
+  const previewFish = randomFishForRarity(rarity);
+
+  fishingMiniGame.active = true;
+  fishingMiniGame.spotId = spot.id;
+  fishingMiniGame.pointer = 0.08 + Math.random() * 0.84;
+  fishingMiniGame.direction = Math.random() < 0.5 ? -1 : 1;
+  fishingMiniGame.zoneCenter = zoneCenter;
+  fishingMiniGame.zoneWidth = zoneWidth;
+  fishingMiniGame.speed = Math.max(0.6, Number(profile.speed) || 1);
+  fishingMiniGame.timeoutAt = performance.now() + Math.max(1500, Number(profile.timeoutMs) || FISH_TIMING_TIMEOUT_FALLBACK_MS);
+  fishingMiniGame.rarity = rarity;
+
+  if (fishingMeterZoneEl) {
+    fishingMeterZoneEl.style.left = `${((zoneCenter - half) * 100).toFixed(2)}%`;
+    fishingMeterZoneEl.style.width = `${(zoneWidth * 100).toFixed(2)}%`;
   }
-  const now = Date.now();
-  if (!fishingMiniGame.active || fishingMiniGame.spotId !== spot.id) {
-    startFishingMinigame(spot);
-    return true;
+  if (fishingMeterPointerEl) {
+    fishingMeterPointerEl.style.left = `${(fishingMiniGame.pointer * 100).toFixed(2)}%`;
   }
-  if (now < fishingMiniGame.windowStart) {
+  if (fishingMeterPreviewNameEl) {
+    fishingMeterPreviewNameEl.textContent = 'Unknown Catch';
+  }
+  if (fishingMeterPreviewRarityEl) {
+    fishingMeterPreviewRarityEl.textContent = `${capitalizeWord(rarity)} difficulty`;
+    fishingMeterPreviewRarityEl.style.color = FISH_RARITY_COLORS[rarity] || '#93c5fd';
+  }
+  applyFishIcon(fishingMeterPreviewIconEl, previewFish, { locked: true });
+  setFishingMeterStatus('Press E or click while marker is in green.', '#fef3c7');
+  fishingMeterEl?.classList.remove('hidden');
+  setFishingFocusMode(true);
+  updateQuestPanel('Line is tight. Hit the green zone to hook fish.');
+  appendChatLine({ text: `Fishing started: ${capitalizeWord(rarity)} timing.`, isSystem: true });
+  return true;
+}
+
+function attemptFishingTimingHit(local) {
+  if (!fishingMiniGame.active) return false;
+  const now = performance.now();
+  if (now - lastMineAt < FISH_TIMING_HIT_COOLDOWN_MS) return true;
+  lastMineAt = now;
+
+  if (!local || inMine || inLighthouseInterior || local.onBoat) {
     resetFishingMiniGame();
-    updateQuestPanel('Too early. The fish got spooked.');
-    appendChatLine({ text: 'Too early. Cast again and wait for the bite.', isSystem: true });
     return true;
   }
-  if (now > fishingMiniGame.windowEnd) {
-    resetFishingMiniGame();
-    updateQuestPanel('Too late. The fish got away.');
-    appendChatLine({ text: 'Too late. Cast again.', isSystem: true });
+  const spot = activeFishingSpot(local);
+  if (!spot) {
+    fishingMiniGame.active = false;
+    setFishingMeterStatus('Fishing canceled. Move back to the fishing spot.', '#fecaca');
+    scheduleFishingMiniGameClose(180);
+    updateQuestPanel('Fishing canceled. Move closer to the fishing spot.');
     return true;
   }
 
-  resetFishingMiniGame();
+  const zoneHalf = fishingMiniGame.zoneWidth * 0.5;
+  const zoneMin = fishingMiniGame.zoneCenter - zoneHalf;
+  const zoneMax = fishingMiniGame.zoneCenter + zoneHalf;
+  const hit = fishingMiniGame.pointer >= zoneMin && fishingMiniGame.pointer <= zoneMax;
+  fishingMiniGame.active = false;
+
+  if (!hit) {
+    setFishingMeterStatus('Missed timing. Fish escaped.', '#fecaca');
+    scheduleFishingMiniGameClose(170);
+    updateQuestPanel('Missed fish timing. Cast again.');
+    appendChatLine({ text: 'Missed timing. Cast again.', isSystem: true });
+    return true;
+  }
+
+  setFishingMeterStatus('Great hit! Reeling fish...', '#86efac');
+  scheduleFishingMiniGameClose(180);
   socket.emit('fish:catch', {}, (resp) => {
     if (!resp?.ok) {
       updateQuestPanel(resp?.error || 'Could not catch fish.');
@@ -5898,37 +6262,84 @@ function tryFishingSpotInteract(local) {
     if (resp.progress) {
       applyProgressState(resp.progress);
     }
-    updateQuestPanel('Caught fish successfully.');
-    appendChatLine({ text: 'Caught 1 fish.', isSystem: true });
+    const fish = fishFromServerPayload(resp?.caughtFish);
+    if (!fish) {
+      updateQuestPanel('Caught fish successfully.');
+      appendChatLine({ text: 'Caught 1 fish.', isSystem: true });
+      return;
+    }
+    const fishCount = Math.max(1, Math.floor(Number(resp?.fishCaughtCount) || 1));
+    showFishCatchCard(fish, fishCount);
+    renderFishIndex();
+    updateQuestPanel(`Caught ${fish.name} (${capitalizeWord(fish.rarity)}).`);
+    appendChatLine({ text: `Caught ${fish.name} (${capitalizeWord(fish.rarity)}).`, isSystem: true });
   });
   return true;
 }
 
-function updateFishingMinigame(local, nowMs) {
-  const wallNow = Date.now();
+function tryFishingSpotInteract(local) {
+  if (!local || inMine || inLighthouseInterior || local.onBoat) return false;
+  if (!questState.hasFishingRod) {
+    appendChatLine({ text: 'You need a fishing rod first.', isSystem: true });
+    updateQuestPanel('Buy a fishing rod at the Fishing island vendor.');
+    return true;
+  }
+  if (fishingMiniGame.active) {
+    return attemptFishingTimingHit(local);
+  }
+  const spot = nearestFishingSpot(local);
+  if (!spot) return false;
+  return startFishingMinigame(spot);
+}
+
+function updateFishingMinigame(local, nowMs, delta) {
   for (const spot of fishingSpots) {
     if (!spot.marker) continue;
     const pulse = 0.9 + Math.sin(nowMs * 0.004 + spot.x * 0.03) * 0.1;
     spot.marker.scale.setScalar(pulse);
   }
   if (!fishingMiniGame.active) return;
-  if (!local || !questState.hasFishingRod || inMine || inLighthouseInterior || local.onBoat) {
+  if (
+    !local
+    || !questState.hasFishingRod
+    || inMine
+    || inLighthouseInterior
+    || local.onBoat
+    || menuOpen
+    || mineWarningOpen
+    || npcDialogueOpen
+    || fishIndexOpen
+    || !customizeModalEl.classList.contains('hidden')
+  ) {
     resetFishingMiniGame();
     return;
   }
-  const spot = findFishingSpotById(fishingMiniGame.spotId);
+  const spot = activeFishingSpot(local);
   if (!spot) {
-    resetFishingMiniGame();
-    return;
-  }
-  if (distance2D(local, spot) > FISHING_SPOT_RADIUS + 2.8) {
-    resetFishingMiniGame();
+    fishingMiniGame.active = false;
+    setFishingMeterStatus('Fishing canceled. Move back to the fishing spot.', '#fecaca');
+    scheduleFishingMiniGameClose(170);
     updateQuestPanel('Fishing canceled. Move back to a fishing spot.');
     return;
   }
-  if (wallNow > fishingMiniGame.expireAt) {
-    resetFishingMiniGame();
+  if (nowMs > fishingMiniGame.timeoutAt) {
+    fishingMiniGame.active = false;
+    setFishingMeterStatus('Too slow. Fish got away.', '#fecaca');
+    scheduleFishingMiniGameClose(170);
     updateQuestPanel('Fish got away. Cast again.');
+    return;
+  }
+  let pointer = fishingMiniGame.pointer + delta * fishingMiniGame.speed * fishingMiniGame.direction;
+  if (pointer > 1) {
+    pointer = 2 - pointer;
+    fishingMiniGame.direction = -1;
+  } else if (pointer < 0) {
+    pointer = -pointer;
+    fishingMiniGame.direction = 1;
+  }
+  fishingMiniGame.pointer = THREE.MathUtils.clamp(pointer, 0, 1);
+  if (fishingMeterPointerEl) {
+    fishingMeterPointerEl.style.left = `${(fishingMiniGame.pointer * 100).toFixed(2)}%`;
   }
 }
 
@@ -6225,6 +6636,7 @@ function tryAutoTeleport(local, now = performance.now()) {
 function hasManualInteractTarget(local) {
   if (!local) return false;
   if (npcDialogueOpen) return true;
+  if (fishingMiniGame.active) return true;
   if (isTeleporting) return false;
 
   const nearMineExit = inMine && distance2D(local, MINE_EXIT_POS) < 3.1;
@@ -6258,6 +6670,7 @@ function updateMobileUseButtonVisibility(local) {
     && isAuthenticated
     && !mineWarningOpen
     && !menuOpen
+    && !fishIndexOpen
     && authModalEl.classList.contains('hidden')
     && customizeModalEl.classList.contains('hidden')
     && hasManualInteractTarget(local);
@@ -6266,7 +6679,7 @@ function updateMobileUseButtonVisibility(local) {
 }
 
 function tryInteract() {
-  if (!isAuthenticated || menuOpen || !customizeModalEl.classList.contains('hidden')) return;
+  if (!isAuthenticated || menuOpen || fishIndexOpen || !customizeModalEl.classList.contains('hidden')) return;
   if (mineWarningOpen) return;
   if (npcDialogueOpen) {
     if (typeof npcDialoguePrimaryAction === 'function') npcDialoguePrimaryAction();
@@ -6294,6 +6707,11 @@ function tryInteract() {
     runTeleportTransition('exit-mine', () => {
       exitMineToEntrance(local);
     });
+    lastInteractAt = now;
+    return;
+  }
+
+  if (fishingMiniGame.active && tryFishingSpotInteract(local)) {
     lastInteractAt = now;
     return;
   }
@@ -6595,6 +7013,10 @@ window.addEventListener('keydown', (event) => {
       setCustomizeModal(false);
       return;
     }
+    if (fishIndexOpen) {
+      setFishIndexOpen(false);
+      return;
+    }
     setMenuOpen(!menuOpen);
     return;
   }
@@ -6611,6 +7033,7 @@ window.addEventListener('keydown', (event) => {
     isAuthenticated &&
     authModalEl.classList.contains('hidden') &&
     customizeModalEl.classList.contains('hidden') &&
+    !fishIndexOpen &&
     !typingInInput
   ) {
     event.preventDefault();
@@ -6626,6 +7049,7 @@ window.addEventListener('keydown', (event) => {
     isAuthenticated &&
     authModalEl.classList.contains('hidden') &&
     customizeModalEl.classList.contains('hidden') &&
+    !fishIndexOpen &&
     !typingInInput
   ) {
     event.preventDefault();
@@ -6643,6 +7067,7 @@ window.addEventListener('keydown', (event) => {
     isAuthenticated &&
     authModalEl.classList.contains('hidden') &&
     customizeModalEl.classList.contains('hidden') &&
+    !fishIndexOpen &&
     !typingInInput
   ) {
     event.preventDefault();
@@ -6650,7 +7075,7 @@ window.addEventListener('keydown', (event) => {
     return;
   }
 
-  if (!isAuthenticated || menuOpen || !customizeModalEl.classList.contains('hidden')) return;
+  if (!isAuthenticated || menuOpen || fishIndexOpen || !customizeModalEl.classList.contains('hidden')) return;
   if (typingInInput) return;
   if (key === 't' && !event.repeat) {
     event.preventDefault();
@@ -6692,7 +7117,7 @@ window.addEventListener('keyup', (event) => {
   const key = event.key.toLowerCase();
   // Always release keys even while menus/modals are open, so input cannot get stuck.
   keys.delete(key);
-  if (!isAuthenticated || menuOpen || !customizeModalEl.classList.contains('hidden')) return;
+  if (!isAuthenticated || menuOpen || fishIndexOpen || !customizeModalEl.classList.contains('hidden')) return;
   if (key === 'q') {
     emoteWheelOpen = false;
     emoteWheelEl?.classList.add('hidden');
@@ -7070,6 +7495,10 @@ minimapToggleEl?.addEventListener('click', () => {
 minimapQuickToggleEl?.addEventListener('click', () => {
   setMinimapEnabled(!minimapEnabled);
 });
+fishIndexToggleEl?.addEventListener('click', () => {
+  if (!isAuthenticated) return;
+  setFishIndexOpen(!fishIndexOpen);
+});
 performanceToggleEl?.addEventListener('click', () => {
   const currentIdx = GRAPHICS_PRESETS.indexOf(graphicsPreset);
   const nextIdx = currentIdx >= 0 ? (currentIdx + 1) % GRAPHICS_PRESETS.length : 0;
@@ -7109,6 +7538,10 @@ customizeOpenEl?.addEventListener('click', () => {
 customizeCloseEl?.addEventListener('click', () => setCustomizeModal(false));
 customizeModalEl?.addEventListener('click', (event) => {
   if (event.target === customizeModalEl) setCustomizeModal(false);
+});
+fishIndexCloseEl?.addEventListener('click', () => setFishIndexOpen(false));
+fishIndexModalEl?.addEventListener('click', (event) => {
+  if (event.target === fishIndexModalEl) setFishIndexOpen(false);
 });
 
 emoteButtons.forEach((button) => {
@@ -7152,6 +7585,13 @@ miningMeterEl?.addEventListener('pointerdown', (event) => {
   event.preventDefault();
   event.stopPropagation();
   attemptMiningAccuracyHit(players.get(localPlayerId));
+});
+fishingMeterEl?.addEventListener('pointerdown', (event) => {
+  if (!fishingMiniGame.active) return;
+  if (typeof event.button === 'number' && event.button !== 0) return;
+  event.preventDefault();
+  event.stopPropagation();
+  attemptFishingTimingHit(players.get(localPlayerId));
 });
 
 window.addEventListener('resize', () => {
@@ -7232,13 +7672,13 @@ joystickEl.addEventListener('pointerup', (event) => {
 joystickEl.addEventListener('pointercancel', resetJoystick);
 
 mobileJumpEl?.addEventListener('click', () => {
-  if (!isAuthenticated || menuOpen || !customizeModalEl.classList.contains('hidden')) return;
+  if (!isAuthenticated || menuOpen || fishIndexOpen || !customizeModalEl.classList.contains('hidden')) return;
   pendingJump = true;
 });
 mobileUseEl?.addEventListener('click', tryInteract);
 mobileConsumeEl?.addEventListener('click', () => consumeFish(1));
 mobileEmoteEl?.addEventListener('click', () => {
-  if (!isAuthenticated || menuOpen || !customizeModalEl.classList.contains('hidden')) return;
+  if (!isAuthenticated || menuOpen || fishIndexOpen || !customizeModalEl.classList.contains('hidden')) return;
   triggerEmote('dance');
 });
 
@@ -7288,6 +7728,11 @@ function clampGameplayCameraPitch(value) {
 renderer.domElement.addEventListener('pointerdown', (event) => {
   if (event.button === 0) {
     const local = players.get(localPlayerId);
+    if (fishingMiniGame.active) {
+      event.preventDefault();
+      attemptFishingTimingHit(local);
+      return;
+    }
     if (miningAccuracyGame.active) {
       event.preventDefault();
       attemptMiningAccuracyHit(local);
@@ -7297,6 +7742,7 @@ renderer.domElement.addEventListener('pointerdown', (event) => {
       && isAuthenticated
       && inMine
       && !menuOpen
+      && !fishIndexOpen
       && !mineWarningOpen
       && !npcDialogueOpen
       && customizeModalEl.classList.contains('hidden');
@@ -7315,7 +7761,7 @@ renderer.domElement.addEventListener('pointerdown', (event) => {
 });
 
 renderer.domElement.addEventListener('pointermove', (event) => {
-  if (miningAccuracyGame.active) return;
+  if (miningAccuracyGame.active || fishingMiniGame.active) return;
   if (pointerLocked) {
     cameraYaw -= (event.movementX || 0) * 0.0038;
     cameraPitch = clampGameplayCameraPitch(cameraPitch - (event.movementY || 0) * 0.0038);
@@ -7455,10 +7901,10 @@ function rotatePlayerTowards(player, targetYaw, delta, speed) {
 }
 
 function updateLocalPlayer(delta, nowMs) {
-  if (!isAuthenticated || menuOpen || !customizeModalEl.classList.contains('hidden')) return;
+  if (!isAuthenticated || menuOpen || fishIndexOpen || !customizeModalEl.classList.contains('hidden')) return;
   const local = players.get(localPlayerId);
   if (!local) return;
-  if (miningAccuracyGame.active) {
+  if (miningAccuracyGame.active || fishingMiniGame.active) {
     local.animSpeed = 0;
     local.vy = 0;
     if (!Number.isFinite(local.targetYaw)) {
@@ -7758,14 +8204,7 @@ function updateInteractionHint() {
     return;
   }
   if (fishingMiniGame.active) {
-    const now = Date.now();
-    if (now >= fishingMiniGame.windowStart && now <= fishingMiniGame.windowEnd) {
-      interactHintEl.textContent = 'Fish biting now. Press E!';
-    } else if (now < fishingMiniGame.windowStart) {
-      interactHintEl.textContent = 'Fishing... wait for a bite then press E';
-    } else {
-      interactHintEl.textContent = 'Fishing window missed. Press E to cast again';
-    }
+    interactHintEl.textContent = 'Fishing meter active: click or press E while marker is in green';
     return;
   }
   if (isNearFishingVendor(local)) {
@@ -8007,7 +8446,7 @@ function animate(nowMs) {
   updateLocalPlayer(delta, nowMs);
   updateRemotePlayers(delta);
   const localForMinigames = players.get(localPlayerId);
-  updateFishingMinigame(localForMinigames, nowMs);
+  updateFishingMinigame(localForMinigames, nowMs, delta);
   updateMiningAccuracyGame(localForMinigames, nowMs, delta);
   updateInteractionHint();
   updatePlayerEmotes(Date.now(), delta);
@@ -8030,8 +8469,9 @@ function animate(nowMs) {
   const local = players.get(localPlayerId);
   updateTorchLight(local, nowMs);
   if (local) {
-    const miningCameraLocked = updateMiningFocusCamera(local, delta);
-    if (!miningCameraLocked) {
+    const fishingCameraLocked = updateFishingFocusCamera(local, delta);
+    const miningCameraLocked = !fishingCameraLocked && updateMiningFocusCamera(local, delta);
+    if (!fishingCameraLocked && !miningCameraLocked) {
       const headTrackY = local.y + (local.isSwimming ? 1.15 : 1.78);
       if (firstPersonEnabled) {
       local.mesh.visible = false;

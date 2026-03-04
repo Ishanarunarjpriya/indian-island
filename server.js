@@ -92,6 +92,31 @@ const FISH_SELL_PRICE = 20;
 const MAX_STAMINA_BONUS_PCT = 50;
 const FISH_STAMINA_GAIN_PER_FISH = 5;
 const FISH_CATCH_COOLDOWN_MS = 1800;
+const FISH_SPECIES = [
+  { id: 'pond-minnow', name: 'Pond Minnow', rarity: 'common', chanceLabel: '1 in 5', color: '#7dc7ff', accent: '#d8f2ff', weight: 2800 },
+  { id: 'river-darter', name: 'River Darter', rarity: 'common', chanceLabel: '1 in 6', color: '#60a5fa', accent: '#bfdbfe', weight: 2200 },
+  { id: 'silver-gill', name: 'Silver Gill', rarity: 'common', chanceLabel: '1 in 7', color: '#94a3b8', accent: '#e2e8f0', weight: 1900 },
+  { id: 'mud-carp', name: 'Mud Carp', rarity: 'common', chanceLabel: '1 in 8', color: '#84cc16', accent: '#d9f99d', weight: 1600 },
+  { id: 'reed-snapper', name: 'Reed Snapper', rarity: 'common', chanceLabel: '1 in 10', color: '#22d3ee', accent: '#a5f3fc', weight: 1300 },
+  { id: 'striped-koi', name: 'Striped Koi', rarity: 'common', chanceLabel: '1 in 13', color: '#fb923c', accent: '#fed7aa', weight: 1000 },
+  { id: 'coral-perch', name: 'Coral Perch', rarity: 'uncommon', chanceLabel: '1 in 18', color: '#fb7185', accent: '#fecdd3', weight: 760 },
+  { id: 'moon-tilapia', name: 'Moon Tilapia', rarity: 'uncommon', chanceLabel: '1 in 22', color: '#a78bfa', accent: '#ddd6fe', weight: 620 },
+  { id: 'drift-trout', name: 'Drift Trout', rarity: 'uncommon', chanceLabel: '1 in 26', color: '#38bdf8', accent: '#bae6fd', weight: 520 },
+  { id: 'amber-flounder', name: 'Amber Flounder', rarity: 'uncommon', chanceLabel: '1 in 31', color: '#f59e0b', accent: '#fde68a', weight: 430 },
+  { id: 'glass-catfish', name: 'Glass Catfish', rarity: 'uncommon', chanceLabel: '1 in 37', color: '#67e8f9', accent: '#ecfeff', weight: 360 },
+  { id: 'thunder-pike', name: 'Thunder Pike', rarity: 'rare', chanceLabel: '1 in 53', color: '#818cf8', accent: '#c7d2fe', weight: 250 },
+  { id: 'lava-char', name: 'Lava Char', rarity: 'rare', chanceLabel: '1 in 74', color: '#f97316', accent: '#fdba74', weight: 180 },
+  { id: 'ghost-bass', name: 'Ghost Bass', rarity: 'rare', chanceLabel: '1 in 102', color: '#d1d5db', accent: '#f8fafc', weight: 130 },
+  { id: 'cobalt-ray', name: 'Cobalt Ray', rarity: 'rare', chanceLabel: '1 in 140', color: '#2563eb', accent: '#93c5fd', weight: 95 },
+  { id: 'sunblade-mako', name: 'Sunblade Mako', rarity: 'epic', chanceLabel: '1 in 220', color: '#facc15', accent: '#fef08a', weight: 60 },
+  { id: 'prism-swordfish', name: 'Prism Swordfish', rarity: 'epic', chanceLabel: '1 in 350', color: '#8b5cf6', accent: '#ddd6fe', weight: 38 },
+  { id: 'deepfin-marlin', name: 'Deepfin Marlin', rarity: 'epic', chanceLabel: '1 in 560', color: '#0ea5e9', accent: '#bae6fd', weight: 24 },
+  { id: 'void-whalelet', name: 'Void Whalelet', rarity: 'legendary', chanceLabel: '1 in 1650', color: '#6366f1', accent: '#c7d2fe', weight: 8 },
+  { id: 'crown-leviathan', name: 'Crown Leviathan', rarity: 'mythic', chanceLabel: '1 in 6500', color: '#f43f5e', accent: '#fecdd3', weight: 2 }
+];
+const FISH_SPECIES_BY_ID = new Map(FISH_SPECIES.map((fish) => [fish.id, fish]));
+const FISH_SPECIES_IDS = new Set(FISH_SPECIES.map((fish) => fish.id));
+const FISH_SPECIES_WEIGHT_TOTAL = FISH_SPECIES.reduce((sum, fish) => sum + Math.max(0, Number(fish.weight) || 0), 0);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -333,6 +358,7 @@ function defaultProgress() {
     coins: 0,
     pickaxe: 'wood',
     inventory: defaultInventory(),
+    fishIndex: {},
     hasFishingRod: false,
     maxStaminaBonusPct: 0,
     questSeed: 1,
@@ -355,6 +381,18 @@ function sanitizeInventory(value) {
     }
   }
   return base;
+}
+
+function sanitizeFishIndex(value) {
+  const cleaned = {};
+  if (!value || typeof value !== 'object') return cleaned;
+  for (const [fishId, count] of Object.entries(value)) {
+    if (!FISH_SPECIES_IDS.has(fishId)) continue;
+    const n = Number(count);
+    if (!Number.isFinite(n) || n <= 0) continue;
+    cleaned[fishId] = clamp(Math.floor(n), 1, 1_000_000);
+  }
+  return cleaned;
 }
 
 function sanitizeQuest(value, fallbackSeed = 1) {
@@ -390,6 +428,7 @@ function sanitizeProgress(value) {
     coins: clamp(Math.floor(Number(value.coins) || 0), 0, 100_000_000),
     pickaxe: sanitizePickaxe(value.pickaxe, 'wood'),
     inventory: sanitizeInventory(value.inventory),
+    fishIndex: sanitizeFishIndex(value.fishIndex),
     hasFishingRod: value.hasFishingRod === true,
     maxStaminaBonusPct,
     questSeed,
@@ -407,6 +446,7 @@ function progressSnapshot(progress) {
     coins: progress.coins,
     pickaxe: progress.pickaxe,
     inventory: { ...progress.inventory },
+    fishIndex: { ...(progress.fishIndex || {}) },
     hasFishingRod: progress.hasFishingRod === true,
     maxStaminaBonusPct: clamp(Math.floor(Number(progress.maxStaminaBonusPct) || 0), 0, MAX_STAMINA_BONUS_PCT),
     questSeed: progress.questSeed,
@@ -416,6 +456,28 @@ function progressSnapshot(progress) {
       price: { ...PICKAXE_PRICE }
     }
   };
+}
+
+function fishCatchSnapshot(fish) {
+  if (!fish || typeof fish !== 'object') return null;
+  return {
+    id: fish.id,
+    name: fish.name,
+    rarity: fish.rarity,
+    chanceLabel: fish.chanceLabel,
+    color: fish.color,
+    accent: fish.accent
+  };
+}
+
+function rollRandomFishSpecies() {
+  if (!FISH_SPECIES.length) return null;
+  let roll = Math.random() * Math.max(1, FISH_SPECIES_WEIGHT_TOTAL);
+  for (const fish of FISH_SPECIES) {
+    roll -= Math.max(0, Number(fish.weight) || 0);
+    if (roll <= 0) return fish;
+  }
+  return FISH_SPECIES[0];
 }
 
 function sanitizeAppearance(input, fallback) {
@@ -1158,10 +1220,28 @@ io.on('connection', (socket) => {
       return;
     }
     socket.data.lastFishCatchAt = now;
+    const caughtFish = rollRandomFishSpecies();
+    if (!caughtFish || !FISH_SPECIES_BY_ID.has(caughtFish.id)) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'No fish available right now. Try again.' });
+      return;
+    }
     progress.inventory.fish = clamp((progress.inventory.fish || 0) + 1, 0, 1_000_000);
+    if (!progress.fishIndex || typeof progress.fishIndex !== 'object') {
+      progress.fishIndex = {};
+    }
+    progress.fishIndex[caughtFish.id] = clamp((progress.fishIndex[caughtFish.id] || 0) + 1, 1, 1_000_000);
     persistPlayerProgress(actor, { immediate: true });
     emitProgress(socket, actor);
-    if (typeof ack === 'function') ack({ ok: true, caught: 1, fish: progress.inventory.fish, progress: progressSnapshot(progress) });
+    if (typeof ack === 'function') {
+      ack({
+        ok: true,
+        caught: 1,
+        fish: progress.inventory.fish,
+        fishCaughtCount: progress.fishIndex[caughtFish.id],
+        caughtFish: fishCatchSnapshot(caughtFish),
+        progress: progressSnapshot(progress)
+      });
+    }
   });
 
   socket.on('fish:sell', (payload, ack) => {
