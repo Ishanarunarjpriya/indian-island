@@ -1557,8 +1557,10 @@ function addFishingIsland() {
     vendor
   });
   vendor.position.z = -0.46;
+  const fishingHouseYaw = Math.atan2(-FISHING_VENDOR_POS.x, -FISHING_VENDOR_POS.z);
+  addWoodHouse(FISHING_VENDOR_POS.x, FISHING_VENDOR_POS.z, fishingHouseYaw);
   stall.position.set(FISHING_VENDOR_POS.x, 0, FISHING_VENDOR_POS.z);
-  stall.rotation.y = Math.atan2(-FISHING_VENDOR_POS.x, -FISHING_VENDOR_POS.z);
+  stall.rotation.y = fishingHouseYaw;
   scene.add(stall);
   addWorldCollider(FISHING_VENDOR_POS.x, FISHING_VENDOR_POS.z, 1.04, 'npc');
 
@@ -1628,8 +1630,10 @@ function addMarketIsland() {
     vendor
   });
   vendor.position.z = -0.5;
+  const marketHouseYaw = Math.atan2(-MARKET_VENDOR_POS.x, -MARKET_VENDOR_POS.z);
+  addWoodHouse(MARKET_VENDOR_POS.x, MARKET_VENDOR_POS.z, marketHouseYaw);
   stall.position.set(MARKET_VENDOR_POS.x, 0, MARKET_VENDOR_POS.z);
-  stall.rotation.y = Math.atan2(-MARKET_VENDOR_POS.x, -MARKET_VENDOR_POS.z);
+  stall.rotation.y = marketHouseYaw;
   scene.add(stall);
   addWorldCollider(MARKET_VENDOR_POS.x, MARKET_VENDOR_POS.z, 1.04, 'npc');
 }

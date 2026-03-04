@@ -22,7 +22,8 @@
         "stone": 0,
         "iron": 0,
         "gold": 0,
-        "diamond": 0
+        "diamond": 0,
+        "torch": 1
       },
       "questSeed": 1,
       "quest": {
@@ -62,7 +63,8 @@
         "stone": 0,
         "iron": 0,
         "gold": 0,
-        "diamond": 0
+        "diamond": 0,
+        "torch": 1
       },
       "questSeed": 1,
       "quest": {
@@ -79,84 +81,31 @@
       }
     }
   },
-  "acct-guest_62532r69": {
-    "name": "guest_62532r69",
-    "color": "#b4f5f6",
-    "appearance": {
-      "skin": "#f3cfb3",
-      "shirt": "#b4f5f6",
-      "pants": "#334155",
-      "shoes": "#111827",
-      "hairStyle": "short",
-      "hairColor": "#2b211c",
-      "faceStyle": "smile",
-      "accessories": []
-    },
+  "acct-devansh_testing": {
+    "name": "devansh_testing",
+    "color": "#38bdf8",
+    "appearance": {},
     "x": null,
     "y": null,
     "z": null,
-    "progress": {
-      "coins": 0,
-      "pickaxe": "wood",
-      "inventory": {
-        "stone": 0,
-        "iron": 0,
-        "gold": 0,
-        "diamond": 0
-      },
-      "questSeed": 1,
-      "quest": {
-        "id": "q-1772384442249-1",
-        "type": "mine",
-        "resource": "iron",
-        "targetCount": 15,
-        "progress": 0,
-        "rewardCoins": 132,
-        "rewardDiamonds": 0,
-        "title": "Mine 15 ore",
-        "description": "Collect 15 ore chunks in the mine.",
-        "status": "available"
-      }
-    }
+    "progress": {}
+  },
+  "acct-guest_62532r69": {
+    "name": "guest_62532r69",
+    "color": "#38bdf8",
+    "appearance": {},
+    "x": null,
+    "y": null,
+    "z": null,
+    "progress": {}
   },
   "acct-guest_l483w1m4": {
     "name": "guest_l483w1m4",
-    "color": "#ddc6b4",
-    "appearance": {
-      "skin": "#f3cfb3",
-      "shirt": "#ddc6b4",
-      "pants": "#334155",
-      "shoes": "#111827",
-      "hairStyle": "short",
-      "hairColor": "#2b211c",
-      "faceStyle": "smile",
-      "accessories": []
-    },
-    "x": 68.76858311398021,
-    "y": 1.3521342999883306,
-    "z": -73.7483106260018,
-    "progress": {
-      "coins": 0,
-      "pickaxe": "wood",
-      "inventory": {
-        "stone": 0,
-        "iron": 0,
-        "gold": 0,
-        "diamond": 0
-      },
-      "questSeed": 1,
-      "quest": {
-        "id": "q-1772384442280-1",
-        "type": "mine",
-        "resource": "iron",
-        "targetCount": 15,
-        "progress": 0,
-        "rewardCoins": 132,
-        "rewardDiamonds": 0,
-        "title": "Mine 15 ore",
-        "description": "Collect 15 ore chunks in the mine.",
-        "status": "available"
-      }
-    }
+    "color": "#38bdf8",
+    "appearance": {},
+    "x": null,
+    "y": null,
+    "z": null,
+    "progress": {}
   }
 }

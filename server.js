@@ -839,27 +839,14 @@ function spawnPlayer(socket, profileId, username) {
   ensureProfileExists(profileId, username);
   const profile = profiles.get(profileId);
   const spawnPoint = randomSpawn(WORLD_LIMIT * 0.65);
-  const savedX = Number(profile?.x);
-  const savedY = Number(profile?.y);
-  const savedZ = Number(profile?.z);
-  const hasSavedPosition = Number.isFinite(savedX) && Number.isFinite(savedY) && Number.isFinite(savedZ);
-  const savedInMine = hasSavedPosition
-    && Math.hypot(savedX - MINE_POS.x, savedZ - MINE_POS.z) <= MINE_PLAY_RADIUS;
-  const boundedSaved = hasSavedPosition
-    ? clampToPlayableGround(
-      clamp(savedX, -PLAYABLE_BOUND, PLAYABLE_BOUND),
-      clamp(savedZ, -PLAYABLE_BOUND, PLAYABLE_BOUND),
-      savedInMine
-    )
-    : null;
   const spawn = {
     id: socket.id,
     profileId,
     name: profile?.name || username || `Player-${socket.id.slice(0, 4)}`,
-    x: boundedSaved ? boundedSaved.x : spawnPoint.x,
-    y: hasSavedPosition ? clamp(savedY, SWIM_MIN_Y, 30) : ISLAND_SURFACE_Y,
-    z: boundedSaved ? boundedSaved.z : spawnPoint.z,
-    inMine: Boolean(savedInMine),
+    x: spawnPoint.x,
+    y: ISLAND_SURFACE_Y,
+    z: spawnPoint.z,
+    inMine: false,
     torchEquipped: false,
     appearance: sanitizeAppearance(profile?.appearance, {
       ...defaultAppearance(),
