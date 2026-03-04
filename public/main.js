@@ -1598,7 +1598,7 @@ function addFishingIsland() {
   });
   vendor.position.z = -0.46;
   const fishingHouseYaw = Math.atan2(-FISHING_VENDOR_POS.x, -FISHING_VENDOR_POS.z);
-  addWoodHouse(FISHING_VENDOR_POS.x, FISHING_VENDOR_POS.z, fishingHouseYaw);
+  addWoodHouse(FISHING_VENDOR_POS.x, FISHING_VENDOR_POS.z, fishingHouseYaw, { collisions: false });
   stall.position.set(FISHING_VENDOR_POS.x, 0, FISHING_VENDOR_POS.z);
   stall.rotation.y = fishingHouseYaw;
   scene.add(stall);
@@ -1671,7 +1671,7 @@ function addMarketIsland() {
   });
   vendor.position.z = -0.5;
   const marketHouseYaw = Math.atan2(-MARKET_VENDOR_POS.x, -MARKET_VENDOR_POS.z);
-  addWoodHouse(MARKET_VENDOR_POS.x, MARKET_VENDOR_POS.z, marketHouseYaw);
+  addWoodHouse(MARKET_VENDOR_POS.x, MARKET_VENDOR_POS.z, marketHouseYaw, { collisions: false });
   stall.position.set(MARKET_VENDOR_POS.x, 0, MARKET_VENDOR_POS.z);
   stall.rotation.y = marketHouseYaw;
   scene.add(stall);
@@ -1980,7 +1980,8 @@ function addDecorBoat(x, z, yaw = 0, scale = 1.9, y = 1.06) {
   scene.add(boat);
 }
 
-function addWoodHouse(x, z, yaw = 0) {
+function addWoodHouse(x, z, yaw = 0, options = {}) {
+  const collisions = options?.collisions !== false;
   const house = new THREE.Group();
   house.position.set(x, 1.35, z);
   house.rotation.y = yaw;
@@ -2057,13 +2058,15 @@ function addWoodHouse(x, z, yaw = 0) {
     m.receiveShadow = true;
   });
   scene.add(house);
-  // Use the actual wall meshes for collision so blocking matches visible walls.
-  addWallCollisionFromMesh(back, 'house');
-  addWallCollisionFromMesh(left, 'house');
-  addWallCollisionFromMesh(right, 'house');
-  addWallCollisionFromMesh(frontLeft, 'house');
-  addWallCollisionFromMesh(frontRight, 'house');
-  addWallCollisionFromMesh(frontTop, 'house');
+  if (collisions) {
+    // Use the actual wall meshes for collision so blocking matches visible walls.
+    addWallCollisionFromMesh(back, 'house');
+    addWallCollisionFromMesh(left, 'house');
+    addWallCollisionFromMesh(right, 'house');
+    addWallCollisionFromMesh(frontLeft, 'house');
+    addWallCollisionFromMesh(frontRight, 'house');
+    addWallCollisionFromMesh(frontTop, 'house');
+  }
 }
 
 function addCliffAndWaterfall(x, z) {
