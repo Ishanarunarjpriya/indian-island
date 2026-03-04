@@ -25,6 +25,9 @@ const MINE_TIMING_PROFILES = {
   gold: { speed: 1.42, zoneWidth: 0.17, timeoutMs: 4400 },
   diamond: { speed: 1.78, zoneWidth: 0.12, timeoutMs: 3800 }
 };
+const MINE_FOCUS_CAMERA_BACK = 3.15;
+const MINE_FOCUS_CAMERA_SIDE = 1.15;
+const MINE_FOCUS_CAMERA_HEIGHT = 2.4;
 const STAMINA_BASE_MAX = 100;
 let torchEquipped = false;
 
@@ -147,6 +150,8 @@ const miningAccuracyGame = {
 };
 let miningAccuracyUiTimer = null;
 const _mineNodeWorldPos = new THREE.Vector3();
+const _mineFocusLook = new THREE.Vector3();
+const _mineFocusCameraPos = new THREE.Vector3();
 let npcDialogueOpen = false;
 let npcDialoguePrimaryAction = null;
 let npcDialogueSecondaryAction = null;
@@ -4826,6 +4831,10 @@ function setMiningMeterStatus(text, color = '#fef3c7') {
   miningMeterStatusEl.style.color = color;
 }
 
+function setMiningFocusMode(active) {
+  document.body.classList.toggle('mining-focus', Boolean(active));
+}
+
 function resetMiningAccuracyGame() {
   miningAccuracyGame.active = false;
   miningAccuracyGame.node = null;
@@ -4845,9 +4854,11 @@ function resetMiningAccuracyGame() {
   if (miningMeterEl) {
     miningMeterEl.classList.add('hidden');
   }
+  setMiningFocusMode(false);
 }
 
 function scheduleMiningAccuracyClose(delayMs = 180) {
+  setMiningFocusMode(false);
   if (miningAccuracyUiTimer) {
     clearTimeout(miningAccuracyUiTimer);
     miningAccuracyUiTimer = null;
@@ -4901,6 +4912,7 @@ function startMiningAccuracyGame(node) {
   if (miningMeterEl) {
     miningMeterEl.classList.remove('hidden');
   }
+  setMiningFocusMode(true);
   return true;
 }
 
@@ -5015,6 +5027,33 @@ function updateMiningAccuracyGame(local, nowMs, delta) {
   if (miningMeterPointerEl) {
     miningMeterPointerEl.style.left = `${(miningAccuracyGame.pointer * 100).toFixed(2)}%`;
   }
+}
+
+function updateMiningFocusCamera(local, delta) {
+  if (!local || !miningAccuracyGame.active) return false;
+  const node = activeMiningNode(local);
+  if (!node) return false;
+  node.mesh.getWorldPosition(_mineNodeWorldPos);
+  const dx = _mineNodeWorldPos.x - local.x;
+  const dz = _mineNodeWorldPos.z - local.z;
+  const len = Math.hypot(dx, dz) || 1;
+  const dirX = dx / len;
+  const dirZ = dz / len;
+  const sideX = -dirZ;
+  const sideZ = dirX;
+  const desiredX = _mineNodeWorldPos.x - dirX * MINE_FOCUS_CAMERA_BACK + sideX * MINE_FOCUS_CAMERA_SIDE;
+  const desiredY = Math.min(MINE_CEILING_Y - 1.25, local.y + MINE_FOCUS_CAMERA_HEIGHT);
+  const desiredZ = _mineNodeWorldPos.z - dirZ * MINE_FOCUS_CAMERA_BACK + sideZ * MINE_FOCUS_CAMERA_SIDE;
+
+  _mineFocusCameraPos.set(desiredX, desiredY, desiredZ);
+  _mineFocusLook.set(_mineNodeWorldPos.x, _mineNodeWorldPos.y + 0.35, _mineNodeWorldPos.z);
+
+  camera.position.x += (_mineFocusCameraPos.x - camera.position.x) * Math.min(1, delta * 11.5);
+  camera.position.y += (_mineFocusCameraPos.y - camera.position.y) * Math.min(1, delta * 11.5);
+  camera.position.z += (_mineFocusCameraPos.z - camera.position.z) * Math.min(1, delta * 11.5);
+  camera.lookAt(_mineFocusLook);
+  local.mesh.visible = true;
+  return true;
 }
 
 function applyProgressState(progress) {
@@ -7244,10 +7283,24 @@ function clampGameplayCameraPitch(value) {
 }
 
 renderer.domElement.addEventListener('pointerdown', (event) => {
-  if (event.button === 0 && miningAccuracyGame.active) {
-    event.preventDefault();
-    attemptMiningAccuracyHit(players.get(localPlayerId));
-    return;
+  if (event.button === 0) {
+    const local = players.get(localPlayerId);
+    if (miningAccuracyGame.active) {
+      event.preventDefault();
+      attemptMiningAccuracyHit(local);
+      return;
+    }
+    const canTryMineByClick = Boolean(local)
+      && isAuthenticated
+      && inMine
+      && !menuOpen
+      && !mineWarningOpen
+      && !npcDialogueOpen
+      && customizeModalEl.classList.contains('hidden');
+    if (canTryMineByClick && tryMineNode(local)) {
+      event.preventDefault();
+      return;
+    }
   }
   if (pointerLocked) return;
   if (event.button !== 0) return;
@@ -7259,6 +7312,7 @@ renderer.domElement.addEventListener('pointerdown', (event) => {
 });
 
 renderer.domElement.addEventListener('pointermove', (event) => {
+  if (miningAccuracyGame.active) return;
   if (pointerLocked) {
     cameraYaw -= (event.movementX || 0) * 0.0038;
     cameraPitch = clampGameplayCameraPitch(cameraPitch - (event.movementY || 0) * 0.0038);
@@ -7287,6 +7341,7 @@ renderer.domElement.addEventListener('pointercancel', endOrbit);
 renderer.domElement.addEventListener(
   'wheel',
   (event) => {
+    if (miningAccuracyGame.active) return;
     if (firstPersonEnabled) return;
     event.preventDefault();
     cameraDistanceTarget = Math.max(
@@ -7400,6 +7455,20 @@ function updateLocalPlayer(delta, nowMs) {
   if (!isAuthenticated || menuOpen || !customizeModalEl.classList.contains('hidden')) return;
   const local = players.get(localPlayerId);
   if (!local) return;
+  if (miningAccuracyGame.active) {
+    local.animSpeed = 0;
+    local.vy = 0;
+    if (!Number.isFinite(local.targetYaw)) {
+      local.targetYaw = Number.isFinite(local.facingYaw) ? local.facingYaw : 0;
+    }
+    rotatePlayerTowards(local, local.targetYaw, delta, TURN_SPEED * 0.65);
+    if (staminaFillEl) {
+      stamina = Math.min(getStaminaMax(), stamina + STAMINA_REGEN * delta);
+      const pct = Math.round((stamina / getStaminaMax()) * 100);
+      staminaFillEl.style.width = `${pct}%`;
+    }
+    return;
+  }
 
   const prevX = local.x;
   const prevY = local.y;
@@ -7674,7 +7743,7 @@ function updateInteractionHint() {
       return;
     }
     if (getNearbyOreNode(local)) {
-      interactHintEl.textContent = 'Press E to start mining meter';
+      interactHintEl.textContent = 'Press E or left-click to start mining meter';
       return;
     }
     interactHintEl.textContent = 'Mine ore and return to the quest giver';
@@ -7958,8 +8027,10 @@ function animate(nowMs) {
   const local = players.get(localPlayerId);
   updateTorchLight(local, nowMs);
   if (local) {
-    const headTrackY = local.y + (local.isSwimming ? 1.15 : 1.78);
-    if (firstPersonEnabled) {
+    const miningCameraLocked = updateMiningFocusCamera(local, delta);
+    if (!miningCameraLocked) {
+      const headTrackY = local.y + (local.isSwimming ? 1.15 : 1.78);
+      if (firstPersonEnabled) {
       local.mesh.visible = false;
       const eyeY = local.y + (local.isSwimming ? FIRST_PERSON_EYE_HEIGHT_SWIM : FIRST_PERSON_EYE_HEIGHT);
       const desiredX = local.x;
@@ -7971,61 +8042,62 @@ function animate(nowMs) {
       const lookY = desiredY + Math.sin(cameraPitch) * lookDistance;
       const lookZ = desiredZ + Math.cos(cameraYaw) * horizontalLook;
 
-      camera.position.x += (desiredX - camera.position.x) * Math.min(1, delta * 14);
-      camera.position.y += (desiredY - camera.position.y) * Math.min(1, delta * 14);
-      camera.position.z += (desiredZ - camera.position.z) * Math.min(1, delta * 14);
-      camera.lookAt(lookX, lookY, lookZ);
-    } else {
-      local.mesh.visible = true;
-      let activeCameraTarget = cameraDistanceTarget;
-      if (inLighthouseInterior) {
-        activeCameraTarget = Math.min(activeCameraTarget, 10.5);
-      } else if (inMine) {
-        activeCameraTarget = Math.min(activeCameraTarget, MINE_CAMERA_MAX_DISTANCE);
-      }
-      cameraDistance += (activeCameraTarget - cameraDistance) * Math.min(1, delta * 10);
-      if (inLighthouseInterior) {
-        cameraDistance = Math.min(cameraDistance, 10.5);
-        cameraDistanceTarget = activeCameraTarget;
-      } else if (inMine) {
-        cameraDistance = Math.min(cameraDistance, MINE_CAMERA_MAX_DISTANCE);
-        cameraDistanceTarget = activeCameraTarget;
-      }
-
-      const horizontal = Math.cos(cameraPitch) * cameraDistance;
-      const offsetX = Math.sin(cameraYaw) * horizontal;
-      const offsetY = Math.sin(cameraPitch) * cameraDistance;
-      const offsetZ = Math.cos(cameraYaw) * horizontal;
-      let desiredX = local.x + offsetX;
-      let desiredY = headTrackY + offsetY;
-      let desiredZ = local.z + offsetZ;
-      if (inLighthouseInterior) {
-        const camRadius = INTERIOR_PLAY_RADIUS - 1.35;
-        const cdx = desiredX - LIGHTHOUSE_INTERIOR_BASE.x;
-        const cdz = desiredZ - LIGHTHOUSE_INTERIOR_BASE.z;
-        const clen = Math.hypot(cdx, cdz);
-        if (clen > camRadius) {
-          const scale = camRadius / (clen || 1);
-          desiredX = LIGHTHOUSE_INTERIOR_BASE.x + cdx * scale;
-          desiredZ = LIGHTHOUSE_INTERIOR_BASE.z + cdz * scale;
+        camera.position.x += (desiredX - camera.position.x) * Math.min(1, delta * 14);
+        camera.position.y += (desiredY - camera.position.y) * Math.min(1, delta * 14);
+        camera.position.z += (desiredZ - camera.position.z) * Math.min(1, delta * 14);
+        camera.lookAt(lookX, lookY, lookZ);
+      } else {
+        local.mesh.visible = true;
+        let activeCameraTarget = cameraDistanceTarget;
+        if (inLighthouseInterior) {
+          activeCameraTarget = Math.min(activeCameraTarget, 10.5);
+        } else if (inMine) {
+          activeCameraTarget = Math.min(activeCameraTarget, MINE_CAMERA_MAX_DISTANCE);
         }
-      } else if (inMine) {
-        const camRadius = MINE_PLAY_RADIUS - 1.9;
-        const cdx = desiredX - MINE_POS.x;
-        const cdz = desiredZ - MINE_POS.z;
-        const clen = Math.hypot(cdx, cdz);
-        if (clen > camRadius) {
-          const scale = camRadius / (clen || 1);
-          desiredX = MINE_POS.x + cdx * scale;
-          desiredZ = MINE_POS.z + cdz * scale;
+        cameraDistance += (activeCameraTarget - cameraDistance) * Math.min(1, delta * 10);
+        if (inLighthouseInterior) {
+          cameraDistance = Math.min(cameraDistance, 10.5);
+          cameraDistanceTarget = activeCameraTarget;
+        } else if (inMine) {
+          cameraDistance = Math.min(cameraDistance, MINE_CAMERA_MAX_DISTANCE);
+          cameraDistanceTarget = activeCameraTarget;
         }
-        desiredY = Math.min(desiredY, MINE_CEILING_Y - 1.1);
-      }
 
-      camera.position.x += (desiredX - camera.position.x) * Math.min(1, delta * 10);
-      camera.position.y += (desiredY - camera.position.y) * Math.min(1, delta * 10);
-      camera.position.z += (desiredZ - camera.position.z) * Math.min(1, delta * 10);
-      camera.lookAt(local.x, headTrackY - (local.isSwimming ? 0.2 : 0.05), local.z);
+        const horizontal = Math.cos(cameraPitch) * cameraDistance;
+        const offsetX = Math.sin(cameraYaw) * horizontal;
+        const offsetY = Math.sin(cameraPitch) * cameraDistance;
+        const offsetZ = Math.cos(cameraYaw) * horizontal;
+        let desiredX = local.x + offsetX;
+        let desiredY = headTrackY + offsetY;
+        let desiredZ = local.z + offsetZ;
+        if (inLighthouseInterior) {
+          const camRadius = INTERIOR_PLAY_RADIUS - 1.35;
+          const cdx = desiredX - LIGHTHOUSE_INTERIOR_BASE.x;
+          const cdz = desiredZ - LIGHTHOUSE_INTERIOR_BASE.z;
+          const clen = Math.hypot(cdx, cdz);
+          if (clen > camRadius) {
+            const scale = camRadius / (clen || 1);
+            desiredX = LIGHTHOUSE_INTERIOR_BASE.x + cdx * scale;
+            desiredZ = LIGHTHOUSE_INTERIOR_BASE.z + cdz * scale;
+          }
+        } else if (inMine) {
+          const camRadius = MINE_PLAY_RADIUS - 1.9;
+          const cdx = desiredX - MINE_POS.x;
+          const cdz = desiredZ - MINE_POS.z;
+          const clen = Math.hypot(cdx, cdz);
+          if (clen > camRadius) {
+            const scale = camRadius / (clen || 1);
+            desiredX = MINE_POS.x + cdx * scale;
+            desiredZ = MINE_POS.z + cdz * scale;
+          }
+          desiredY = Math.min(desiredY, MINE_CEILING_Y - 1.1);
+        }
+
+        camera.position.x += (desiredX - camera.position.x) * Math.min(1, delta * 10);
+        camera.position.y += (desiredY - camera.position.y) * Math.min(1, delta * 10);
+        camera.position.z += (desiredZ - camera.position.z) * Math.min(1, delta * 10);
+        camera.lookAt(local.x, headTrackY - (local.isSwimming ? 0.2 : 0.05), local.z);
+      }
     }
   }
 
