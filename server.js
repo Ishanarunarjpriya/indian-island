@@ -90,7 +90,7 @@ const PICKAXE_PRICE = {
 const FISHING_ROD_PRICE = 260;
 const FISH_SELL_PRICE = 20;
 const MAX_STAMINA_BONUS_PCT = 50;
-const FISH_STAMINA_GAIN_PER_FISH = 1;
+const FISH_STAMINA_GAIN_PER_FISH = 5;
 const FISH_CATCH_COOLDOWN_MS = 1800;
 
 const __filename = fileURLToPath(import.meta.url);
