@@ -38,8 +38,12 @@ const questState = {
   coins: 0,
   pickaxe: 'wood',
   inventory: { stone: 0, iron: 0, gold: 0, diamond: 0, torch: 1, fish: 0 },
+  fishBag: {},
   fishIndex: {},
   hasFishingRod: false,
+  fishingRodTier: 'basic',
+  fishingQuest: null,
+  fishingQuestCompletions: 0,
   maxStaminaBonusPct: 0,
   quest: null,
   shop: {
@@ -117,26 +121,16 @@ const FISHING_VENDOR_POS = new THREE.Vector3(FISHING_ISLAND_POS.x - 1.3, 1.35, F
 const MARKET_VENDOR_POS = new THREE.Vector3(MARKET_ISLAND_POS.x + 1.5, 1.35, MARKET_ISLAND_POS.z - 1.2);
 const FISHING_SPOT_RADIUS = 3.2;
 const FISHING_ROD_PRICE = 260;
-const FISH_SELL_PRICE = 20;
-const FISH_TIMING_HIT_COOLDOWN_MS = 120;
-const FISH_TIMING_TIMEOUT_FALLBACK_MS = 5800;
+const ORE_SELL_PRICE = { stone: 2, iron: 8, gold: 22, diamond: 120 };
+const FISH_SELL_BY_RARITY = {
+  common: 18,
+  uncommon: 32,
+  rare: 56,
+  epic: 120,
+  legendary: 320,
+  mythic: 1500
+};
 const FISH_CATCH_CARD_SHOW_MS = 2400;
-const FISH_TIMING_PROFILES = {
-  common: { speed: 0.82, zoneWidth: 0.3, timeoutMs: 6200 },
-  uncommon: { speed: 0.98, zoneWidth: 0.25, timeoutMs: 5900 },
-  rare: { speed: 1.16, zoneWidth: 0.21, timeoutMs: 5600 },
-  epic: { speed: 1.36, zoneWidth: 0.17, timeoutMs: 5200 },
-  legendary: { speed: 1.54, zoneWidth: 0.14, timeoutMs: 5000 },
-  mythic: { speed: 1.72, zoneWidth: 0.12, timeoutMs: 4600 }
-};
-const FISH_METER_RARITY_WEIGHTS = {
-  common: 48,
-  uncommon: 25,
-  rare: 14,
-  epic: 8,
-  legendary: 4,
-  mythic: 1
-};
 const FISH_RARITY_ORDER = ['common', 'uncommon', 'rare', 'epic', 'legendary', 'mythic'];
 const FISH_RARITY_COLORS = {
   common: '#cbd5e1',
@@ -174,6 +168,15 @@ const FISH_CATALOG_SORTED = [...FISH_CATALOG].sort((a, b) => {
   if (rarityGap !== 0) return rarityGap;
   return a.name.localeCompare(b.name);
 });
+const FISHING_ROD_TIERS = ['basic', 'reinforced', 'expert', 'master', 'mythic'];
+const FISHING_ROD_TIER_LABEL = {
+  basic: 'Basic Rod',
+  reinforced: 'Reinforced Rod',
+  expert: 'Expert Rod',
+  master: 'Master Rod',
+  mythic: 'Mythic Rod'
+};
+const SELLABLE_ORE_ORDER = ['stone', 'iron', 'gold', 'diamond'];
 const MINE_ENTRY_YAW = Math.atan2(MINE_ENTRY_DOCK_POS.x - MINE_ENTRY_POS.x, MINE_ENTRY_DOCK_POS.z - MINE_ENTRY_POS.z);
 
 let inMine = false;
@@ -188,12 +191,22 @@ const oreNodes = [];
 const fishingSpots = [];
 const fishingMiniGame = {
   active: false,
+  starting: false,
   spotId: null,
-  pointer: 0,
-  direction: 1,
+  challengeId: null,
+  targetFish: null,
+  cursor: 0.5,
+  isHolding: false,
+  zonePointer: 0.2,
+  zoneDirection: 1,
   zoneCenter: 0.5,
-  zoneWidth: 0.2,
-  speed: 1,
+  zoneWidth: 0.22,
+  zoneSpeed: 0.5,
+  cursorRiseSpeed: 0.9,
+  cursorFallSpeed: 0.8,
+  decaySpeed: 0.35,
+  requiredHoldMs: 1000,
+  holdMs: 0,
   timeoutAt: 0,
   rarity: 'common'
 };
@@ -234,6 +247,7 @@ const minimapCtx = minimapEl.getContext('2d');
 const minimapToggleEl = document.getElementById('minimap-toggle');
 const minimapQuickToggleEl = document.getElementById('minimap-quick-toggle');
 const fishIndexToggleEl = document.getElementById('fish-index-toggle');
+const inventoryToggleEl = document.getElementById('inventory-toggle');
 const performanceToggleEl = document.getElementById('performance-toggle');
 const chatLogEl = document.getElementById('chat-log');
 const chatFormEl = document.getElementById('chat-form');
@@ -303,7 +317,43 @@ const fishIndexModalEl = document.getElementById('fish-index-modal');
 const fishIndexCloseEl = document.getElementById('fish-index-close');
 const fishIndexSummaryEl = document.getElementById('fish-index-summary');
 const fishIndexListEl = document.getElementById('fish-index-list');
-const gameplayPanels = ['hud', 'mini-panel', 'chat-panel', 'world-state', 'top-left-toolbar', 'inventory-bar', 'mining-meter', 'fishing-meter', 'fish-catch-card', 'fish-index-modal']
+const inventoryModalEl = document.getElementById('inventory-modal');
+const inventoryCloseEl = document.getElementById('inventory-close');
+const inventoryTabOresEl = document.getElementById('inventory-tab-ores');
+const inventoryTabFishEl = document.getElementById('inventory-tab-fish');
+const inventoryListEl = document.getElementById('inventory-list');
+const rodShopModalEl = document.getElementById('rod-shop-modal');
+const rodShopCloseEl = document.getElementById('rod-shop-close');
+const rodCurrentTierEl = document.getElementById('rod-current-tier');
+const rodNextTierEl = document.getElementById('rod-next-tier');
+const rodUpgradeCostEl = document.getElementById('rod-upgrade-cost');
+const rodUpgradeFishCostEl = document.getElementById('rod-upgrade-fish-cost');
+const rodBuyBtnEl = document.getElementById('rod-buy-btn');
+const rodUpgradeBtnEl = document.getElementById('rod-upgrade-btn');
+const rodShopStatusEl = document.getElementById('rod-shop-status');
+const marketModalEl = document.getElementById('market-modal');
+const marketCloseEl = document.getElementById('market-close');
+const marketOpenIndexEl = document.getElementById('market-open-index');
+const marketFishIndexSummaryEl = document.getElementById('market-fish-index-summary');
+const marketSellCategoryEl = document.getElementById('market-sell-category');
+const marketSellItemEl = document.getElementById('market-sell-item');
+const marketSellAmountEl = document.getElementById('market-sell-amount');
+const marketSellPricePreviewEl = document.getElementById('market-sell-price-preview');
+const marketSellBtnEl = document.getElementById('market-sell-btn');
+const marketQuestTitleEl = document.getElementById('market-quest-title');
+const marketQuestDescEl = document.getElementById('market-quest-desc');
+const marketQuestProgressEl = document.getElementById('market-quest-progress');
+const marketQuestFishItemEl = document.getElementById('market-quest-fish-item');
+const marketQuestFishAmountEl = document.getElementById('market-quest-fish-amount');
+const marketQuestAcceptBtnEl = document.getElementById('market-quest-accept-btn');
+const marketQuestTurnInBtnEl = document.getElementById('market-quest-turnin-btn');
+const marketQuestClaimBtnEl = document.getElementById('market-quest-claim-btn');
+const marketStatusEl = document.getElementById('market-status');
+const gameplayPanels = [
+  'hud', 'mini-panel', 'chat-panel', 'world-state', 'top-left-toolbar',
+  'inventory-bar', 'mining-meter', 'fishing-meter', 'fish-catch-card',
+  'fish-index-modal', 'inventory-modal', 'market-modal', 'rod-shop-modal'
+]
   .map((id) => document.getElementById(id))
   .filter(Boolean);
 
@@ -427,6 +477,11 @@ let pointerLocked = false;
 let minimapExpanded = false;
 let minimapEnabled = localStorage.getItem('island_minimap_enabled') !== '0';
 let fishIndexOpen = false;
+let inventoryModalOpen = false;
+let marketModalOpen = false;
+let rodShopModalOpen = false;
+let inventoryViewTab = 'ores';
+let rodShopSnapshot = null;
 const GRAPHICS_PRESETS = ['quality', 'balanced', 'performance'];
 const legacyLowPerformanceMode = localStorage.getItem('island_low_performance_mode') === '1';
 const storedGraphicsPreset = localStorage.getItem('island_graphics_preset');
@@ -501,15 +556,78 @@ function updateFishIndexToggleState() {
   fishIndexToggleEl.title = fishIndexOpen ? 'Close fish index' : 'Open fish index';
 }
 
+function closeCommerceModals() {
+  inventoryModalOpen = false;
+  marketModalOpen = false;
+  rodShopModalOpen = false;
+  inventoryModalEl?.classList.add('hidden');
+  marketModalEl?.classList.add('hidden');
+  rodShopModalEl?.classList.add('hidden');
+}
+
+function isAnyGameplayOverlayOpen() {
+  return fishIndexOpen || inventoryModalOpen || marketModalOpen || rodShopModalOpen;
+}
+
 function setFishIndexOpen(open) {
   if (!isAuthenticated && open) return;
   fishIndexOpen = Boolean(open);
   fishIndexModalEl?.classList.toggle('hidden', !fishIndexOpen);
   if (fishIndexOpen) {
+    closeCommerceModals();
+    closeNpcDialogue();
     setMenuOpen(false);
     renderFishIndex();
   }
   updateFishIndexToggleState();
+}
+
+function setInventoryModalOpen(open) {
+  if (!isAuthenticated && open) return;
+  inventoryModalOpen = Boolean(open);
+  inventoryModalEl?.classList.toggle('hidden', !inventoryModalOpen);
+  if (inventoryModalOpen) {
+    setMenuOpen(false);
+    setFishIndexOpen(false);
+    closeNpcDialogue();
+    marketModalOpen = false;
+    rodShopModalOpen = false;
+    marketModalEl?.classList.add('hidden');
+    rodShopModalEl?.classList.add('hidden');
+    renderInventoryModal();
+  }
+}
+
+function setRodShopModalOpen(open) {
+  if (!isAuthenticated && open) return;
+  rodShopModalOpen = Boolean(open);
+  rodShopModalEl?.classList.toggle('hidden', !rodShopModalOpen);
+  if (rodShopModalOpen) {
+    setMenuOpen(false);
+    setFishIndexOpen(false);
+    closeNpcDialogue();
+    inventoryModalOpen = false;
+    marketModalOpen = false;
+    inventoryModalEl?.classList.add('hidden');
+    marketModalEl?.classList.add('hidden');
+    renderRodShopModal();
+  }
+}
+
+function setMarketModalOpen(open) {
+  if (!isAuthenticated && open) return;
+  marketModalOpen = Boolean(open);
+  marketModalEl?.classList.toggle('hidden', !marketModalOpen);
+  if (marketModalOpen) {
+    setMenuOpen(false);
+    setFishIndexOpen(false);
+    closeNpcDialogue();
+    inventoryModalOpen = false;
+    rodShopModalOpen = false;
+    inventoryModalEl?.classList.add('hidden');
+    rodShopModalEl?.classList.add('hidden');
+    renderMarketModal();
+  }
 }
 
 function updatePerformanceToggleLabel() {
@@ -656,11 +774,15 @@ function clearSessionWorld() {
   boatState.onboard = false;
   inMine = false;
   torchEquipped = false;
+  inventoryViewTab = 'ores';
+  rodShopSnapshot = null;
   resetMiningAccuracyGame();
   resetFishingMiniGame();
   hideFishCatchCard();
   setFishIndexOpen(false);
+  closeCommerceModals();
   closeMineWarningDialog();
+  closeNpcDialogue();
   refreshConsumeActionVisibility(null);
 }
 
@@ -680,6 +802,7 @@ function setAuthModalOpen(open, statusText = '') {
     emoteWheelEl?.classList.add('hidden');
     setCustomizeModal(false);
     setFishIndexOpen(false);
+    closeCommerceModals();
     menuOpen = false;
     menuOverlayEl?.classList.add('hidden');
     resetMiningAccuracyGame();
@@ -698,6 +821,7 @@ function setMenuOpen(open) {
     emoteWheelEl?.classList.add('hidden');
     setCustomizeModal(false);
     setFishIndexOpen(false);
+    closeCommerceModals();
     resetMiningAccuracyGame();
     resetFishingMiniGame();
   }
@@ -1784,6 +1908,27 @@ function addMarketIsland() {
   stall.rotation.y = marketHouseYaw;
   scene.add(stall);
   addWorldCollider(MARKET_VENDOR_POS.x, MARKET_VENDOR_POS.z, 1.04, 'npc');
+
+  const spotDefs = [
+    { id: 'market-fish-north', x: MARKET_ISLAND_POS.x + 0.75, z: MARKET_ISLAND_POS.z - (MARKET_ISLAND_RADIUS + 0.62) },
+    { id: 'market-fish-east', x: MARKET_ISLAND_POS.x + (MARKET_ISLAND_RADIUS + 0.56), z: MARKET_ISLAND_POS.z + 0.55 },
+    { id: 'market-fish-south', x: MARKET_ISLAND_POS.x - 0.45, z: MARKET_ISLAND_POS.z + (MARKET_ISLAND_RADIUS + 0.58) }
+  ];
+  for (const spot of spotDefs) {
+    const marker = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.26, 0.26, 0.08, 16),
+      new THREE.MeshStandardMaterial({ color: 0x38bdf8, emissive: 0x0c4a6e, emissiveIntensity: 0.72, roughness: 0.34 })
+    );
+    marker.position.set(spot.x, 0.43, spot.z);
+    marker.castShadow = true;
+    scene.add(marker);
+    fishingSpots.push({
+      id: spot.id,
+      x: spot.x,
+      z: spot.z,
+      marker
+    });
+  }
 }
 
 function addLighthouseInterior() {
@@ -4906,7 +5051,7 @@ function refreshConsumeActionVisibility(local) {
     && isAuthenticated
     && !mineWarningOpen
     && !menuOpen
-    && !fishIndexOpen
+    && !isAnyGameplayOverlayOpen()
     && authModalEl.classList.contains('hidden')
     && customizeModalEl.classList.contains('hidden')
     && fish > 0;
@@ -4915,12 +5060,22 @@ function refreshConsumeActionVisibility(local) {
 
 function resetFishingMiniGame() {
   fishingMiniGame.active = false;
+  fishingMiniGame.starting = false;
   fishingMiniGame.spotId = null;
-  fishingMiniGame.pointer = 0;
-  fishingMiniGame.direction = 1;
+  fishingMiniGame.challengeId = null;
+  fishingMiniGame.targetFish = null;
+  fishingMiniGame.cursor = 0.5;
+  fishingMiniGame.isHolding = false;
+  fishingMiniGame.zonePointer = 0.2;
+  fishingMiniGame.zoneDirection = 1;
   fishingMiniGame.zoneCenter = 0.5;
-  fishingMiniGame.zoneWidth = 0.2;
-  fishingMiniGame.speed = 1;
+  fishingMiniGame.zoneWidth = 0.22;
+  fishingMiniGame.zoneSpeed = 0.5;
+  fishingMiniGame.cursorRiseSpeed = 0.9;
+  fishingMiniGame.cursorFallSpeed = 0.8;
+  fishingMiniGame.decaySpeed = 0.35;
+  fishingMiniGame.requiredHoldMs = 1000;
+  fishingMiniGame.holdMs = 0;
   fishingMiniGame.timeoutAt = 0;
   fishingMiniGame.rarity = 'common';
   if (fishingMiniGameUiTimer) {
@@ -4963,15 +5118,19 @@ function sanitizeHexColor(value, fallback) {
   return fallback;
 }
 
-function fishTimingProfile(rarity) {
-  return FISH_TIMING_PROFILES[normalizeFishRarity(rarity, 'common')] || {
-    speed: 1,
-    zoneWidth: 0.2,
-    timeoutMs: FISH_TIMING_TIMEOUT_FALLBACK_MS
-  };
+function normalizeFishIndexMap(value) {
+  const next = {};
+  if (!value || typeof value !== 'object') return next;
+  for (const [id, count] of Object.entries(value)) {
+    if (!FISH_BY_ID.has(id)) continue;
+    const n = Number(count);
+    if (!Number.isFinite(n) || n <= 0) continue;
+    next[id] = Math.max(0, Math.floor(n));
+  }
+  return next;
 }
 
-function normalizeFishIndexMap(value) {
+function normalizeFishBagMap(value) {
   const next = {};
   if (!value || typeof value !== 'object') return next;
   for (const [id, count] of Object.entries(value)) {
@@ -4985,6 +5144,14 @@ function normalizeFishIndexMap(value) {
 
 function caughtFishCount(fishId) {
   return Math.max(0, Math.floor(Number(questState.fishIndex?.[fishId]) || 0));
+}
+
+function ownedFishCount(fishId) {
+  return Math.max(0, Math.floor(Number(questState.fishBag?.[fishId]) || 0));
+}
+
+function discoveredFishCount() {
+  return FISH_CATALOG_SORTED.reduce((sum, fish) => sum + (caughtFishCount(fish.id) > 0 ? 1 : 0), 0);
 }
 
 function buildFishIconMarkup(fish, options = {}) {
@@ -5031,9 +5198,12 @@ function setFishingFocusMode(active) {
 
 function renderFishIndex() {
   if (!fishIndexListEl) return;
-  const discovered = FISH_CATALOG_SORTED.reduce((sum, fish) => sum + (caughtFishCount(fish.id) > 0 ? 1 : 0), 0);
+  const discovered = discoveredFishCount();
   if (fishIndexSummaryEl) {
     fishIndexSummaryEl.textContent = `Fish discovered: ${discovered} / ${FISH_CATALOG_SORTED.length}`;
+  }
+  if (marketFishIndexSummaryEl) {
+    marketFishIndexSummaryEl.textContent = `Fish discovered: ${discovered} / ${FISH_CATALOG_SORTED.length}`;
   }
   fishIndexListEl.innerHTML = '';
   FISH_CATALOG_SORTED.forEach((fish) => {
@@ -5052,6 +5222,322 @@ function renderFishIndex() {
     `;
     fishIndexListEl.appendChild(entry);
   });
+}
+
+function fishSellPriceById(fishId) {
+  const fish = FISH_BY_ID.get(fishId);
+  if (!fish) return 0;
+  return FISH_SELL_BY_RARITY[normalizeFishRarity(fish.rarity, 'common')] || 0;
+}
+
+function normalizeRodTier(value, fallback = 'basic') {
+  return FISHING_ROD_TIERS.includes(value) ? value : fallback;
+}
+
+function rodTierLabel(value) {
+  const tier = normalizeRodTier(value, 'basic');
+  return FISHING_ROD_TIER_LABEL[tier] || capitalizeWord(tier);
+}
+
+function setRodShopStatus(text, color = '#cbd5e1') {
+  if (!rodShopStatusEl) return;
+  rodShopStatusEl.textContent = text || '';
+  rodShopStatusEl.style.color = color;
+}
+
+function setMarketStatus(text, color = '#cbd5e1') {
+  if (!marketStatusEl) return;
+  marketStatusEl.textContent = text || '';
+  marketStatusEl.style.color = color;
+}
+
+function inventoryEntriesForTab(tab = 'ores') {
+  if (tab === 'fish') {
+    return FISH_CATALOG_SORTED
+      .map((fish) => {
+        const qty = ownedFishCount(fish.id);
+        if (qty <= 0) return null;
+        return {
+          id: fish.id,
+          name: `${fish.name} (${capitalizeWord(fish.rarity)})`,
+          qty,
+          price: fishSellPriceById(fish.id)
+        };
+      })
+      .filter(Boolean);
+  }
+  return SELLABLE_ORE_ORDER.map((ore) => ({
+    id: ore,
+    name: capitalizeWord(ore),
+    qty: Math.max(0, Math.floor(Number(questState.inventory?.[ore]) || 0)),
+    price: ORE_SELL_PRICE[ore] || 0
+  }));
+}
+
+function renderInventoryModal() {
+  if (!inventoryListEl) return;
+  const tab = inventoryViewTab === 'fish' ? 'fish' : 'ores';
+  inventoryViewTab = tab;
+  inventoryTabOresEl?.classList.toggle('active', tab === 'ores');
+  inventoryTabFishEl?.classList.toggle('active', tab === 'fish');
+  const entries = inventoryEntriesForTab(tab);
+  inventoryListEl.innerHTML = '';
+  if (!entries.length) {
+    const empty = document.createElement('article');
+    empty.className = 'inventory-entry';
+    empty.innerHTML = `
+      <div class="name">No items</div>
+      <div class="qty">${tab === 'fish' ? 'Catch fish to fill this tab.' : 'Mine ore to fill this tab.'}</div>
+      <div class="price">Value: --</div>
+    `;
+    inventoryListEl.appendChild(empty);
+    return;
+  }
+  entries.forEach((entry) => {
+    const card = document.createElement('article');
+    card.className = 'inventory-entry';
+    card.innerHTML = `
+      <div class="name">${entry.name}</div>
+      <div class="qty">Owned: ${entry.qty.toLocaleString()}</div>
+      <div class="price">Sell value: ${entry.price.toLocaleString()} coins each</div>
+    `;
+    inventoryListEl.appendChild(card);
+  });
+}
+
+function renderRodShopModal() {
+  const hasFishingRod = questState.hasFishingRod === true;
+  const currentTier = normalizeRodTier(questState.fishingRodTier, 'basic');
+  const shopData = rodShopSnapshot?.rodShop || null;
+  const buyPrice = Math.max(0, Math.floor(Number(rodShopSnapshot?.buyPrice) || FISHING_ROD_PRICE));
+  const currentLabel = hasFishingRod ? rodTierLabel(currentTier) : 'None';
+  if (rodCurrentTierEl) {
+    rodCurrentTierEl.textContent = `Current rod: ${currentLabel}`;
+  }
+  const next = shopData?.next || null;
+  if (!hasFishingRod) {
+    if (rodNextTierEl) rodNextTierEl.textContent = 'Next upgrade: Buy your first rod';
+    if (rodUpgradeCostEl) rodUpgradeCostEl.textContent = `First rod price: ${buyPrice.toLocaleString()} coins`;
+    if (rodUpgradeFishCostEl) rodUpgradeFishCostEl.innerHTML = '<li>No fish required for first rod.</li>';
+  } else if (shopData && next) {
+    if (rodNextTierEl) rodNextTierEl.textContent = `Next upgrade: ${next.label || rodTierLabel(next.tier)}`;
+    if (rodUpgradeCostEl) rodUpgradeCostEl.textContent = `Coins required: ${Math.max(0, Math.floor(Number(next.coins) || 0)).toLocaleString()}`;
+    if (rodUpgradeFishCostEl) {
+      rodUpgradeFishCostEl.innerHTML = '';
+      for (const cost of next.fishCost || []) {
+        const item = document.createElement('li');
+        const owned = Math.max(0, Math.floor(Number(ownedFishCount(cost?.fishId) || cost?.owned) || 0));
+        const needed = Math.max(1, Math.floor(Number(cost?.amount) || 1));
+        const ok = owned >= needed;
+        item.style.color = ok ? '#86efac' : '#fca5a5';
+        item.textContent = `${cost?.name || 'Fish'}: ${owned.toLocaleString()} / ${needed.toLocaleString()}`;
+        rodUpgradeFishCostEl.appendChild(item);
+      }
+    }
+  } else if (!shopData) {
+    if (rodNextTierEl) rodNextTierEl.textContent = 'Next upgrade: Loading...';
+    if (rodUpgradeCostEl) rodUpgradeCostEl.textContent = '';
+    if (rodUpgradeFishCostEl) rodUpgradeFishCostEl.innerHTML = '<li>Loading rod data...</li>';
+  } else {
+    if (rodNextTierEl) rodNextTierEl.textContent = 'Next upgrade: Max tier reached';
+    if (rodUpgradeCostEl) rodUpgradeCostEl.textContent = '';
+    if (rodUpgradeFishCostEl) rodUpgradeFishCostEl.innerHTML = '<li>Your rod is fully upgraded.</li>';
+  }
+
+  if (rodBuyBtnEl) {
+    rodBuyBtnEl.disabled = hasFishingRod;
+    rodBuyBtnEl.textContent = hasFishingRod
+      ? 'Rod Owned'
+      : `Buy Fishing Rod (${buyPrice.toLocaleString()} coins)`;
+  }
+  if (rodUpgradeBtnEl) {
+    rodUpgradeBtnEl.disabled = !hasFishingRod || !next;
+  }
+}
+
+function loadRodShopModal(statusText = '') {
+  setRodShopStatus(statusText || 'Loading rod shop...', '#93c5fd');
+  socket.emit('shop:getRodShop', {}, (resp) => {
+    if (!resp?.ok) {
+      setRodShopStatus(resp?.error || 'Could not load rod shop.', '#fecaca');
+      return;
+    }
+    if (resp.progress) {
+      applyProgressState(resp.progress);
+    }
+    rodShopSnapshot = resp;
+    renderRodShopModal();
+    setRodShopStatus(statusText || 'Use fish and coins to upgrade your rod.', '#cbd5e1');
+  });
+}
+
+function marketSellEntries(category = 'fish') {
+  if (category === 'ore') {
+    return SELLABLE_ORE_ORDER
+      .map((oreId) => {
+        const qty = Math.max(0, Math.floor(Number(questState.inventory?.[oreId]) || 0));
+        if (qty <= 0) return null;
+        return {
+          id: oreId,
+          name: capitalizeWord(oreId),
+          qty,
+          unitPrice: ORE_SELL_PRICE[oreId] || 0
+        };
+      })
+      .filter(Boolean);
+  }
+  return FISH_CATALOG_SORTED
+    .map((fish) => {
+      const qty = ownedFishCount(fish.id);
+      if (qty <= 0) return null;
+      return {
+        id: fish.id,
+        name: `${fish.name} (${capitalizeWord(fish.rarity)})`,
+        qty,
+        unitPrice: fishSellPriceById(fish.id)
+      };
+    })
+    .filter(Boolean);
+}
+
+function selectedMarketCategory() {
+  return marketSellCategoryEl?.value === 'ore' ? 'ore' : 'fish';
+}
+
+function selectedMarketSellEntry() {
+  const category = selectedMarketCategory();
+  const selectedId = typeof marketSellItemEl?.value === 'string' ? marketSellItemEl.value : '';
+  const entry = marketSellEntries(category).find((item) => item.id === selectedId) || null;
+  return { category, entry };
+}
+
+function renderMarketSellOptions() {
+  if (!marketSellItemEl) return;
+  const category = selectedMarketCategory();
+  const entries = marketSellEntries(category);
+  const previous = marketSellItemEl.value;
+  marketSellItemEl.innerHTML = '';
+  if (!entries.length) {
+    const empty = document.createElement('option');
+    empty.value = '';
+    empty.textContent = 'No items available';
+    marketSellItemEl.appendChild(empty);
+    marketSellItemEl.disabled = true;
+    if (marketSellAmountEl) {
+      marketSellAmountEl.value = '1';
+      marketSellAmountEl.max = '1';
+    }
+    if (marketSellBtnEl) marketSellBtnEl.disabled = true;
+    return;
+  }
+  for (const entry of entries) {
+    const option = document.createElement('option');
+    option.value = entry.id;
+    option.textContent = `${entry.name} (x${entry.qty.toLocaleString()})`;
+    marketSellItemEl.appendChild(option);
+  }
+  marketSellItemEl.disabled = false;
+  marketSellItemEl.value = entries.some((row) => row.id === previous) ? previous : entries[0].id;
+}
+
+function renderMarketSellPreview() {
+  const { entry } = selectedMarketSellEntry();
+  if (!entry) {
+    if (marketSellPricePreviewEl) marketSellPricePreviewEl.textContent = 'Value: --';
+    if (marketSellBtnEl) marketSellBtnEl.disabled = true;
+    return;
+  }
+  const maxOwned = Math.max(1, entry.qty);
+  const requested = Number(marketSellAmountEl?.value);
+  const amount = Number.isFinite(requested) ? THREE.MathUtils.clamp(Math.floor(requested), 1, maxOwned) : 1;
+  if (marketSellAmountEl) {
+    marketSellAmountEl.value = String(amount);
+    marketSellAmountEl.max = String(maxOwned);
+  }
+  const total = amount * entry.unitPrice;
+  if (marketSellPricePreviewEl) {
+    marketSellPricePreviewEl.textContent = `Value: ${amount.toLocaleString()} x ${entry.unitPrice.toLocaleString()} = ${total.toLocaleString()} coins`;
+  }
+  if (marketSellBtnEl) marketSellBtnEl.disabled = false;
+}
+
+function renderMarketQuestFishOptions() {
+  if (!marketQuestFishItemEl) return;
+  const previous = marketQuestFishItemEl.value;
+  const entries = FISH_CATALOG_SORTED
+    .map((fish) => {
+      const qty = ownedFishCount(fish.id);
+      if (qty <= 0) return null;
+      return { fish, qty };
+    })
+    .filter(Boolean);
+  marketQuestFishItemEl.innerHTML = '';
+  if (!entries.length) {
+    const empty = document.createElement('option');
+    empty.value = '';
+    empty.textContent = 'No fish in bag';
+    marketQuestFishItemEl.appendChild(empty);
+    marketQuestFishItemEl.disabled = true;
+    if (marketQuestFishAmountEl) {
+      marketQuestFishAmountEl.value = '1';
+      marketQuestFishAmountEl.max = '1';
+    }
+    return;
+  }
+  for (const row of entries) {
+    const option = document.createElement('option');
+    option.value = row.fish.id;
+    option.textContent = `${row.fish.name} (${capitalizeWord(row.fish.rarity)}) x${row.qty.toLocaleString()}`;
+    marketQuestFishItemEl.appendChild(option);
+  }
+  marketQuestFishItemEl.disabled = false;
+  marketQuestFishItemEl.value = entries.some((row) => row.fish.id === previous) ? previous : entries[0].fish.id;
+  const selectedQty = entries.find((row) => row.fish.id === marketQuestFishItemEl.value)?.qty || 1;
+  const requested = Number(marketQuestFishAmountEl?.value);
+  const amount = Number.isFinite(requested) ? THREE.MathUtils.clamp(Math.floor(requested), 1, selectedQty) : 1;
+  if (marketQuestFishAmountEl) {
+    marketQuestFishAmountEl.value = String(amount);
+    marketQuestFishAmountEl.max = String(selectedQty);
+  }
+}
+
+function renderMarketQuestSection() {
+  const quest = questState.fishingQuest;
+  if (!quest) {
+    if (marketQuestTitleEl) marketQuestTitleEl.textContent = 'Fishing quest unavailable';
+    if (marketQuestDescEl) marketQuestDescEl.textContent = 'Try reopening this panel.';
+    if (marketQuestProgressEl) marketQuestProgressEl.textContent = '';
+    if (marketQuestAcceptBtnEl) marketQuestAcceptBtnEl.disabled = true;
+    if (marketQuestTurnInBtnEl) marketQuestTurnInBtnEl.disabled = true;
+    if (marketQuestClaimBtnEl) marketQuestClaimBtnEl.disabled = true;
+    return;
+  }
+  const targetFish = quest.targetFishId ? FISH_BY_ID.get(quest.targetFishId) : null;
+  const targetLabel = targetFish
+    ? targetFish.name
+    : `${capitalizeWord(normalizeFishRarity(quest.targetRarity, 'common'))} fish`;
+  if (marketQuestTitleEl) marketQuestTitleEl.textContent = quest.title || 'Fishing Quest';
+  if (marketQuestDescEl) marketQuestDescEl.textContent = quest.description || `Bring ${targetLabel}.`;
+  if (marketQuestProgressEl) {
+    const status = capitalizeWord(quest.status || 'available');
+    const progress = `${Math.max(0, Math.floor(Number(quest.progress) || 0))}/${Math.max(1, Math.floor(Number(quest.targetCount) || 1))}`;
+    const reward = Math.max(0, Math.floor(Number(quest.rewardCoins) || 0)).toLocaleString();
+    marketQuestProgressEl.textContent = `Status: ${status} | Progress: ${progress} | Reward: ${reward} coins`;
+  }
+  renderMarketQuestFishOptions();
+  if (marketQuestAcceptBtnEl) marketQuestAcceptBtnEl.disabled = quest.status !== 'available';
+  if (marketQuestTurnInBtnEl) {
+    const hasSelection = Boolean(marketQuestFishItemEl && marketQuestFishItemEl.value);
+    marketQuestTurnInBtnEl.disabled = quest.status !== 'active' || !hasSelection;
+  }
+  if (marketQuestClaimBtnEl) marketQuestClaimBtnEl.disabled = quest.status !== 'ready';
+}
+
+function renderMarketModal() {
+  renderFishIndex();
+  renderMarketSellOptions();
+  renderMarketSellPreview();
+  renderMarketQuestSection();
 }
 
 function showFishCatchCard(fish, amount = 1) {
@@ -5369,11 +5855,24 @@ function applyProgressState(progress) {
     ? Math.max(0, Math.floor(torchCount))
     : 1;
   const fishCount = Number(inv.fish);
+  questState.fishBag = normalizeFishBagMap(progress.fishBag);
+  const fishFromBag = Object.values(questState.fishBag).reduce((sum, count) => sum + (Number(count) || 0), 0);
   questState.inventory.fish = Number.isFinite(fishCount)
     ? Math.max(0, Math.floor(fishCount))
-    : 0;
+    : Math.max(0, Math.floor(fishFromBag));
+  if (fishFromBag > 0) {
+    questState.inventory.fish = Math.max(0, Math.floor(fishFromBag));
+  }
   questState.fishIndex = normalizeFishIndexMap(progress.fishIndex);
   questState.hasFishingRod = progress.hasFishingRod === true;
+  questState.fishingRodTier = normalizeRodTier(progress.fishingRodTier, 'basic');
+  if (!questState.hasFishingRod) {
+    questState.fishingRodTier = 'basic';
+  }
+  questState.fishingQuest = progress.fishingQuest && typeof progress.fishingQuest === 'object'
+    ? { ...progress.fishingQuest }
+    : null;
+  questState.fishingQuestCompletions = Math.max(0, Math.floor(Number(progress.fishingQuestCompletions) || 0));
   questState.maxStaminaBonusPct = Math.max(0, Math.min(50, Math.floor(Number(progress.maxStaminaBonusPct) || 0)));
   if (questState.inventory.torch <= 0) {
     torchEquipped = false;
@@ -5390,6 +5889,15 @@ function applyProgressState(progress) {
   renderInventoryBar();
   if (fishIndexOpen) {
     renderFishIndex();
+  }
+  if (inventoryModalOpen) {
+    renderInventoryModal();
+  }
+  if (marketModalOpen) {
+    renderMarketModal();
+  }
+  if (rodShopModalOpen) {
+    renderRodShopModal();
   }
   refreshConsumeActionVisibility(local);
   updateQuestPanel();
@@ -6147,24 +6655,6 @@ function findFishingSpotById(id) {
   return fishingSpots.find((spot) => spot.id === id) || null;
 }
 
-function randomFishRarityForMeter() {
-  const entries = Object.entries(FISH_METER_RARITY_WEIGHTS);
-  const total = entries.reduce((sum, [, weight]) => sum + Math.max(0, Number(weight) || 0), 0) || 1;
-  let roll = Math.random() * total;
-  for (const [rarity, weight] of entries) {
-    roll -= Math.max(0, Number(weight) || 0);
-    if (roll <= 0) return normalizeFishRarity(rarity, 'common');
-  }
-  return 'common';
-}
-
-function randomFishForRarity(rarity) {
-  const safeRarity = normalizeFishRarity(rarity, 'common');
-  const pool = FISH_CATALOG.filter((fish) => fish.rarity === safeRarity);
-  if (pool.length <= 0) return FISH_CATALOG[0];
-  return pool[Math.floor(Math.random() * pool.length)];
-}
-
 function activeFishingSpot(local) {
   if (!local || !fishingMiniGame.active) return null;
   const spot = findFishingSpotById(fishingMiniGame.spotId);
@@ -6173,108 +6663,140 @@ function activeFishingSpot(local) {
   return spot;
 }
 
-function startFishingMinigame(spot) {
-  if (!spot) return false;
-  resetFishingMiniGame();
-  const rarity = randomFishRarityForMeter();
-  const profile = fishTimingProfile(rarity);
-  const zoneWidth = THREE.MathUtils.clamp(profile.zoneWidth, 0.09, 0.34);
-  const half = zoneWidth * 0.5;
-  const minCenter = half + 0.06;
-  const maxCenter = 1 - half - 0.06;
-  const zoneCenter = minCenter + Math.random() * Math.max(0.01, maxCenter - minCenter);
-  const previewFish = randomFishForRarity(rarity);
-
-  fishingMiniGame.active = true;
-  fishingMiniGame.spotId = spot.id;
-  fishingMiniGame.pointer = 0.08 + Math.random() * 0.84;
-  fishingMiniGame.direction = Math.random() < 0.5 ? -1 : 1;
-  fishingMiniGame.zoneCenter = zoneCenter;
-  fishingMiniGame.zoneWidth = zoneWidth;
-  fishingMiniGame.speed = Math.max(0.6, Number(profile.speed) || 1);
-  fishingMiniGame.timeoutAt = performance.now() + Math.max(1500, Number(profile.timeoutMs) || FISH_TIMING_TIMEOUT_FALLBACK_MS);
-  fishingMiniGame.rarity = rarity;
-
+function updateFishingMeterVisuals() {
+  const half = THREE.MathUtils.clamp(fishingMiniGame.zoneWidth * 0.5, 0.04, 0.45);
   if (fishingMeterZoneEl) {
-    fishingMeterZoneEl.style.left = `${((zoneCenter - half) * 100).toFixed(2)}%`;
-    fishingMeterZoneEl.style.width = `${(zoneWidth * 100).toFixed(2)}%`;
+    fishingMeterZoneEl.style.left = `${((fishingMiniGame.zoneCenter - half) * 100).toFixed(2)}%`;
+    fishingMeterZoneEl.style.width = `${(fishingMiniGame.zoneWidth * 100).toFixed(2)}%`;
   }
   if (fishingMeterPointerEl) {
-    fishingMeterPointerEl.style.left = `${(fishingMiniGame.pointer * 100).toFixed(2)}%`;
+    fishingMeterPointerEl.style.left = `${(fishingMiniGame.cursor * 100).toFixed(2)}%`;
   }
-  if (fishingMeterPreviewNameEl) {
-    fishingMeterPreviewNameEl.textContent = 'Unknown Catch';
+}
+
+function applyFishingCatchResponse(resp, fallbackFish = null) {
+  if (!resp?.ok) {
+    updateQuestPanel(resp?.error || 'Could not catch fish.');
+    appendChatLine({ text: resp?.error || 'Could not catch fish.', isSystem: true });
+    return;
   }
+  if (resp.progress) {
+    applyProgressState(resp.progress);
+  }
+  const fish = fishFromServerPayload(resp?.caughtFish) || fallbackFish;
+  if (!fish) {
+    updateQuestPanel('Caught fish successfully.');
+    appendChatLine({ text: 'Caught 1 fish.', isSystem: true });
+    return;
+  }
+  const fishCount = Math.max(1, Math.floor(Number(resp?.fishCaughtCount) || ownedFishCount(fish.id) || 1));
+  showFishCatchCard(fish, fishCount);
+  renderFishIndex();
+  updateQuestPanel(`Caught ${fish.name} (${capitalizeWord(fish.rarity)}).`);
+  appendChatLine({ text: `Caught ${fish.name} (${capitalizeWord(fish.rarity)}).`, isSystem: true });
+}
+
+function completeFishingMinigame(local) {
+  const spot = activeFishingSpot(local);
+  if (!spot) {
+    setFishingMeterStatus('Fishing canceled. Move back to the fishing spot.', '#fecaca');
+    scheduleFishingMiniGameClose(170);
+    return;
+  }
+  const challengeId = typeof fishingMiniGame.challengeId === 'string' ? fishingMiniGame.challengeId : '';
+  const targetFish = fishingMiniGame.targetFish;
+  fishingMiniGame.active = false;
+  fishingMiniGame.isHolding = false;
+  setFishingMeterStatus('Hooked! Reeling in...', '#86efac');
+  scheduleFishingMiniGameClose(180);
+  socket.emit('fish:catch', { challengeId }, (resp) => {
+    applyFishingCatchResponse(resp, targetFish);
+  });
+}
+
+function startFishingMinigame(spot) {
+  if (!spot || fishingMiniGame.starting) return false;
+  resetFishingMiniGame();
+  fishingMiniGame.active = true;
+  fishingMiniGame.starting = true;
+  fishingMiniGame.spotId = spot.id;
+  fishingMiniGame.cursor = 0.32;
+  fishingMiniGame.zoneCenter = 0.5;
+  fishingMiniGame.zoneWidth = 0.24;
+  updateFishingMeterVisuals();
+  if (fishingMeterPreviewNameEl) fishingMeterPreviewNameEl.textContent = 'Casting...';
   if (fishingMeterPreviewRarityEl) {
-    fishingMeterPreviewRarityEl.textContent = `${capitalizeWord(rarity)} difficulty`;
-    fishingMeterPreviewRarityEl.style.color = FISH_RARITY_COLORS[rarity] || '#93c5fd';
+    fishingMeterPreviewRarityEl.textContent = 'Waiting for bite';
+    fishingMeterPreviewRarityEl.style.color = '#93c5fd';
   }
-  applyFishIcon(fishingMeterPreviewIconEl, previewFish, { locked: true });
-  setFishingMeterStatus('Press E or click while marker is in green.', '#fef3c7');
+  setFishingMeterStatus('Casting line...', '#93c5fd');
   fishingMeterEl?.classList.remove('hidden');
   setFishingFocusMode(true);
-  updateQuestPanel('Line is tight. Hit the green zone to hook fish.');
-  appendChatLine({ text: `Fishing started: ${capitalizeWord(rarity)} timing.`, isSystem: true });
+  socket.emit('fish:start', { spotId: spot.id }, (resp) => {
+    if (!fishingMiniGame.active || fishingMiniGame.spotId !== spot.id) {
+      return;
+    }
+    fishingMiniGame.starting = false;
+    const latestLocal = players.get(localPlayerId);
+    if (!resp?.ok) {
+      fishingMiniGame.active = false;
+      scheduleFishingMiniGameClose(170);
+      updateQuestPanel(resp?.error || 'Could not start fishing.');
+      appendChatLine({ text: resp?.error || 'Could not start fishing.', isSystem: true });
+      return;
+    }
+    const activeSpot = nearestFishingSpot(latestLocal, FISHING_SPOT_RADIUS + 0.6);
+    if (!latestLocal || !activeSpot || activeSpot.id !== spot.id) {
+      fishingMiniGame.active = false;
+      scheduleFishingMiniGameClose(80);
+      return;
+    }
+    const fish = fishFromServerPayload(resp.fish);
+    const difficulty = resp?.difficulty || {};
+    const zoneWidth = THREE.MathUtils.clamp(Number(difficulty.zoneWidth) || 0.22, 0.09, 0.42);
+    const half = zoneWidth * 0.5;
+    const minCenter = half;
+    const maxCenter = 1 - half;
+    fishingMiniGame.active = true;
+    fishingMiniGame.spotId = spot.id;
+    fishingMiniGame.challengeId = typeof resp.challengeId === 'string' ? resp.challengeId : null;
+    fishingMiniGame.targetFish = fish;
+    fishingMiniGame.cursor = 0.32;
+    fishingMiniGame.isHolding = false;
+    fishingMiniGame.zonePointer = Math.random();
+    fishingMiniGame.zoneDirection = Math.random() < 0.5 ? -1 : 1;
+    fishingMiniGame.zoneWidth = zoneWidth;
+    fishingMiniGame.zoneSpeed = THREE.MathUtils.clamp(Number(difficulty.zoneSpeed) || 0.5, 0.2, 1.8);
+    fishingMiniGame.cursorRiseSpeed = THREE.MathUtils.clamp(Number(difficulty.cursorRiseSpeed) || 0.9, 0.35, 2.2);
+    fishingMiniGame.cursorFallSpeed = THREE.MathUtils.clamp(Number(difficulty.cursorFallSpeed) || 0.8, 0.35, 2.2);
+    fishingMiniGame.decaySpeed = THREE.MathUtils.clamp(Number(difficulty.decaySpeed) || 0.35, 0.05, 2.5);
+    fishingMiniGame.requiredHoldMs = THREE.MathUtils.clamp(Math.floor(Number(difficulty.requiredHoldMs) || 1000), 500, 5000);
+    fishingMiniGame.holdMs = 0;
+    fishingMiniGame.timeoutAt = performance.now() + THREE.MathUtils.clamp(Math.floor(Number(difficulty.timeoutMs) || 9800), 1500, 30000);
+    fishingMiniGame.rarity = normalizeFishRarity(fish?.rarity, 'common');
+    fishingMiniGame.zoneCenter = THREE.MathUtils.clamp(minCenter + fishingMiniGame.zonePointer * Math.max(0.001, (maxCenter - minCenter)), minCenter, maxCenter);
+    updateFishingMeterVisuals();
+
+    if (fish && fishingMeterPreviewNameEl) {
+      fishingMeterPreviewNameEl.textContent = fish.name;
+    } else if (fishingMeterPreviewNameEl) {
+      fishingMeterPreviewNameEl.textContent = 'Mystery catch';
+    }
+    if (fishingMeterPreviewRarityEl) {
+      const rarity = normalizeFishRarity(fish?.rarity, 'common');
+      fishingMeterPreviewRarityEl.textContent = `${capitalizeWord(rarity)} difficulty`;
+      fishingMeterPreviewRarityEl.style.color = FISH_RARITY_COLORS[rarity] || '#93c5fd';
+    }
+    applyFishIcon(fishingMeterPreviewIconEl, fish || FISH_CATALOG[0], { locked: false });
+    setFishingMeterStatus('Hold click to move white box right. Release to drift left.', '#fef3c7');
+    updateQuestPanel('Keep the white box inside the moving green zone to catch the fish.');
+  });
   return true;
 }
 
-function attemptFishingTimingHit(local) {
-  if (!fishingMiniGame.active) return false;
-  const now = performance.now();
-  if (now - lastMineAt < FISH_TIMING_HIT_COOLDOWN_MS) return true;
-  lastMineAt = now;
-
-  if (!local || inMine || inLighthouseInterior || local.onBoat) {
-    resetFishingMiniGame();
-    return true;
-  }
-  const spot = activeFishingSpot(local);
-  if (!spot) {
-    fishingMiniGame.active = false;
-    setFishingMeterStatus('Fishing canceled. Move back to the fishing spot.', '#fecaca');
-    scheduleFishingMiniGameClose(180);
-    updateQuestPanel('Fishing canceled. Move closer to the fishing spot.');
-    return true;
-  }
-
-  const zoneHalf = fishingMiniGame.zoneWidth * 0.5;
-  const zoneMin = fishingMiniGame.zoneCenter - zoneHalf;
-  const zoneMax = fishingMiniGame.zoneCenter + zoneHalf;
-  const hit = fishingMiniGame.pointer >= zoneMin && fishingMiniGame.pointer <= zoneMax;
-  fishingMiniGame.active = false;
-
-  if (!hit) {
-    setFishingMeterStatus('Missed timing. Fish escaped.', '#fecaca');
-    scheduleFishingMiniGameClose(170);
-    updateQuestPanel('Missed fish timing. Cast again.');
-    appendChatLine({ text: 'Missed timing. Cast again.', isSystem: true });
-    return true;
-  }
-
-  setFishingMeterStatus('Great hit! Reeling fish...', '#86efac');
-  scheduleFishingMiniGameClose(180);
-  socket.emit('fish:catch', {}, (resp) => {
-    if (!resp?.ok) {
-      updateQuestPanel(resp?.error || 'Could not catch fish.');
-      appendChatLine({ text: resp?.error || 'Could not catch fish.', isSystem: true });
-      return;
-    }
-    if (resp.progress) {
-      applyProgressState(resp.progress);
-    }
-    const fish = fishFromServerPayload(resp?.caughtFish);
-    if (!fish) {
-      updateQuestPanel('Caught fish successfully.');
-      appendChatLine({ text: 'Caught 1 fish.', isSystem: true });
-      return;
-    }
-    const fishCount = Math.max(1, Math.floor(Number(resp?.fishCaughtCount) || 1));
-    showFishCatchCard(fish, fishCount);
-    renderFishIndex();
-    updateQuestPanel(`Caught ${fish.name} (${capitalizeWord(fish.rarity)}).`);
-    appendChatLine({ text: `Caught ${fish.name} (${capitalizeWord(fish.rarity)}).`, isSystem: true });
-  });
-  return true;
+function setFishingHoldState(holding) {
+  if (!fishingMiniGame.active || fishingMiniGame.starting) return;
+  fishingMiniGame.isHolding = Boolean(holding);
 }
 
 function tryFishingSpotInteract(local) {
@@ -6285,7 +6807,10 @@ function tryFishingSpotInteract(local) {
     return true;
   }
   if (fishingMiniGame.active) {
-    return attemptFishingTimingHit(local);
+    return true;
+  }
+  if (fishingMiniGame.starting) {
+    return true;
   }
   const spot = nearestFishingSpot(local);
   if (!spot) return false;
@@ -6308,7 +6833,7 @@ function updateFishingMinigame(local, nowMs, delta) {
     || menuOpen
     || mineWarningOpen
     || npcDialogueOpen
-    || fishIndexOpen
+    || isAnyGameplayOverlayOpen()
     || !customizeModalEl.classList.contains('hidden')
   ) {
     resetFishingMiniGame();
@@ -6322,6 +6847,10 @@ function updateFishingMinigame(local, nowMs, delta) {
     updateQuestPanel('Fishing canceled. Move back to a fishing spot.');
     return;
   }
+  if (fishingMiniGame.starting) {
+    setFishingMeterStatus('Casting line...', '#93c5fd');
+    return;
+  }
   if (nowMs > fishingMiniGame.timeoutAt) {
     fishingMiniGame.active = false;
     setFishingMeterStatus('Too slow. Fish got away.', '#fecaca');
@@ -6329,87 +6858,55 @@ function updateFishingMinigame(local, nowMs, delta) {
     updateQuestPanel('Fish got away. Cast again.');
     return;
   }
-  let pointer = fishingMiniGame.pointer + delta * fishingMiniGame.speed * fishingMiniGame.direction;
-  if (pointer > 1) {
-    pointer = 2 - pointer;
-    fishingMiniGame.direction = -1;
-  } else if (pointer < 0) {
-    pointer = -pointer;
-    fishingMiniGame.direction = 1;
+
+  const half = fishingMiniGame.zoneWidth * 0.5;
+  const minCenter = half;
+  const maxCenter = 1 - half;
+  let zoneCenter = fishingMiniGame.zoneCenter + delta * fishingMiniGame.zoneSpeed * fishingMiniGame.zoneDirection;
+  if (zoneCenter > maxCenter) {
+    zoneCenter = maxCenter - (zoneCenter - maxCenter);
+    fishingMiniGame.zoneDirection = -1;
+  } else if (zoneCenter < minCenter) {
+    zoneCenter = minCenter + (minCenter - zoneCenter);
+    fishingMiniGame.zoneDirection = 1;
   }
-  fishingMiniGame.pointer = THREE.MathUtils.clamp(pointer, 0, 1);
-  if (fishingMeterPointerEl) {
-    fishingMeterPointerEl.style.left = `${(fishingMiniGame.pointer * 100).toFixed(2)}%`;
+  fishingMiniGame.zoneCenter = THREE.MathUtils.clamp(zoneCenter, minCenter, maxCenter);
+
+  const cursorVelocity = fishingMiniGame.isHolding
+    ? fishingMiniGame.cursorRiseSpeed
+    : -fishingMiniGame.cursorFallSpeed;
+  fishingMiniGame.cursor = THREE.MathUtils.clamp(fishingMiniGame.cursor + cursorVelocity * delta, 0, 1);
+  updateFishingMeterVisuals();
+
+  const zoneMin = fishingMiniGame.zoneCenter - half;
+  const zoneMax = fishingMiniGame.zoneCenter + half;
+  const inside = fishingMiniGame.cursor >= zoneMin && fishingMiniGame.cursor <= zoneMax;
+  const holdDelta = delta * 1000;
+  if (inside) {
+    fishingMiniGame.holdMs = Math.min(fishingMiniGame.requiredHoldMs, fishingMiniGame.holdMs + holdDelta);
+  } else {
+    fishingMiniGame.holdMs = Math.max(0, fishingMiniGame.holdMs - holdDelta * fishingMiniGame.decaySpeed);
+  }
+  const progressPct = Math.round((fishingMiniGame.holdMs / Math.max(1, fishingMiniGame.requiredHoldMs)) * 100);
+  const statusColor = inside ? '#86efac' : '#fef3c7';
+  setFishingMeterStatus(`Reel control: ${progressPct}% (${Math.max(0, Math.ceil((fishingMiniGame.timeoutAt - nowMs) / 1000))}s left)`, statusColor);
+  if (fishingMiniGame.holdMs >= fishingMiniGame.requiredHoldMs) {
+    completeFishingMinigame(local);
   }
 }
 
 function fishingVendorInteract(local) {
   if (!isNearFishingVendor(local)) return false;
-  if (questState.hasFishingRod) {
-    openNpcDialogue({
-      name: 'Fishing Vendor',
-      text: 'You already own a fishing rod. Fish at the glowing spots near shore.',
-      primaryLabel: 'Okay',
-      secondaryLabel: 'Close'
-    });
-    return true;
-  }
-  openNpcDialogue({
-    name: 'Fishing Vendor',
-    text: `Fishing rod costs ${FISHING_ROD_PRICE} coins. You currently have ${questState.coins} coins.`,
-    primaryLabel: 'Buy Rod',
-    secondaryLabel: 'Cancel',
-    onPrimary: () => {
-      socket.emit('shop:buyFishingRod', {}, (resp) => {
-        if (!resp?.ok) {
-          updateQuestPanel(resp?.error || 'Could not buy fishing rod.');
-          return;
-        }
-        if (resp.progress) {
-          applyProgressState(resp.progress);
-        }
-        closeNpcDialogue();
-        updateQuestPanel('Bought fishing rod.');
-      });
-    },
-    onSecondary: closeNpcDialogue
-  });
+  setRodShopModalOpen(true);
+  loadRodShopModal();
   return true;
 }
 
 function fishMarketInteract(local) {
   if (!isNearFishMarket(local)) return false;
-  const fishCount = Math.max(0, Math.floor(Number(questState.inventory.fish) || 0));
-  if (fishCount <= 0) {
-    openNpcDialogue({
-      name: 'Market Trader',
-      text: 'Bring me fish and I will pay coins.',
-      primaryLabel: 'Okay',
-      secondaryLabel: 'Close'
-    });
-    return true;
-  }
-  const payout = fishCount * FISH_SELL_PRICE;
-  openNpcDialogue({
-    name: 'Market Trader',
-    text: `You have ${fishCount} fish. Sell all for ${payout} coins?`,
-    primaryLabel: 'Sell All',
-    secondaryLabel: 'Cancel',
-    onPrimary: () => {
-      socket.emit('fish:sell', {}, (resp) => {
-        if (!resp?.ok) {
-          updateQuestPanel(resp?.error || 'Could not sell fish.');
-          return;
-        }
-        if (resp.progress) {
-          applyProgressState(resp.progress);
-        }
-        closeNpcDialogue();
-        updateQuestPanel(`Sold ${resp?.sold || fishCount} fish for ${resp?.coinsEarned || payout} coins.`);
-      });
-    },
-    onSecondary: closeNpcDialogue
-  });
+  setMarketModalOpen(true);
+  renderMarketModal();
+  setMarketStatus('Select fish/ore to sell, or manage your fishing quest.', '#cbd5e1');
   return true;
 }
 
@@ -6670,7 +7167,7 @@ function updateMobileUseButtonVisibility(local) {
     && isAuthenticated
     && !mineWarningOpen
     && !menuOpen
-    && !fishIndexOpen
+    && !isAnyGameplayOverlayOpen()
     && authModalEl.classList.contains('hidden')
     && customizeModalEl.classList.contains('hidden')
     && hasManualInteractTarget(local);
@@ -6679,7 +7176,7 @@ function updateMobileUseButtonVisibility(local) {
 }
 
 function tryInteract() {
-  if (!isAuthenticated || menuOpen || fishIndexOpen || !customizeModalEl.classList.contains('hidden')) return;
+  if (!isAuthenticated || menuOpen || isAnyGameplayOverlayOpen() || !customizeModalEl.classList.contains('hidden')) return;
   if (mineWarningOpen) return;
   if (npcDialogueOpen) {
     if (typeof npcDialoguePrimaryAction === 'function') npcDialoguePrimaryAction();
@@ -7013,6 +7510,18 @@ window.addEventListener('keydown', (event) => {
       setCustomizeModal(false);
       return;
     }
+    if (inventoryModalOpen) {
+      setInventoryModalOpen(false);
+      return;
+    }
+    if (rodShopModalOpen) {
+      setRodShopModalOpen(false);
+      return;
+    }
+    if (marketModalOpen) {
+      setMarketModalOpen(false);
+      return;
+    }
     if (fishIndexOpen) {
       setFishIndexOpen(false);
       return;
@@ -7033,7 +7542,7 @@ window.addEventListener('keydown', (event) => {
     isAuthenticated &&
     authModalEl.classList.contains('hidden') &&
     customizeModalEl.classList.contains('hidden') &&
-    !fishIndexOpen &&
+    !isAnyGameplayOverlayOpen() &&
     !typingInInput
   ) {
     event.preventDefault();
@@ -7049,7 +7558,7 @@ window.addEventListener('keydown', (event) => {
     isAuthenticated &&
     authModalEl.classList.contains('hidden') &&
     customizeModalEl.classList.contains('hidden') &&
-    !fishIndexOpen &&
+    !isAnyGameplayOverlayOpen() &&
     !typingInInput
   ) {
     event.preventDefault();
@@ -7067,7 +7576,7 @@ window.addEventListener('keydown', (event) => {
     isAuthenticated &&
     authModalEl.classList.contains('hidden') &&
     customizeModalEl.classList.contains('hidden') &&
-    !fishIndexOpen &&
+    !isAnyGameplayOverlayOpen() &&
     !typingInInput
   ) {
     event.preventDefault();
@@ -7075,7 +7584,7 @@ window.addEventListener('keydown', (event) => {
     return;
   }
 
-  if (!isAuthenticated || menuOpen || fishIndexOpen || !customizeModalEl.classList.contains('hidden')) return;
+  if (!isAuthenticated || menuOpen || isAnyGameplayOverlayOpen() || !customizeModalEl.classList.contains('hidden')) return;
   if (typingInInput) return;
   if (key === 't' && !event.repeat) {
     event.preventDefault();
@@ -7117,7 +7626,7 @@ window.addEventListener('keyup', (event) => {
   const key = event.key.toLowerCase();
   // Always release keys even while menus/modals are open, so input cannot get stuck.
   keys.delete(key);
-  if (!isAuthenticated || menuOpen || fishIndexOpen || !customizeModalEl.classList.contains('hidden')) return;
+  if (!isAuthenticated || menuOpen || isAnyGameplayOverlayOpen() || !customizeModalEl.classList.contains('hidden')) return;
   if (key === 'q') {
     emoteWheelOpen = false;
     emoteWheelEl?.classList.add('hidden');
@@ -7128,13 +7637,21 @@ window.addEventListener('keyup', (event) => {
 window.addEventListener('blur', () => {
   keys.clear();
   pendingJump = false;
+  setFishingHoldState(false);
 });
 
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
     keys.clear();
     pendingJump = false;
+    setFishingHoldState(false);
   }
+});
+window.addEventListener('pointerup', () => {
+  setFishingHoldState(false);
+});
+window.addEventListener('pointercancel', () => {
+  setFishingHoldState(false);
 });
 
 chatFormEl.addEventListener('submit', (event) => {
@@ -7499,6 +8016,10 @@ fishIndexToggleEl?.addEventListener('click', () => {
   if (!isAuthenticated) return;
   setFishIndexOpen(!fishIndexOpen);
 });
+inventoryToggleEl?.addEventListener('click', () => {
+  if (!isAuthenticated) return;
+  setInventoryModalOpen(!inventoryModalOpen);
+});
 performanceToggleEl?.addEventListener('click', () => {
   const currentIdx = GRAPHICS_PRESETS.indexOf(graphicsPreset);
   const nextIdx = currentIdx >= 0 ? (currentIdx + 1) % GRAPHICS_PRESETS.length : 0;
@@ -7542,6 +8063,149 @@ customizeModalEl?.addEventListener('click', (event) => {
 fishIndexCloseEl?.addEventListener('click', () => setFishIndexOpen(false));
 fishIndexModalEl?.addEventListener('click', (event) => {
   if (event.target === fishIndexModalEl) setFishIndexOpen(false);
+});
+inventoryCloseEl?.addEventListener('click', () => setInventoryModalOpen(false));
+inventoryModalEl?.addEventListener('click', (event) => {
+  if (event.target === inventoryModalEl) setInventoryModalOpen(false);
+});
+inventoryTabOresEl?.addEventListener('click', () => {
+  inventoryViewTab = 'ores';
+  renderInventoryModal();
+});
+inventoryTabFishEl?.addEventListener('click', () => {
+  inventoryViewTab = 'fish';
+  renderInventoryModal();
+});
+rodShopCloseEl?.addEventListener('click', () => setRodShopModalOpen(false));
+rodShopModalEl?.addEventListener('click', (event) => {
+  if (event.target === rodShopModalEl) setRodShopModalOpen(false);
+});
+marketCloseEl?.addEventListener('click', () => setMarketModalOpen(false));
+marketModalEl?.addEventListener('click', (event) => {
+  if (event.target === marketModalEl) setMarketModalOpen(false);
+});
+marketOpenIndexEl?.addEventListener('click', () => {
+  setMarketModalOpen(false);
+  setFishIndexOpen(true);
+});
+marketSellCategoryEl?.addEventListener('change', () => {
+  renderMarketSellOptions();
+  renderMarketSellPreview();
+});
+marketSellItemEl?.addEventListener('change', renderMarketSellPreview);
+marketSellAmountEl?.addEventListener('input', renderMarketSellPreview);
+marketSellBtnEl?.addEventListener('click', () => {
+  const { category, entry } = selectedMarketSellEntry();
+  if (!entry) {
+    setMarketStatus('No item selected to sell.', '#fecaca');
+    return;
+  }
+  const requested = Number(marketSellAmountEl?.value);
+  const amount = Number.isFinite(requested) ? THREE.MathUtils.clamp(Math.floor(requested), 1, entry.qty) : 1;
+  socket.emit('market:sellSelection', { category, itemId: entry.id, amount }, (resp) => {
+    if (!resp?.ok) {
+      setMarketStatus(resp?.error || 'Could not sell selected item.', '#fecaca');
+      return;
+    }
+    if (resp.progress) {
+      applyProgressState(resp.progress);
+    }
+    renderMarketModal();
+    const sold = Math.max(1, Math.floor(Number(resp.sold) || amount));
+    const coinsEarned = Math.max(0, Math.floor(Number(resp.coinsEarned) || 0));
+    setMarketStatus(`Sold ${sold.toLocaleString()} for ${coinsEarned.toLocaleString()} coins.`, '#86efac');
+  });
+});
+marketQuestFishItemEl?.addEventListener('change', renderMarketQuestSection);
+marketQuestFishAmountEl?.addEventListener('input', renderMarketQuestSection);
+marketQuestAcceptBtnEl?.addEventListener('click', () => {
+  socket.emit('market:fishingQuestAccept', {}, (resp) => {
+    if (!resp?.ok) {
+      setMarketStatus(resp?.error || 'Could not accept fishing quest.', '#fecaca');
+      return;
+    }
+    if (resp.progress) {
+      applyProgressState(resp.progress);
+    }
+    renderMarketModal();
+    setMarketStatus('Fishing quest accepted.', '#86efac');
+  });
+});
+marketQuestTurnInBtnEl?.addEventListener('click', () => {
+  const fishId = typeof marketQuestFishItemEl?.value === 'string' ? marketQuestFishItemEl.value : '';
+  if (!fishId) {
+    setMarketStatus('Select fish to turn in.', '#fecaca');
+    return;
+  }
+  const owned = ownedFishCount(fishId);
+  const requested = Number(marketQuestFishAmountEl?.value);
+  const amount = Number.isFinite(requested) ? THREE.MathUtils.clamp(Math.floor(requested), 1, Math.max(1, owned)) : 1;
+  socket.emit('market:fishingQuestTurnIn', { fishId, amount }, (resp) => {
+    if (!resp?.ok) {
+      setMarketStatus(resp?.error || 'Could not turn in fish.', '#fecaca');
+      return;
+    }
+    if (resp.progress) {
+      applyProgressState(resp.progress);
+    }
+    renderMarketModal();
+    const turnedIn = Math.max(1, Math.floor(Number(resp.turnedIn) || amount));
+    setMarketStatus(`Turned in ${turnedIn.toLocaleString()} fish.`, '#86efac');
+  });
+});
+marketQuestClaimBtnEl?.addEventListener('click', () => {
+  socket.emit('market:fishingQuestClaim', {}, (resp) => {
+    if (!resp?.ok) {
+      setMarketStatus(resp?.error || 'Could not claim fishing quest.', '#fecaca');
+      return;
+    }
+    if (resp.progress) {
+      applyProgressState(resp.progress);
+    }
+    renderMarketModal();
+    const rewardCoins = Math.max(0, Math.floor(Number(resp.rewardCoins) || 0));
+    setMarketStatus(`Claimed ${rewardCoins.toLocaleString()} coins. New fishing quest generated.`, '#86efac');
+  });
+});
+rodBuyBtnEl?.addEventListener('click', () => {
+  socket.emit('shop:buyFishingRod', {}, (resp) => {
+    if (!resp?.ok) {
+      setRodShopStatus(resp?.error || 'Could not buy fishing rod.', '#fecaca');
+      return;
+    }
+    if (resp.progress) {
+      applyProgressState(resp.progress);
+    }
+    if (resp.rodShop) {
+      rodShopSnapshot = {
+        ...(rodShopSnapshot || {}),
+        ...resp,
+        rodShop: resp.rodShop
+      };
+    }
+    renderRodShopModal();
+    setRodShopStatus('Fishing rod purchased.', '#86efac');
+  });
+});
+rodUpgradeBtnEl?.addEventListener('click', () => {
+  socket.emit('shop:upgradeFishingRod', {}, (resp) => {
+    if (!resp?.ok) {
+      setRodShopStatus(resp?.error || 'Could not upgrade rod.', '#fecaca');
+      return;
+    }
+    if (resp.progress) {
+      applyProgressState(resp.progress);
+    }
+    if (resp.rodShop) {
+      rodShopSnapshot = {
+        ...(rodShopSnapshot || {}),
+        ...resp,
+        rodShop: resp.rodShop
+      };
+    }
+    renderRodShopModal();
+    setRodShopStatus('Rod upgraded successfully.', '#86efac');
+  });
 });
 
 emoteButtons.forEach((button) => {
@@ -7591,7 +8255,16 @@ fishingMeterEl?.addEventListener('pointerdown', (event) => {
   if (typeof event.button === 'number' && event.button !== 0) return;
   event.preventDefault();
   event.stopPropagation();
-  attemptFishingTimingHit(players.get(localPlayerId));
+  setFishingHoldState(true);
+});
+fishingMeterEl?.addEventListener('pointerup', () => {
+  setFishingHoldState(false);
+});
+fishingMeterEl?.addEventListener('pointercancel', () => {
+  setFishingHoldState(false);
+});
+fishingMeterEl?.addEventListener('pointerleave', () => {
+  setFishingHoldState(false);
 });
 
 window.addEventListener('resize', () => {
@@ -7672,13 +8345,13 @@ joystickEl.addEventListener('pointerup', (event) => {
 joystickEl.addEventListener('pointercancel', resetJoystick);
 
 mobileJumpEl?.addEventListener('click', () => {
-  if (!isAuthenticated || menuOpen || fishIndexOpen || !customizeModalEl.classList.contains('hidden')) return;
+  if (!isAuthenticated || menuOpen || isAnyGameplayOverlayOpen() || !customizeModalEl.classList.contains('hidden')) return;
   pendingJump = true;
 });
 mobileUseEl?.addEventListener('click', tryInteract);
 mobileConsumeEl?.addEventListener('click', () => consumeFish(1));
 mobileEmoteEl?.addEventListener('click', () => {
-  if (!isAuthenticated || menuOpen || fishIndexOpen || !customizeModalEl.classList.contains('hidden')) return;
+  if (!isAuthenticated || menuOpen || isAnyGameplayOverlayOpen() || !customizeModalEl.classList.contains('hidden')) return;
   triggerEmote('dance');
 });
 
@@ -7730,7 +8403,7 @@ renderer.domElement.addEventListener('pointerdown', (event) => {
     const local = players.get(localPlayerId);
     if (fishingMiniGame.active) {
       event.preventDefault();
-      attemptFishingTimingHit(local);
+      setFishingHoldState(true);
       return;
     }
     if (miningAccuracyGame.active) {
@@ -7742,7 +8415,7 @@ renderer.domElement.addEventListener('pointerdown', (event) => {
       && isAuthenticated
       && inMine
       && !menuOpen
-      && !fishIndexOpen
+      && !isAnyGameplayOverlayOpen()
       && !mineWarningOpen
       && !npcDialogueOpen
       && customizeModalEl.classList.contains('hidden');
@@ -7785,8 +8458,14 @@ function endOrbit(event) {
   renderer.domElement.releasePointerCapture(event.pointerId);
 }
 
-renderer.domElement.addEventListener('pointerup', endOrbit);
-renderer.domElement.addEventListener('pointercancel', endOrbit);
+renderer.domElement.addEventListener('pointerup', (event) => {
+  setFishingHoldState(false);
+  endOrbit(event);
+});
+renderer.domElement.addEventListener('pointercancel', (event) => {
+  setFishingHoldState(false);
+  endOrbit(event);
+});
 renderer.domElement.addEventListener(
   'wheel',
   (event) => {
@@ -7901,7 +8580,7 @@ function rotatePlayerTowards(player, targetYaw, delta, speed) {
 }
 
 function updateLocalPlayer(delta, nowMs) {
-  if (!isAuthenticated || menuOpen || fishIndexOpen || !customizeModalEl.classList.contains('hidden')) return;
+  if (!isAuthenticated || menuOpen || isAnyGameplayOverlayOpen() || !customizeModalEl.classList.contains('hidden')) return;
   const local = players.get(localPlayerId);
   if (!local) return;
   if (miningAccuracyGame.active || fishingMiniGame.active) {
@@ -8204,23 +8883,21 @@ function updateInteractionHint() {
     return;
   }
   if (fishingMiniGame.active) {
-    interactHintEl.textContent = 'Fishing meter active: click or press E while marker is in green';
+    interactHintEl.textContent = 'Fishing active: hold click to move white box right, release to drift left';
     return;
   }
   if (isNearFishingVendor(local)) {
-    interactHintEl.textContent = questState.hasFishingRod
-      ? 'Press E to talk to Fishing Vendor'
-      : 'Press E to buy Fishing Rod';
+    interactHintEl.textContent = 'Press E to open Fishing Rod upgrades';
     return;
   }
   if (isNearFishMarket(local)) {
-    interactHintEl.textContent = 'Press E to sell fish at market';
+    interactHintEl.textContent = 'Press E to open Market quests and selling';
     return;
   }
   if (!inMine && nearestFishingSpot(local)) {
     interactHintEl.textContent = questState.hasFishingRod
-      ? 'Press E to cast/reel fish'
-      : 'Need fishing rod to fish here';
+      ? 'Press E to cast line at this fishing spot'
+      : 'Need fishing rod to fish at these islands';
     return;
   }
   if (distance2D(local, MINE_ENTRY_POS) < 2.45) {

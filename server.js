@@ -88,10 +88,82 @@ const PICKAXE_PRICE = {
   diamond: 620
 };
 const FISHING_ROD_PRICE = 260;
-const FISH_SELL_PRICE = 20;
 const MAX_STAMINA_BONUS_PCT = 50;
 const FISH_STAMINA_GAIN_PER_FISH = 5;
 const FISH_CATCH_COOLDOWN_MS = 1800;
+const FISH_CHALLENGE_EXPIRE_MS = 20_000;
+const FISH_RARITY_ORDER = ['common', 'uncommon', 'rare', 'epic', 'legendary', 'mythic'];
+const FISH_SELL_BY_RARITY = {
+  common: 18,
+  uncommon: 32,
+  rare: 56,
+  epic: 120,
+  legendary: 320,
+  mythic: 1500
+};
+const ORE_SELL_PRICE = {
+  stone: 2,
+  iron: 8,
+  gold: 22,
+  diamond: 120
+};
+const FISH_ROD_TIERS = ['basic', 'reinforced', 'expert', 'master', 'mythic'];
+const FISH_ROD_DATA = {
+  basic: {
+    label: 'Basic Rod',
+    rarityWeights: { common: 68, uncommon: 22, rare: 8, epic: 2, legendary: 0, mythic: 0 },
+    difficultyAssist: { zoneBonus: 0, requiredHoldScale: 1.0 },
+    next: {
+      tier: 'reinforced',
+      coins: 650,
+      fishCost: { 'pond-minnow': 12, 'coral-perch': 6 }
+    }
+  },
+  reinforced: {
+    label: 'Reinforced Rod',
+    rarityWeights: { common: 51, uncommon: 28, rare: 13, epic: 6, legendary: 2, mythic: 0 },
+    difficultyAssist: { zoneBonus: 0.02, requiredHoldScale: 0.93 },
+    next: {
+      tier: 'expert',
+      coins: 1800,
+      fishCost: { 'drift-trout': 8, 'thunder-pike': 4 }
+    }
+  },
+  expert: {
+    label: 'Expert Rod',
+    rarityWeights: { common: 37, uncommon: 30, rare: 18, epic: 9, legendary: 4, mythic: 2 },
+    difficultyAssist: { zoneBonus: 0.035, requiredHoldScale: 0.88 },
+    next: {
+      tier: 'master',
+      coins: 4200,
+      fishCost: { 'lava-char': 8, 'sunblade-mako': 4 }
+    }
+  },
+  master: {
+    label: 'Master Rod',
+    rarityWeights: { common: 24, uncommon: 29, rare: 22, epic: 13, legendary: 8, mythic: 4 },
+    difficultyAssist: { zoneBonus: 0.05, requiredHoldScale: 0.82 },
+    next: {
+      tier: 'mythic',
+      coins: 9600,
+      fishCost: { 'deepfin-marlin': 8, 'void-whalelet': 2 }
+    }
+  },
+  mythic: {
+    label: 'Mythic Rod',
+    rarityWeights: { common: 14, uncommon: 24, rare: 26, epic: 18, legendary: 12, mythic: 6 },
+    difficultyAssist: { zoneBonus: 0.065, requiredHoldScale: 0.76 },
+    next: null
+  }
+};
+const FISH_DIFFICULTY_BY_RARITY = {
+  common: { zoneWidth: 0.28, zoneSpeed: 0.42, requiredHoldMs: 900, cursorRiseSpeed: 0.85, cursorFallSpeed: 0.72, decaySpeed: 0.32, timeoutMs: 9400 },
+  uncommon: { zoneWidth: 0.24, zoneSpeed: 0.52, requiredHoldMs: 1150, cursorRiseSpeed: 0.95, cursorFallSpeed: 0.8, decaySpeed: 0.4, timeoutMs: 9800 },
+  rare: { zoneWidth: 0.2, zoneSpeed: 0.64, requiredHoldMs: 1420, cursorRiseSpeed: 1.06, cursorFallSpeed: 0.9, decaySpeed: 0.5, timeoutMs: 10_400 },
+  epic: { zoneWidth: 0.17, zoneSpeed: 0.76, requiredHoldMs: 1700, cursorRiseSpeed: 1.2, cursorFallSpeed: 1.02, decaySpeed: 0.58, timeoutMs: 11_000 },
+  legendary: { zoneWidth: 0.14, zoneSpeed: 0.88, requiredHoldMs: 2000, cursorRiseSpeed: 1.34, cursorFallSpeed: 1.14, decaySpeed: 0.67, timeoutMs: 11_800 },
+  mythic: { zoneWidth: 0.12, zoneSpeed: 1.0, requiredHoldMs: 2400, cursorRiseSpeed: 1.48, cursorFallSpeed: 1.28, decaySpeed: 0.78, timeoutMs: 12_600 }
+};
 const FISH_SPECIES = [
   { id: 'pond-minnow', name: 'Pond Minnow', rarity: 'common', chanceLabel: '1 in 5', color: '#7dc7ff', accent: '#d8f2ff', weight: 2800 },
   { id: 'river-darter', name: 'River Darter', rarity: 'common', chanceLabel: '1 in 6', color: '#60a5fa', accent: '#bfdbfe', weight: 2200 },
@@ -149,6 +221,10 @@ app.use(express.static('public'));
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
+}
+
+function distance2DPoint(a, b) {
+  return Math.hypot((a?.x || 0) - (b?.x || 0), (a?.z || 0) - (b?.z || 0));
 }
 
 function clampToIsland(x, z, limit) {
@@ -327,6 +403,59 @@ function defaultInventory() {
   };
 }
 
+function defaultFishBag() {
+  return {};
+}
+
+function fishForQuestPool(completions = 0) {
+  const done = Math.max(0, Math.floor(Number(completions) || 0));
+  if (done < 2) return { rarity: 'common', min: 3, max: 5, allowSpecific: false };
+  if (done < 4) return { rarity: Math.random() < 0.65 ? 'common' : 'uncommon', min: 4, max: 6, allowSpecific: false };
+  if (done < 7) return { rarity: 'uncommon', min: 5, max: 8, allowSpecific: true };
+  if (done < 10) return { rarity: Math.random() < 0.75 ? 'rare' : 'uncommon', min: 5, max: 9, allowSpecific: true };
+  if (done < 14) return { rarity: Math.random() < 0.7 ? 'rare' : 'epic', min: 6, max: 10, allowSpecific: true };
+  if (done < 18) return { rarity: Math.random() < 0.7 ? 'epic' : 'legendary', min: 7, max: 11, allowSpecific: true };
+  return { rarity: Math.random() < 0.75 ? 'legendary' : 'mythic', min: 8, max: 12, allowSpecific: true };
+}
+
+function pickFishByRarity(rarity) {
+  const list = FISH_SPECIES.filter((fish) => fish.rarity === rarity);
+  if (!list.length) return null;
+  const idx = Math.floor(Math.random() * list.length);
+  return list[idx] || null;
+}
+
+function defaultFishingQuest(completions = 0, seed = 1) {
+  const template = fishForQuestPool(completions);
+  const span = Math.max(1, template.max - template.min + 1);
+  const targetCount = template.min + ((seed * 5) % span);
+  let targetFishId = null;
+  if (template.allowSpecific && Math.random() < Math.min(0.7, 0.18 + completions * 0.04)) {
+    targetFishId = pickFishByRarity(template.rarity)?.id || null;
+  }
+  const rarityBase = FISH_RARITY_ORDER.indexOf(template.rarity) + 1;
+  const rewardCoins = clamp(
+    Math.floor(60 + targetCount * (18 + rarityBase * 8) + completions * 26),
+    80,
+    120_000
+  );
+  const targetFishName = targetFishId ? (FISH_SPECIES_BY_ID.get(targetFishId)?.name || 'fish') : `${template.rarity} fish`;
+  return {
+    id: `fq-${Date.now()}-${seed}`,
+    type: 'fishing',
+    status: 'available',
+    targetRarity: template.rarity,
+    targetFishId,
+    targetCount,
+    progress: 0,
+    rewardCoins,
+    title: `Turn in ${targetCount} ${targetFishName}`,
+    description: targetFishId
+      ? `Bring ${targetCount} ${targetFishName} to the Market Trader.`
+      : `Bring ${targetCount} ${template.rarity} fish to the Market Trader.`
+  };
+}
+
 function defaultQuest(seed = 1) {
   const pool = [
     { resource: 'stone', min: 14, max: 28, rewardPerItem: 3, diamondBonusChance: 0.08 },
@@ -358,11 +487,16 @@ function defaultProgress() {
     coins: 0,
     pickaxe: 'wood',
     inventory: defaultInventory(),
+    fishBag: defaultFishBag(),
     fishIndex: {},
     hasFishingRod: false,
+    fishingRodTier: 'basic',
     maxStaminaBonusPct: 0,
     questSeed: 1,
-    quest: defaultQuest(1)
+    quest: defaultQuest(1),
+    fishingQuestSeed: 1,
+    fishingQuestCompletions: 0,
+    fishingQuest: defaultFishingQuest(0, 1)
   };
 }
 
@@ -395,6 +529,57 @@ function sanitizeFishIndex(value) {
   return cleaned;
 }
 
+function sanitizeFishBag(value) {
+  const cleaned = {};
+  if (!value || typeof value !== 'object') return cleaned;
+  for (const [fishId, count] of Object.entries(value)) {
+    if (!FISH_SPECIES_IDS.has(fishId)) continue;
+    const n = Number(count);
+    if (!Number.isFinite(n) || n <= 0) continue;
+    cleaned[fishId] = clamp(Math.floor(n), 1, 1_000_000);
+  }
+  return cleaned;
+}
+
+function sanitizeFishingRodTier(value, fallback = 'basic') {
+  if (typeof value === 'string' && FISH_ROD_TIERS.includes(value)) return value;
+  return fallback;
+}
+
+function sanitizeFishingQuest(value, completions = 0, seed = 1) {
+  const fallback = defaultFishingQuest(completions, seed);
+  if (!value || typeof value !== 'object') return fallback;
+  const targetRarity = FISH_RARITY_ORDER.includes(value.targetRarity) ? value.targetRarity : fallback.targetRarity;
+  const targetFishIdRaw = typeof value.targetFishId === 'string' ? value.targetFishId : '';
+  const targetFishId = targetFishIdRaw && FISH_SPECIES_IDS.has(targetFishIdRaw)
+    ? targetFishIdRaw
+    : null;
+  const targetCount = clamp(Math.floor(Number(value.targetCount) || fallback.targetCount), 1, 500);
+  const progress = clamp(Math.floor(Number(value.progress) || 0), 0, targetCount);
+  const rewardCoins = clamp(Math.floor(Number(value.rewardCoins) || fallback.rewardCoins), 10, 1_000_000);
+  const statusRaw = typeof value.status === 'string' ? value.status : fallback.status;
+  const status = ['available', 'active', 'ready'].includes(statusRaw)
+    ? statusRaw
+    : fallback.status;
+  const name = targetFishId
+    ? (FISH_SPECIES_BY_ID.get(targetFishId)?.name || 'fish')
+    : `${targetRarity} fish`;
+  return {
+    id: typeof value.id === 'string' && value.id ? value.id.slice(0, 80) : fallback.id,
+    type: 'fishing',
+    status: progress >= targetCount && status === 'active' ? 'ready' : status,
+    targetRarity,
+    targetFishId,
+    targetCount,
+    progress,
+    rewardCoins,
+    title: `Turn in ${targetCount} ${name}`,
+    description: targetFishId
+      ? `Bring ${targetCount} ${name} to the Market Trader.`
+      : `Bring ${targetCount} ${targetRarity} fish to the Market Trader.`
+  };
+}
+
 function sanitizeQuest(value, fallbackSeed = 1) {
   const fallback = defaultQuest(fallbackSeed);
   if (!value || typeof value !== 'object') return fallback;
@@ -423,16 +608,30 @@ function sanitizeProgress(value) {
   if (!value || typeof value !== 'object') return base;
   const questSeed = clamp(Math.floor(Number(value.questSeed) || 1), 1, 1_000_000);
   const quest = sanitizeQuest(value.quest, questSeed);
+  const inventory = sanitizeInventory(value.inventory);
+  const fishBag = sanitizeFishBag(value.fishBag);
+  const fishFromBag = Object.values(fishBag).reduce((sum, n) => sum + (Number(n) || 0), 0);
+  if (fishFromBag > 0) {
+    inventory.fish = clamp(Math.floor(fishFromBag), 0, 1_000_000);
+  }
+  const fishingQuestCompletions = clamp(Math.floor(Number(value.fishingQuestCompletions) || 0), 0, 1_000_000);
+  const fishingQuestSeed = clamp(Math.floor(Number(value.fishingQuestSeed) || 1), 1, 1_000_000);
+  const fishingQuest = sanitizeFishingQuest(value.fishingQuest, fishingQuestCompletions, fishingQuestSeed);
   const maxStaminaBonusPct = clamp(Math.floor(Number(value.maxStaminaBonusPct) || 0), 0, MAX_STAMINA_BONUS_PCT);
   return {
     coins: clamp(Math.floor(Number(value.coins) || 0), 0, 100_000_000),
     pickaxe: sanitizePickaxe(value.pickaxe, 'wood'),
-    inventory: sanitizeInventory(value.inventory),
+    inventory,
+    fishBag,
     fishIndex: sanitizeFishIndex(value.fishIndex),
     hasFishingRod: value.hasFishingRod === true,
+    fishingRodTier: sanitizeFishingRodTier(value.fishingRodTier, 'basic'),
     maxStaminaBonusPct,
     questSeed,
-    quest
+    quest,
+    fishingQuestSeed,
+    fishingQuestCompletions,
+    fishingQuest
   };
 }
 
@@ -446,11 +645,16 @@ function progressSnapshot(progress) {
     coins: progress.coins,
     pickaxe: progress.pickaxe,
     inventory: { ...progress.inventory },
+    fishBag: { ...(progress.fishBag || {}) },
     fishIndex: { ...(progress.fishIndex || {}) },
     hasFishingRod: progress.hasFishingRod === true,
+    fishingRodTier: sanitizeFishingRodTier(progress.fishingRodTier, 'basic'),
     maxStaminaBonusPct: clamp(Math.floor(Number(progress.maxStaminaBonusPct) || 0), 0, MAX_STAMINA_BONUS_PCT),
     questSeed: progress.questSeed,
     quest: { ...progress.quest },
+    fishingQuestSeed: clamp(Math.floor(Number(progress.fishingQuestSeed) || 1), 1, 1_000_000),
+    fishingQuestCompletions: clamp(Math.floor(Number(progress.fishingQuestCompletions) || 0), 0, 1_000_000),
+    fishingQuest: progress.fishingQuest ? { ...progress.fishingQuest } : defaultFishingQuest(0, 1),
     shop: {
       order: [...PICKAXE_ORDER],
       price: { ...PICKAXE_PRICE }
@@ -470,14 +674,180 @@ function fishCatchSnapshot(fish) {
   };
 }
 
-function rollRandomFishSpecies() {
-  if (!FISH_SPECIES.length) return null;
-  let roll = Math.random() * Math.max(1, FISH_SPECIES_WEIGHT_TOTAL);
-  for (const fish of FISH_SPECIES) {
-    roll -= Math.max(0, Number(fish.weight) || 0);
-    if (roll <= 0) return fish;
+function fishSellPrice(fishId) {
+  const fish = FISH_SPECIES_BY_ID.get(fishId);
+  if (!fish) return 0;
+  return FISH_SELL_BY_RARITY[fish.rarity] || 0;
+}
+
+function computeTotalFishInBag(bag) {
+  if (!bag || typeof bag !== 'object') return 0;
+  return Object.values(bag).reduce((sum, n) => sum + Math.max(0, Math.floor(Number(n) || 0)), 0);
+}
+
+function weightedPick(entries, weightSelector) {
+  const safeEntries = Array.isArray(entries) ? entries : [];
+  const total = safeEntries.reduce((sum, entry) => sum + Math.max(0, Number(weightSelector(entry)) || 0), 0);
+  if (total <= 0 || !safeEntries.length) return null;
+  let roll = Math.random() * total;
+  for (const entry of safeEntries) {
+    roll -= Math.max(0, Number(weightSelector(entry)) || 0);
+    if (roll <= 0) return entry;
   }
-  return FISH_SPECIES[0];
+  return safeEntries[0] || null;
+}
+
+function pickRarityForRodTier(rodTier = 'basic') {
+  const tier = FISH_ROD_DATA[sanitizeFishingRodTier(rodTier, 'basic')] || FISH_ROD_DATA.basic;
+  const weighted = FISH_RARITY_ORDER
+    .map((rarity) => ({ rarity, weight: Number(tier.rarityWeights?.[rarity]) || 0 }))
+    .filter((entry) => entry.weight > 0);
+  return weightedPick(weighted, (entry) => entry.weight)?.rarity || 'common';
+}
+
+function rollRandomFishSpecies(options = {}) {
+  const requiredRarity = typeof options.rarity === 'string' ? options.rarity : '';
+  const rarity = FISH_RARITY_ORDER.includes(requiredRarity)
+    ? requiredRarity
+    : pickRarityForRodTier(options.rodTier || 'basic');
+  const pool = FISH_SPECIES.filter((fish) => fish.rarity === rarity);
+  if (!pool.length) {
+    return weightedPick(FISH_SPECIES, (fish) => Math.max(0, Number(fish.weight) || 0)) || null;
+  }
+  return weightedPick(pool, (fish) => Math.max(0, Number(fish.weight) || 0)) || null;
+}
+
+function fishingDifficultyForCatch(fish, rodTier = 'basic') {
+  const safeFish = fish && FISH_SPECIES_BY_ID.has(fish.id) ? fish : rollRandomFishSpecies({ rodTier: 'basic' });
+  const rarity = safeFish?.rarity || 'common';
+  const base = FISH_DIFFICULTY_BY_RARITY[rarity] || FISH_DIFFICULTY_BY_RARITY.common;
+  const tier = FISH_ROD_DATA[sanitizeFishingRodTier(rodTier, 'basic')] || FISH_ROD_DATA.basic;
+  const assist = tier.difficultyAssist || { zoneBonus: 0, requiredHoldScale: 1 };
+  const zoneWidth = clamp(Math.floor((base.zoneWidth + (assist.zoneBonus || 0)) * 1000), 90, 420) / 1000;
+  const requiredHoldMs = clamp(
+    Math.floor(base.requiredHoldMs * Math.max(0.55, Number(assist.requiredHoldScale) || 1)),
+    600,
+    5000
+  );
+  return {
+    rarity,
+    zoneWidth,
+    zoneSpeed: base.zoneSpeed,
+    requiredHoldMs,
+    cursorRiseSpeed: base.cursorRiseSpeed,
+    cursorFallSpeed: base.cursorFallSpeed,
+    decaySpeed: base.decaySpeed,
+    timeoutMs: base.timeoutMs
+  };
+}
+
+function consumeFishBagForAmount(progress, amount) {
+  const wanted = clamp(Math.floor(Number(amount) || 0), 0, 1_000_000);
+  if (wanted <= 0) return 0;
+  if (!progress.fishBag || typeof progress.fishBag !== 'object') {
+    progress.fishBag = {};
+  }
+  const fishByValueAsc = Object.keys(progress.fishBag)
+    .filter((fishId) => FISH_SPECIES_IDS.has(fishId) && (progress.fishBag[fishId] || 0) > 0)
+    .sort((a, b) => fishSellPrice(a) - fishSellPrice(b));
+  let remaining = wanted;
+  for (const fishId of fishByValueAsc) {
+    const has = clamp(Math.floor(Number(progress.fishBag[fishId]) || 0), 0, 1_000_000);
+    if (has <= 0) continue;
+    const take = Math.min(has, remaining);
+    if (take <= 0) continue;
+    const left = has - take;
+    if (left > 0) {
+      progress.fishBag[fishId] = left;
+    } else {
+      delete progress.fishBag[fishId];
+    }
+    remaining -= take;
+    if (remaining <= 0) break;
+  }
+  const consumed = wanted - remaining;
+  progress.inventory.fish = clamp(computeTotalFishInBag(progress.fishBag), 0, 1_000_000);
+  return consumed;
+}
+
+function nextFishingQuest(progress) {
+  progress.fishingQuestSeed = clamp((Number(progress.fishingQuestSeed) || 1) + 1, 1, 1_000_000);
+  const completions = clamp(Math.floor(Number(progress.fishingQuestCompletions) || 0), 0, 1_000_000);
+  progress.fishingQuest = defaultFishingQuest(completions, progress.fishingQuestSeed);
+}
+
+function ensureFishingProgressShape(progress) {
+  if (!progress.fishBag || typeof progress.fishBag !== 'object') {
+    progress.fishBag = {};
+  }
+  progress.fishBag = sanitizeFishBag(progress.fishBag);
+  if (!progress.fishingQuest || typeof progress.fishingQuest !== 'object') {
+    progress.fishingQuest = defaultFishingQuest(
+      clamp(Math.floor(Number(progress.fishingQuestCompletions) || 0), 0, 1_000_000),
+      clamp(Math.floor(Number(progress.fishingQuestSeed) || 1), 1, 1_000_000)
+    );
+  } else {
+    progress.fishingQuest = sanitizeFishingQuest(
+      progress.fishingQuest,
+      clamp(Math.floor(Number(progress.fishingQuestCompletions) || 0), 0, 1_000_000),
+      clamp(Math.floor(Number(progress.fishingQuestSeed) || 1), 1, 1_000_000)
+    );
+  }
+  progress.fishingRodTier = sanitizeFishingRodTier(progress.fishingRodTier, 'basic');
+  progress.inventory.fish = clamp(computeTotalFishInBag(progress.fishBag) || Number(progress.inventory.fish) || 0, 0, 1_000_000);
+}
+
+function rodUpgradeSnapshot(progress) {
+  const tierId = sanitizeFishingRodTier(progress.fishingRodTier, 'basic');
+  const tier = FISH_ROD_DATA[tierId] || FISH_ROD_DATA.basic;
+  const next = tier.next;
+  if (!next) {
+    return {
+      currentTier: tierId,
+      currentLabel: tier.label,
+      next: null
+    };
+  }
+  const fishCost = Object.entries(next.fishCost || {}).map(([fishId, amount]) => ({
+    fishId,
+    name: FISH_SPECIES_BY_ID.get(fishId)?.name || fishId,
+    amount: clamp(Math.floor(Number(amount) || 0), 1, 1_000_000),
+    owned: clamp(Math.floor(Number(progress.fishBag?.[fishId]) || 0), 0, 1_000_000)
+  }));
+  const hasFish = fishCost.every((row) => row.owned >= row.amount);
+  const hasCoins = (Number(progress.coins) || 0) >= next.coins;
+  return {
+    currentTier: tierId,
+    currentLabel: tier.label,
+    next: {
+      tier: next.tier,
+      label: FISH_ROD_DATA[next.tier]?.label || next.tier,
+      coins: next.coins,
+      fishCost,
+      affordable: hasFish && hasCoins
+    }
+  };
+}
+
+function fishingQuestSnapshot(progress) {
+  return progress.fishingQuest ? { ...progress.fishingQuest } : defaultFishingQuest(0, 1);
+}
+
+function isNearFishingIsland(actor, extra = 4.4) {
+  return distance2DPoint(actor, FISHING_ISLAND_POS) <= (FISHING_ISLAND_RADIUS + extra);
+}
+
+function isNearMarketIsland(actor, extra = 4.4) {
+  return distance2DPoint(actor, MARKET_ISLAND_POS) <= (MARKET_ISLAND_RADIUS + extra);
+}
+
+function fishMatchesQuestTarget(quest, fishId) {
+  if (!quest || typeof quest !== 'object') return false;
+  if (!fishId || !FISH_SPECIES_BY_ID.has(fishId)) return false;
+  const fish = FISH_SPECIES_BY_ID.get(fishId);
+  if (quest.targetFishId && quest.targetFishId !== fishId) return false;
+  if (quest.targetRarity && fish.rarity !== quest.targetRarity) return false;
+  return true;
 }
 
 function sanitizeAppearance(input, fallback) {
@@ -916,6 +1286,7 @@ function spawnPlayer(socket, profileId, username) {
     }),
     progress: sanitizeProgress(profile?.progress)
   };
+  ensureFishingProgressShape(spawn.progress);
   spawn.color = spawn.appearance.shirt;
   spawn.pickaxe = sanitizePickaxe(spawn.progress?.pickaxe, 'wood');
   players.set(socket.id, spawn);
@@ -963,7 +1334,8 @@ function removeAuthenticatedPlayer(socket) {
 }
 
 io.on('connection', (socket) => {
-  socket.data.lastFishCatchAt = 0;
+  socket.data.lastFishCastAt = 0;
+  socket.data.fishChallenge = null;
   socket.emit('auth:required');
 
   socket.on('auth:register', async (payload, ack) => {
@@ -1026,6 +1398,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('auth:logout', () => {
+    socket.data.fishChallenge = null;
     removeAuthenticatedPlayer(socket);
   });
 
@@ -1180,11 +1553,34 @@ io.on('connection', (socket) => {
     if (typeof ack === 'function') ack({ ok: true, tier: requested });
   });
 
+  socket.on('shop:getRodShop', (payload, ack) => {
+    const actor = players.get(socket.id);
+    const progress = actor?.progress;
+    if (!actor || !progress) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Not authenticated.' });
+      return;
+    }
+    ensureFishingProgressShape(progress);
+    if (typeof ack === 'function') {
+      ack({
+        ok: true,
+        hasFishingRod: progress.hasFishingRod === true,
+        buyPrice: FISHING_ROD_PRICE,
+        rodShop: rodUpgradeSnapshot(progress),
+        progress: progressSnapshot(progress)
+      });
+    }
+  });
+
   socket.on('shop:buyFishingRod', (payload, ack) => {
     const actor = players.get(socket.id);
     const progress = actor?.progress;
     if (!actor || !progress) {
       if (typeof ack === 'function') ack({ ok: false, error: 'Not authenticated.' });
+      return;
+    }
+    if (!isNearFishingIsland(actor)) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Buy rods at the Fishing Trader island.' });
       return;
     }
     if (progress.hasFishingRod === true) {
@@ -1195,11 +1591,125 @@ io.on('connection', (socket) => {
       if (typeof ack === 'function') ack({ ok: false, error: `Need ${FISHING_ROD_PRICE} coins.` });
       return;
     }
+    ensureFishingProgressShape(progress);
     progress.coins -= FISHING_ROD_PRICE;
     progress.hasFishingRod = true;
+    progress.fishingRodTier = 'basic';
     persistPlayerProgress(actor, { immediate: true });
     emitProgress(socket, actor);
-    if (typeof ack === 'function') ack({ ok: true, hasFishingRod: true, progress: progressSnapshot(progress) });
+    if (typeof ack === 'function') {
+      ack({
+        ok: true,
+        hasFishingRod: true,
+        rodShop: rodUpgradeSnapshot(progress),
+        progress: progressSnapshot(progress)
+      });
+    }
+  });
+
+  socket.on('shop:upgradeFishingRod', (payload, ack) => {
+    const actor = players.get(socket.id);
+    const progress = actor?.progress;
+    if (!actor || !progress) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Not authenticated.' });
+      return;
+    }
+    if (!isNearFishingIsland(actor)) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Rod upgrades are available at the Fishing Trader island.' });
+      return;
+    }
+    ensureFishingProgressShape(progress);
+    if (progress.hasFishingRod !== true) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Buy a fishing rod first.' });
+      return;
+    }
+    const tier = FISH_ROD_DATA[sanitizeFishingRodTier(progress.fishingRodTier, 'basic')] || FISH_ROD_DATA.basic;
+    if (!tier.next) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Rod is already max tier.' });
+      return;
+    }
+    if (progress.coins < tier.next.coins) {
+      if (typeof ack === 'function') ack({ ok: false, error: `Need ${tier.next.coins} coins.` });
+      return;
+    }
+    for (const [fishId, amount] of Object.entries(tier.next.fishCost || {})) {
+      const owned = clamp(Math.floor(Number(progress.fishBag?.[fishId]) || 0), 0, 1_000_000);
+      const needed = clamp(Math.floor(Number(amount) || 0), 0, 1_000_000);
+      if (owned < needed) {
+        const fishName = FISH_SPECIES_BY_ID.get(fishId)?.name || fishId;
+        if (typeof ack === 'function') ack({ ok: false, error: `Need ${needed} ${fishName}.` });
+        return;
+      }
+    }
+    progress.coins -= tier.next.coins;
+    for (const [fishId, amount] of Object.entries(tier.next.fishCost || {})) {
+      const owned = clamp(Math.floor(Number(progress.fishBag?.[fishId]) || 0), 0, 1_000_000);
+      const left = Math.max(0, owned - clamp(Math.floor(Number(amount) || 0), 0, 1_000_000));
+      if (left > 0) {
+        progress.fishBag[fishId] = left;
+      } else {
+        delete progress.fishBag[fishId];
+      }
+    }
+    progress.inventory.fish = clamp(computeTotalFishInBag(progress.fishBag), 0, 1_000_000);
+    progress.fishingRodTier = sanitizeFishingRodTier(tier.next.tier, progress.fishingRodTier);
+    persistPlayerProgress(actor, { immediate: true });
+    emitProgress(socket, actor);
+    if (typeof ack === 'function') {
+      ack({
+        ok: true,
+        rodShop: rodUpgradeSnapshot(progress),
+        progress: progressSnapshot(progress)
+      });
+    }
+  });
+
+  socket.on('fish:start', (payload, ack) => {
+    const actor = players.get(socket.id);
+    const progress = actor?.progress;
+    if (!actor || !progress) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Not authenticated.' });
+      return;
+    }
+    ensureFishingProgressShape(progress);
+    if (progress.hasFishingRod !== true) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Buy a fishing rod first.' });
+      return;
+    }
+    if (!isNearFishingIsland(actor) && !isNearMarketIsland(actor)) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Fish near the Fishing or Market islands only.' });
+      return;
+    }
+    const now = Date.now();
+    const lastCastAt = Number(socket.data.lastFishCastAt) || 0;
+    if (now - lastCastAt < 250) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Cast again in a moment.' });
+      return;
+    }
+    socket.data.lastFishCastAt = now;
+    const rodTier = sanitizeFishingRodTier(progress.fishingRodTier, 'basic');
+    const caughtFish = rollRandomFishSpecies({ rodTier });
+    if (!caughtFish || !FISH_SPECIES_BY_ID.has(caughtFish.id)) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'No fish available right now. Try again.' });
+      return;
+    }
+    const difficulty = fishingDifficultyForCatch(caughtFish, rodTier);
+    const challengeId = `fc-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    socket.data.fishChallenge = {
+      id: challengeId,
+      fishId: caughtFish.id,
+      createdAt: now,
+      expiresAt: now + FISH_CHALLENGE_EXPIRE_MS
+    };
+    if (typeof ack === 'function') {
+      ack({
+        ok: true,
+        challengeId,
+        fish: fishCatchSnapshot(caughtFish),
+        rodTier,
+        difficulty
+      });
+    }
   });
 
   socket.on('fish:catch', (payload, ack) => {
@@ -1209,27 +1719,44 @@ io.on('connection', (socket) => {
       if (typeof ack === 'function') ack({ ok: false, error: 'Not authenticated.' });
       return;
     }
+    ensureFishingProgressShape(progress);
     if (progress.hasFishingRod !== true) {
       if (typeof ack === 'function') ack({ ok: false, error: 'Buy a fishing rod first.' });
       return;
     }
-    const now = Date.now();
-    const lastCatchAt = Number(socket.data.lastFishCatchAt) || 0;
-    if (now - lastCatchAt < FISH_CATCH_COOLDOWN_MS) {
-      if (typeof ack === 'function') ack({ ok: false, error: 'Fish are not biting yet. Try again in a moment.' });
+    if (!isNearFishingIsland(actor) && !isNearMarketIsland(actor)) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Fish near the Fishing or Market islands only.' });
       return;
     }
-    socket.data.lastFishCatchAt = now;
-    const caughtFish = rollRandomFishSpecies();
-    if (!caughtFish || !FISH_SPECIES_BY_ID.has(caughtFish.id)) {
-      if (typeof ack === 'function') ack({ ok: false, error: 'No fish available right now. Try again.' });
+    const challengeId = typeof payload?.challengeId === 'string' ? payload.challengeId : '';
+    const pending = socket.data.fishChallenge;
+    if (!pending || pending.id !== challengeId) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'No active fishing cast.' });
       return;
     }
-    progress.inventory.fish = clamp((progress.inventory.fish || 0) + 1, 0, 1_000_000);
-    if (!progress.fishIndex || typeof progress.fishIndex !== 'object') {
-      progress.fishIndex = {};
+    if (Date.now() > Number(pending.expiresAt || 0)) {
+      socket.data.fishChallenge = null;
+      if (typeof ack === 'function') ack({ ok: false, error: 'Fish got away. Cast again.' });
+      return;
     }
+    const caughtFish = FISH_SPECIES_BY_ID.get(pending.fishId);
+    socket.data.fishChallenge = null;
+    if (!caughtFish) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Fish catch failed. Try again.' });
+      return;
+    }
+    progress.fishBag[caughtFish.id] = clamp((progress.fishBag[caughtFish.id] || 0) + 1, 1, 1_000_000);
+    progress.inventory.fish = clamp(computeTotalFishInBag(progress.fishBag), 0, 1_000_000);
     progress.fishIndex[caughtFish.id] = clamp((progress.fishIndex[caughtFish.id] || 0) + 1, 1, 1_000_000);
+    const fishingQuest = progress.fishingQuest;
+    let fishingQuestProgressed = false;
+    if (fishingQuest?.status === 'active' && fishMatchesQuestTarget(fishingQuest, caughtFish.id)) {
+      fishingQuest.progress = clamp((fishingQuest.progress || 0) + 1, 0, fishingQuest.targetCount || 0);
+      fishingQuestProgressed = true;
+      if (fishingQuest.progress >= fishingQuest.targetCount) {
+        fishingQuest.status = 'ready';
+      }
+    }
     persistPlayerProgress(actor, { immediate: true });
     emitProgress(socket, actor);
     if (typeof ack === 'function') {
@@ -1237,8 +1764,220 @@ io.on('connection', (socket) => {
         ok: true,
         caught: 1,
         fish: progress.inventory.fish,
-        fishCaughtCount: progress.fishIndex[caughtFish.id],
+        fishCaughtCount: progress.fishBag[caughtFish.id],
         caughtFish: fishCatchSnapshot(caughtFish),
+        fishingQuestProgressed,
+        progress: progressSnapshot(progress)
+      });
+    }
+  });
+
+  socket.on('market:sellSelection', (payload, ack) => {
+    const actor = players.get(socket.id);
+    const progress = actor?.progress;
+    if (!actor || !progress) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Not authenticated.' });
+      return;
+    }
+    if (!isNearMarketIsland(actor)) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Sell items at the Market island.' });
+      return;
+    }
+    ensureFishingProgressShape(progress);
+    const category = payload?.category === 'ore' ? 'ore' : 'fish';
+    const itemId = typeof payload?.itemId === 'string' ? payload.itemId.trim() : '';
+    const rawAmount = Number(payload?.amount);
+    const amount = Number.isFinite(rawAmount) ? clamp(Math.floor(rawAmount), 1, 1_000_000) : 1;
+    if (category === 'ore') {
+      if (!ORE_TYPES.has(itemId)) {
+        if (typeof ack === 'function') ack({ ok: false, error: 'Select a valid ore.' });
+        return;
+      }
+      const owned = clamp(Math.floor(Number(progress.inventory[itemId]) || 0), 0, 1_000_000);
+      if (owned <= 0) {
+        if (typeof ack === 'function') ack({ ok: false, error: 'You do not have that ore.' });
+        return;
+      }
+      const sold = clamp(amount, 1, owned);
+      const unitPrice = ORE_SELL_PRICE[itemId] || 0;
+      const coinsEarned = sold * unitPrice;
+      progress.inventory[itemId] = owned - sold;
+      progress.coins = clamp((progress.coins || 0) + coinsEarned, 0, 100_000_000);
+      persistPlayerProgress(actor, { immediate: true });
+      emitProgress(socket, actor);
+      if (typeof ack === 'function') {
+        ack({
+          ok: true,
+          sold,
+          category,
+          itemId,
+          unitPrice,
+          coinsEarned,
+          progress: progressSnapshot(progress)
+        });
+      }
+      return;
+    }
+    if (!FISH_SPECIES_IDS.has(itemId)) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Select a valid fish.' });
+      return;
+    }
+    const owned = clamp(Math.floor(Number(progress.fishBag[itemId]) || 0), 0, 1_000_000);
+    if (owned <= 0) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'You do not have that fish.' });
+      return;
+    }
+    const sold = clamp(amount, 1, owned);
+    const unitPrice = fishSellPrice(itemId);
+    const coinsEarned = sold * unitPrice;
+    const left = owned - sold;
+    if (left > 0) {
+      progress.fishBag[itemId] = left;
+    } else {
+      delete progress.fishBag[itemId];
+    }
+    progress.inventory.fish = clamp(computeTotalFishInBag(progress.fishBag), 0, 1_000_000);
+    progress.coins = clamp((progress.coins || 0) + coinsEarned, 0, 100_000_000);
+    persistPlayerProgress(actor, { immediate: true });
+    emitProgress(socket, actor);
+    if (typeof ack === 'function') {
+      ack({
+        ok: true,
+        sold,
+        category,
+        itemId,
+        unitPrice,
+        coinsEarned,
+        progress: progressSnapshot(progress)
+      });
+    }
+  });
+
+  socket.on('market:fishingQuestAccept', (payload, ack) => {
+    const actor = players.get(socket.id);
+    const progress = actor?.progress;
+    if (!actor || !progress) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Not authenticated.' });
+      return;
+    }
+    if (!isNearMarketIsland(actor)) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Talk to the Market Trader to accept fishing quests.' });
+      return;
+    }
+    ensureFishingProgressShape(progress);
+    const quest = progress.fishingQuest;
+    if (!quest || quest.status !== 'available') {
+      if (typeof ack === 'function') ack({ ok: false, error: 'No quest available to accept.' });
+      return;
+    }
+    quest.status = 'active';
+    persistPlayerProgress(actor, { immediate: true });
+    emitProgress(socket, actor);
+    if (typeof ack === 'function') ack({ ok: true, quest: fishingQuestSnapshot(progress), progress: progressSnapshot(progress) });
+  });
+
+  socket.on('market:fishingQuestTurnIn', (payload, ack) => {
+    const actor = players.get(socket.id);
+    const progress = actor?.progress;
+    if (!actor || !progress) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Not authenticated.' });
+      return;
+    }
+    if (!isNearMarketIsland(actor)) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Turn in quest fish at the Market island.' });
+      return;
+    }
+    ensureFishingProgressShape(progress);
+    const quest = progress.fishingQuest;
+    if (!quest || quest.status !== 'active') {
+      if (typeof ack === 'function') ack({ ok: false, error: 'No active fishing quest.' });
+      return;
+    }
+    const fishId = typeof payload?.fishId === 'string' ? payload.fishId : '';
+    if (!FISH_SPECIES_IDS.has(fishId)) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Select a valid fish to turn in.' });
+      return;
+    }
+    if (!fishMatchesQuestTarget(quest, fishId)) {
+      if (typeof ack === 'function') {
+        const targetName = quest.targetFishId
+          ? (FISH_SPECIES_BY_ID.get(quest.targetFishId)?.name || quest.targetFishId)
+          : `${quest.targetRarity} fish`;
+        ack({ ok: false, error: `This quest needs ${targetName}.` });
+      }
+      return;
+    }
+    const rawAmount = Number(payload?.amount);
+    const amount = Number.isFinite(rawAmount) ? clamp(Math.floor(rawAmount), 1, 1_000_000) : 1;
+    const owned = clamp(Math.floor(Number(progress.fishBag[fishId]) || 0), 0, 1_000_000);
+    if (owned <= 0) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'You do not have that fish.' });
+      return;
+    }
+    const remainingNeeded = clamp((quest.targetCount || 0) - (quest.progress || 0), 0, 1_000_000);
+    if (remainingNeeded <= 0) {
+      quest.status = 'ready';
+      if (typeof ack === 'function') ack({ ok: false, error: 'Quest already complete. Claim reward.' });
+      return;
+    }
+    const turnIn = Math.min(amount, owned, remainingNeeded);
+    const left = owned - turnIn;
+    if (left > 0) {
+      progress.fishBag[fishId] = left;
+    } else {
+      delete progress.fishBag[fishId];
+    }
+    progress.inventory.fish = clamp(computeTotalFishInBag(progress.fishBag), 0, 1_000_000);
+    quest.progress = clamp((quest.progress || 0) + turnIn, 0, quest.targetCount || 0);
+    if (quest.progress >= quest.targetCount) {
+      quest.status = 'ready';
+    }
+    persistPlayerProgress(actor, { immediate: true });
+    emitProgress(socket, actor);
+    if (typeof ack === 'function') {
+      ack({
+        ok: true,
+        turnedIn: turnIn,
+        quest: fishingQuestSnapshot(progress),
+        progress: progressSnapshot(progress)
+      });
+    }
+  });
+
+  socket.on('market:fishingQuestClaim', (payload, ack) => {
+    const actor = players.get(socket.id);
+    const progress = actor?.progress;
+    if (!actor || !progress) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Not authenticated.' });
+      return;
+    }
+    if (!isNearMarketIsland(actor)) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Claim fishing quests at the Market island.' });
+      return;
+    }
+    ensureFishingProgressShape(progress);
+    const quest = progress.fishingQuest;
+    if (!quest || quest.status !== 'ready') {
+      if (typeof ack === 'function') ack({ ok: false, error: 'No completed fishing quest to claim.' });
+      return;
+    }
+    const rewardCoins = clamp(Math.floor(Number(quest.rewardCoins) || 0), 0, 1_000_000);
+    progress.coins = clamp((progress.coins || 0) + rewardCoins, 0, 100_000_000);
+    progress.fishingQuestCompletions = clamp((progress.fishingQuestCompletions || 0) + 1, 0, 1_000_000);
+    const questTitle = quest.title;
+    nextFishingQuest(progress);
+    persistPlayerProgress(actor, { immediate: true });
+    emitProgress(socket, actor);
+    io.emit('chat', {
+      fromName: 'System',
+      text: `${actor.name} completed fishing quest "${questTitle}" for ${rewardCoins} coins.`,
+      sentAt: Date.now()
+    });
+    if (typeof ack === 'function') {
+      ack({
+        ok: true,
+        rewardCoins,
+        quest: fishingQuestSnapshot(progress),
         progress: progressSnapshot(progress)
       });
     }
@@ -1251,25 +1990,31 @@ io.on('connection', (socket) => {
       if (typeof ack === 'function') ack({ ok: false, error: 'Not authenticated.' });
       return;
     }
-    const fishOwned = clamp(Math.floor(Number(progress.inventory.fish) || 0), 0, 1_000_000);
-    if (fishOwned <= 0) {
+    ensureFishingProgressShape(progress);
+    const entries = Object.entries(progress.fishBag || {});
+    if (!entries.length) {
       if (typeof ack === 'function') ack({ ok: false, error: 'No fish to sell.' });
       return;
     }
-    const rawAmount = Number(payload?.amount);
-    const wantsAll = !Number.isFinite(rawAmount) || rawAmount <= 0;
-    const amount = wantsAll ? fishOwned : clamp(Math.floor(rawAmount), 1, fishOwned);
-    const coinsEarned = amount * FISH_SELL_PRICE;
-    progress.inventory.fish = fishOwned - amount;
+    let sold = 0;
+    let coinsEarned = 0;
+    for (const [fishId, count] of entries) {
+      const qty = clamp(Math.floor(Number(count) || 0), 0, 1_000_000);
+      if (qty <= 0) continue;
+      sold += qty;
+      coinsEarned += qty * fishSellPrice(fishId);
+    }
+    progress.fishBag = {};
+    progress.inventory.fish = 0;
     progress.coins = clamp((progress.coins || 0) + coinsEarned, 0, 100_000_000);
     persistPlayerProgress(actor, { immediate: true });
     emitProgress(socket, actor);
     if (typeof ack === 'function') {
       ack({
         ok: true,
-        sold: amount,
+        sold,
         coinsEarned,
-        fish: progress.inventory.fish,
+        fish: 0,
         coins: progress.coins,
         progress: progressSnapshot(progress)
       });
@@ -1283,6 +2028,7 @@ io.on('connection', (socket) => {
       if (typeof ack === 'function') ack({ ok: false, error: 'Not authenticated.' });
       return;
     }
+    ensureFishingProgressShape(progress);
     const fishOwned = clamp(Math.floor(Number(progress.inventory.fish) || 0), 0, 1_000_000);
     if (fishOwned <= 0) {
       if (typeof ack === 'function') ack({ ok: false, error: 'No fish to consume.' });
@@ -1303,9 +2049,13 @@ io.on('connection', (socket) => {
       if (typeof ack === 'function') ack({ ok: false, error: 'No stamina gain available from fish.' });
       return;
     }
-    progress.inventory.fish = fishOwned - amount;
+    const consumed = consumeFishBagForAmount(progress, amount);
+    if (consumed <= 0) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'No fish available to consume.' });
+      return;
+    }
     progress.maxStaminaBonusPct = clamp(
-      currentBonus + amount * FISH_STAMINA_GAIN_PER_FISH,
+      currentBonus + consumed * FISH_STAMINA_GAIN_PER_FISH,
       0,
       MAX_STAMINA_BONUS_PCT
     );
@@ -1314,7 +2064,7 @@ io.on('connection', (socket) => {
     if (typeof ack === 'function') {
       ack({
         ok: true,
-        consumed: amount,
+        consumed,
         fish: progress.inventory.fish,
         maxStaminaBonusPct: progress.maxStaminaBonusPct,
         progress: progressSnapshot(progress)
@@ -1523,6 +2273,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', () => {
+    socket.data.fishChallenge = null;
     removeAuthenticatedPlayer(socket);
   });
 });

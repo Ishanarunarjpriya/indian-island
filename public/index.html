@@ -354,6 +354,19 @@
         letter-spacing: 0.2px;
       }
 
+      #fishing-meter-pointer {
+        top: 2px;
+        width: 16px;
+        height: 24px;
+        border-radius: 4px;
+        background: linear-gradient(180deg, #f8fafc, #dbeafe);
+        box-shadow: 0 0 10px rgba(248, 250, 252, 0.8);
+      }
+
+      #fishing-meter-pointer::before {
+        display: none;
+      }
+
       #fishing-preview-wrap {
         width: 100%;
         display: grid;
@@ -596,6 +609,159 @@
       .fish-entry.locked .sub,
       .fish-entry.locked .count {
         color: #64748b;
+      }
+
+      .modal-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 27;
+        display: grid;
+        place-items: center;
+        background: rgba(2, 8, 20, 0.62);
+        backdrop-filter: blur(4px);
+      }
+
+      .modal-panel {
+        width: min(680px, calc(100vw - 24px));
+        max-height: min(82vh, 760px);
+        display: grid;
+        gap: 10px;
+        padding: 14px;
+      }
+
+      .modal-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+
+      .modal-head h2 {
+        margin: 0;
+        font-size: 18px;
+      }
+
+      .modal-close {
+        width: 34px;
+        height: 34px;
+        padding: 0;
+      }
+
+      .segmented {
+        display: inline-flex;
+        border-radius: 999px;
+        border: 1px solid rgba(148, 163, 184, 0.35);
+        overflow: hidden;
+        background: rgba(15, 23, 42, 0.45);
+      }
+
+      .segmented button {
+        min-width: 94px;
+        height: 32px;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+      }
+
+      .segmented button.active {
+        background: rgba(245, 158, 11, 0.35);
+      }
+
+      .inventory-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(165px, 1fr));
+        gap: 8px;
+        max-height: 58vh;
+        overflow: auto;
+        padding-right: 2px;
+      }
+
+      .inventory-entry {
+        border-radius: 10px;
+        border: 1px solid rgba(148, 163, 184, 0.24);
+        background: rgba(8, 13, 24, 0.72);
+        padding: 8px;
+        display: grid;
+        gap: 4px;
+      }
+
+      .inventory-entry .name {
+        font-size: 12px;
+        font-weight: 700;
+        color: #f8fafc;
+      }
+
+      .inventory-entry .qty {
+        font-size: 12px;
+        color: #cbd5e1;
+      }
+
+      .inventory-entry .price {
+        font-size: 11px;
+        color: #94a3b8;
+      }
+
+      .market-grid {
+        display: grid;
+        gap: 10px;
+      }
+
+      .market-section {
+        border: 1px solid rgba(148, 163, 184, 0.24);
+        border-radius: 10px;
+        padding: 10px;
+        background: rgba(8, 13, 24, 0.72);
+        display: grid;
+        gap: 8px;
+      }
+
+      .market-section h3 {
+        margin: 0;
+        font-size: 14px;
+      }
+
+      .market-form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+
+      .market-inline {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+
+      .market-inline button {
+        height: 34px;
+      }
+
+      #market-status,
+      #rod-shop-status {
+        margin: 0;
+        min-height: 16px;
+        font-size: 12px;
+        color: #cbd5e1;
+      }
+
+      #rod-upgrade-cost {
+        display: grid;
+        gap: 6px;
+      }
+
+      #rod-upgrade-fish-cost {
+        margin: 0;
+        padding-left: 18px;
+        display: grid;
+        gap: 3px;
+        font-size: 12px;
+        color: #cbd5e1;
+      }
+
+      #market-fish-index-summary {
+        font-size: 12px;
+        color: #cbd5e1;
       }
 
       body.mining-focus #hud,
@@ -1414,6 +1580,15 @@
         width: calc(100vw - 16px);
         max-height: calc(100vh - 16px);
       }
+
+      body.mobile-ui .modal-panel {
+        width: calc(100vw - 16px);
+        max-height: calc(100vh - 16px);
+      }
+
+      body.mobile-ui .market-form-row {
+        grid-template-columns: 1fr;
+      }
     </style>
   </head>
   <body>
@@ -1429,6 +1604,7 @@
       </button>
       <button id="minimap-quick-toggle" class="toolbar-btn" type="button" aria-label="Toggle minimap">🗺️</button>
       <button id="fish-index-toggle" class="toolbar-btn" type="button" aria-label="Open fish index">🐟</button>
+      <button id="inventory-toggle" class="toolbar-btn" type="button" aria-label="Open inventory">🎒</button>
       <button id="chat-toggle" class="toolbar-btn" type="button" aria-label="Open chat">💬</button>
       <button id="voice-quick-toggle" class="toolbar-btn" type="button" aria-label="Voice chat / mute">🎙️</button>
       <button id="fullscreen-toggle" class="toolbar-btn" type="button" aria-label="Enter fullscreen">⛶</button>
@@ -1567,7 +1743,7 @@
           <span class="tail"></span><span class="body"></span><span class="fin"></span><span class="eye"></span>
         </div>
         <div id="fishing-preview-name">Unknown Catch</div>
-        <div id="fishing-preview-rarity">Hit while marker is in green</div>
+        <div id="fishing-preview-rarity">Hold click to control white box</div>
       </div>
       <div id="fishing-meter-track-wrap">
         <div id="fishing-meter-track">
@@ -1575,7 +1751,7 @@
           <div id="fishing-meter-pointer"></div>
         </div>
       </div>
-      <div id="fishing-meter-status">Press E or click while marker is in green.</div>
+      <div id="fishing-meter-status">Hold click to move white box right. Release to drift left.</div>
     </section>
 
     <section id="fish-catch-card" class="panel hidden" aria-live="polite">
@@ -1597,6 +1773,97 @@
         <p id="fish-index-summary">Fish discovered: 0 / 20</p>
         <div class="section-title">Fish</div>
         <div id="fish-index-list"></div>
+      </section>
+    </div>
+
+    <div id="inventory-modal" class="hidden modal-backdrop">
+      <section id="inventory-panel" class="panel modal-panel">
+        <div class="modal-head">
+          <h2>Inventory</h2>
+          <button id="inventory-close" class="modal-close" type="button">X</button>
+        </div>
+        <div class="segmented">
+          <button id="inventory-tab-ores" type="button" class="active">Ores</button>
+          <button id="inventory-tab-fish" type="button">Fish</button>
+        </div>
+        <div id="inventory-list" class="inventory-grid"></div>
+      </section>
+    </div>
+
+    <div id="rod-shop-modal" class="hidden modal-backdrop">
+      <section id="rod-shop-panel" class="panel modal-panel">
+        <div class="modal-head">
+          <h2>Fishing Rod Trader</h2>
+          <button id="rod-shop-close" class="modal-close" type="button">X</button>
+        </div>
+        <div class="market-section">
+          <div id="rod-current-tier">Current rod: None</div>
+          <div id="rod-next-tier">Next upgrade: --</div>
+          <div id="rod-upgrade-cost"></div>
+          <ul id="rod-upgrade-fish-cost"></ul>
+          <div class="market-inline">
+            <button id="rod-buy-btn" type="button">Buy Fishing Rod</button>
+            <button id="rod-upgrade-btn" type="button">Upgrade Rod</button>
+          </div>
+          <p id="rod-shop-status"></p>
+        </div>
+      </section>
+    </div>
+
+    <div id="market-modal" class="hidden modal-backdrop">
+      <section id="market-panel" class="panel modal-panel">
+        <div class="modal-head">
+          <h2>Market Trader</h2>
+          <button id="market-close" class="modal-close" type="button">X</button>
+        </div>
+        <div class="market-grid">
+          <section class="market-section">
+            <h3>Fish Index + Rarity</h3>
+            <div id="market-fish-index-summary">Fish discovered: 0 / 20</div>
+            <button id="market-open-index" type="button">Open Full Fish Index</button>
+          </section>
+          <section class="market-section">
+            <h3>Sell Items</h3>
+            <div class="market-form-row">
+              <label>Category
+                <select id="market-sell-category">
+                  <option value="fish">Fish</option>
+                  <option value="ore">Ores</option>
+                </select>
+              </label>
+              <label>Item
+                <select id="market-sell-item"></select>
+              </label>
+            </div>
+            <div class="market-form-row">
+              <label>Amount
+                <input id="market-sell-amount" type="number" min="1" step="1" value="1" />
+              </label>
+              <div id="market-sell-price-preview" style="align-self:end;font-size:12px;color:#cbd5e1;">Value: --</div>
+            </div>
+            <button id="market-sell-btn" type="button">Sell Selected</button>
+          </section>
+          <section class="market-section">
+            <h3>Fishing Quest</h3>
+            <div id="market-quest-title">No quest loaded</div>
+            <div id="market-quest-desc" style="font-size:12px;color:#cbd5e1;"></div>
+            <div id="market-quest-progress" style="font-size:12px;color:#93c5fd;"></div>
+            <div class="market-form-row">
+              <label>Quest fish selection
+                <select id="market-quest-fish-item"></select>
+              </label>
+              <label>Turn-in amount
+                <input id="market-quest-fish-amount" type="number" min="1" step="1" value="1" />
+              </label>
+            </div>
+            <div class="market-inline">
+              <button id="market-quest-accept-btn" type="button">Accept Quest</button>
+              <button id="market-quest-turnin-btn" type="button">Turn In Fish</button>
+              <button id="market-quest-claim-btn" type="button">Claim Reward</button>
+            </div>
+          </section>
+          <p id="market-status"></p>
+        </div>
       </section>
     </div>
 
