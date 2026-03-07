@@ -125,6 +125,7 @@ const MINE_CRYSTAL_INTERACT_RADIUS = 3.0;
 const QUEST_NPC_POS = new THREE.Vector3(MINE_POS.x + 19.5, 1.35, MINE_POS.z + 8.1);
 const MINE_SHOP_NPC_POS = new THREE.Vector3(MINE_POS.x - 18.2, 1.35, MINE_POS.z - 9.2);
 const MINE_ORE_TRADER_POS = new THREE.Vector3(MINE_POS.x + 30.5, 1.35, MINE_POS.z - 22.5);
+const VENDOR_STAND_Y = 1.35;
 const FISHING_VENDOR_POS = new THREE.Vector3(FISHING_ISLAND_POS.x - 1.3, 1.35, FISHING_ISLAND_POS.z + 1.2);
 const MARKET_VENDOR_POS = new THREE.Vector3(MARKET_ISLAND_POS.x + 1.5, 1.35, MARKET_ISLAND_POS.z - 1.2);
 const FISHING_SPOT_RADIUS = 3.2;
@@ -1873,7 +1874,7 @@ function addFishingIsland() {
     canopyB: 0xffffff,
     vendor
   });
-  vendor.position.z = -0.9;
+  vendor.position.set(0, VENDOR_STAND_Y, -1.24);
   const fishingHouseYaw = Math.atan2(-FISHING_VENDOR_POS.x, -FISHING_VENDOR_POS.z);
   addWoodHouse(FISHING_VENDOR_POS.x, FISHING_VENDOR_POS.z, fishingHouseYaw, { collisions: false });
   stall.position.set(FISHING_VENDOR_POS.x, 0, FISHING_VENDOR_POS.z);
@@ -1946,7 +1947,7 @@ function addMarketIsland() {
     canopyB: 0xffffff,
     vendor
   });
-  vendor.position.z = -0.9;
+  vendor.position.set(0, VENDOR_STAND_Y, -1.24);
   const marketHouseYaw = Math.atan2(-MARKET_VENDOR_POS.x, -MARKET_VENDOR_POS.z);
   addWoodHouse(MARKET_VENDOR_POS.x, MARKET_VENDOR_POS.z, marketHouseYaw, { collisions: false });
   stall.position.set(MARKET_VENDOR_POS.x, 0, MARKET_VENDOR_POS.z);
@@ -2750,53 +2751,90 @@ function createVendorNpc({
   hatColor = null
 } = {}) {
   const npc = new THREE.Group();
-  const npcScale = 1.58;
+  // Match player height more closely while keeping NPCs visually distinct.
+  const npcScale = 1.28;
 
-  const legsMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.84 });
+  const pantsMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.84 });
   const shirtMat = new THREE.MeshStandardMaterial({ color: shirtColor, roughness: 0.8 });
   const skinMat = new THREE.MeshStandardMaterial({ color: skinColor, roughness: 0.75 });
   const hairMat = new THREE.MeshStandardMaterial({ color: hairColor, roughness: 0.78 });
 
-  const legGeo = new THREE.BoxGeometry(0.2 * npcScale, 0.9 * npcScale, 0.22 * npcScale);
-  const legL = new THREE.Mesh(legGeo, legsMat);
-  legL.position.set(-0.16 * npcScale, 0.46 * npcScale, 0);
+  const legGeo = new THREE.BoxGeometry(0.16 * npcScale, 0.92 * npcScale, 0.18 * npcScale);
+  const legL = new THREE.Mesh(legGeo, pantsMat);
+  legL.position.set(-0.13 * npcScale, 0.47 * npcScale, 0);
   const legR = legL.clone();
-  legR.position.x = 0.16 * npcScale;
+  legR.position.x = 0.13 * npcScale;
 
-  const body = new THREE.Mesh(
-    new THREE.BoxGeometry(0.68 * npcScale, 1.08 * npcScale, 0.44 * npcScale),
+  const hips = new THREE.Mesh(
+    new THREE.BoxGeometry(0.44 * npcScale, 0.2 * npcScale, 0.28 * npcScale),
+    pantsMat
+  );
+  hips.position.y = 0.97 * npcScale;
+
+  const torso = new THREE.Mesh(
+    new THREE.BoxGeometry(0.52 * npcScale, 1.08 * npcScale, 0.32 * npcScale),
     shirtMat
   );
-  body.position.y = 1.44 * npcScale;
+  torso.position.y = 1.52 * npcScale;
 
-  const head = new THREE.Mesh(
-    new THREE.BoxGeometry(0.44 * npcScale, 0.5 * npcScale, 0.44 * npcScale),
+  const shoulders = new THREE.Mesh(
+    new THREE.BoxGeometry(0.62 * npcScale, 0.15 * npcScale, 0.34 * npcScale),
+    shirtMat
+  );
+  shoulders.position.y = 1.98 * npcScale;
+
+  const neck = new THREE.Mesh(
+    new THREE.BoxGeometry(0.16 * npcScale, 0.12 * npcScale, 0.16 * npcScale),
     skinMat
   );
-  head.position.y = 2.28 * npcScale;
+  neck.position.y = 2.08 * npcScale;
+
+  const head = new THREE.Mesh(
+    new THREE.BoxGeometry(0.42 * npcScale, 0.52 * npcScale, 0.42 * npcScale),
+    skinMat
+  );
+  head.position.y = 2.32 * npcScale;
 
   const hair = new THREE.Mesh(
-    new THREE.BoxGeometry(0.48 * npcScale, 0.18 * npcScale, 0.48 * npcScale),
+    new THREE.BoxGeometry(0.46 * npcScale, 0.18 * npcScale, 0.46 * npcScale),
     hairMat
   );
   hair.position.y = 2.58 * npcScale;
 
-  const arm = new THREE.Mesh(
-    new THREE.BoxGeometry(0.18 * npcScale, 0.78 * npcScale, 0.18 * npcScale),
-    skinMat
-  );
-  arm.position.set(-0.45 * npcScale, 1.46 * npcScale, 0);
-  const armR = arm.clone();
-  armR.position.x = 0.5 * npcScale;
+  const armGeo = new THREE.BoxGeometry(0.12 * npcScale, 0.82 * npcScale, 0.14 * npcScale);
+  const armL = new THREE.Mesh(armGeo, skinMat);
+  armL.position.set(-0.36 * npcScale, 1.52 * npcScale, 0);
+  const armR = armL.clone();
+  armR.position.x = 0.36 * npcScale;
 
-  npc.add(legL, legR, body, head, hair, arm, armR);
+  const handGeo = new THREE.BoxGeometry(0.14 * npcScale, 0.17 * npcScale, 0.15 * npcScale);
+  const handL = new THREE.Mesh(handGeo, skinMat);
+  handL.position.set(-0.36 * npcScale, 1.03 * npcScale, 0);
+  const handR = handL.clone();
+  handR.position.x = 0.36 * npcScale;
+
+  const eyeMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.2 });
+  const eyeL = new THREE.Mesh(new THREE.BoxGeometry(0.05 * npcScale, 0.05 * npcScale, 0.02 * npcScale), eyeMat);
+  eyeL.position.set(-0.1 * npcScale, 2.35 * npcScale, 0.22 * npcScale);
+  const eyeR = eyeL.clone();
+  eyeR.position.x = 0.1 * npcScale;
+  const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.14 * npcScale, 0.025 * npcScale, 0.02 * npcScale), eyeMat);
+  mouth.position.set(0, 2.22 * npcScale, 0.22 * npcScale);
+
+  npc.add(
+    legL, legR,
+    hips, torso, shoulders, neck,
+    head, hair,
+    armL, armR, handL, handR,
+    eyeL, eyeR, mouth
+  );
 
   if (hatColor !== null) {
     const hat = new THREE.Mesh(
-      new THREE.BoxGeometry(0.52 * npcScale, 0.13 * npcScale, 0.52 * npcScale),
+      new THREE.BoxGeometry(0.5 * npcScale, 0.13 * npcScale, 0.5 * npcScale),
       new THREE.MeshStandardMaterial({ color: hatColor, roughness: 0.78 })
     );
-    hat.position.y = 2.73 * npcScale;
+    hat.position.y = 2.72 * npcScale;
     npc.add(hat);
   }
 
@@ -2819,8 +2857,8 @@ function createVendorStall({
   const stall = new THREE.Group();
   const width = 4.6;
   const depth = 2.8;
-  const postHeight = 3.9;
-  const roofY = 4.24;
+  const postHeight = 4.75;
+  const roofY = 5.08;
 
   const woodMat = new THREE.MeshStandardMaterial({ color: 0x4a2f1f, roughness: 0.9 });
   const trimMat = new THREE.MeshStandardMaterial({ color: 0x2f1e14, roughness: 0.92 });
@@ -2849,21 +2887,21 @@ function createVendorStall({
   }
 
   const counterTop = new THREE.Mesh(new THREE.BoxGeometry(width - 0.44, 0.15, 0.78), woodMat);
-  counterTop.position.set(0, 1.66, depth * 0.24);
+  counterTop.position.set(0, 2.02, depth * 0.24);
   const counterFront = new THREE.Mesh(new THREE.BoxGeometry(width - 0.58, 0.7, 0.12), woodMat);
-  counterFront.position.set(0, 1.31, depth * 0.58);
+  counterFront.position.set(0, 1.67, depth * 0.58);
   const counterRail = new THREE.Mesh(new THREE.BoxGeometry(width - 0.2, 0.12, 0.14), trimMat);
-  counterRail.position.set(0, 1.99, depth * 0.58);
+  counterRail.position.set(0, 2.35, depth * 0.58);
   stall.add(counterTop, counterFront, counterRail);
 
   const sideRailL = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.64, depth - 0.62), woodMat);
-  sideRailL.position.set(-(width * 0.5 - 0.24), 1.36, 0);
+  sideRailL.position.set(-(width * 0.5 - 0.24), 1.72, 0);
   const sideRailR = sideRailL.clone();
   sideRailR.position.x = width * 0.5 - 0.24;
   stall.add(sideRailL, sideRailR);
 
   const sign = makeTextSign(label, 3.28, 0.62, signColor, '#ecfeff');
-  sign.position.set(0, roofY + 0.84, depth * 0.5 + 0.15);
+  sign.position.set(0, roofY + 0.72, depth * 0.5 + 0.15);
   sign.rotation.x = -0.14;
   stall.add(sign);
 
@@ -3272,7 +3310,7 @@ function addMineArea() {
     canopyB: 0xf8fafc,
     vendor: mineShopVendor
   });
-  mineShopVendor.position.z = -0.95;
+  mineShopVendor.position.set(0, VENDOR_STAND_Y, -1.24);
   const mineShopLocalPos = new THREE.Vector3(
     MINE_SHOP_NPC_POS.x - MINE_POS.x,
     0,
@@ -3297,7 +3335,7 @@ function addMineArea() {
     canopyB: 0xf8fafc,
     vendor: oreTraderVendor
   });
-  oreTraderVendor.position.z = -0.95;
+  oreTraderVendor.position.set(0, VENDOR_STAND_Y, -1.24);
   const oreTraderLocalPos = new THREE.Vector3(
     MINE_ORE_TRADER_POS.x - MINE_POS.x,
     0,
@@ -3322,7 +3360,7 @@ function addMineArea() {
     canopyB: 0xffffff,
     vendor: questVendor
   });
-  questVendor.position.z = -0.96;
+  questVendor.position.set(0, VENDOR_STAND_Y, -1.24);
   const questLocalPos = new THREE.Vector3(
     QUEST_NPC_POS.x - MINE_POS.x,
     0,
