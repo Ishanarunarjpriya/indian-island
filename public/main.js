@@ -1874,7 +1874,7 @@ function addFishingIsland() {
     canopyB: 0xffffff,
     vendor
   });
-  vendor.position.set(0, VENDOR_STAND_Y, -1.24);
+  vendor.position.set(0, VENDOR_STAND_Y, -1.34);
   const fishingHouseYaw = Math.atan2(-FISHING_VENDOR_POS.x, -FISHING_VENDOR_POS.z);
   addWoodHouse(FISHING_VENDOR_POS.x, FISHING_VENDOR_POS.z, fishingHouseYaw, { collisions: false });
   stall.position.set(FISHING_VENDOR_POS.x, 0, FISHING_VENDOR_POS.z);
@@ -1947,7 +1947,7 @@ function addMarketIsland() {
     canopyB: 0xffffff,
     vendor
   });
-  vendor.position.set(0, VENDOR_STAND_Y, -1.24);
+  vendor.position.set(0, VENDOR_STAND_Y, -1.34);
   const marketHouseYaw = Math.atan2(-MARKET_VENDOR_POS.x, -MARKET_VENDOR_POS.z);
   addWoodHouse(MARKET_VENDOR_POS.x, MARKET_VENDOR_POS.z, marketHouseYaw, { collisions: false });
   stall.position.set(MARKET_VENDOR_POS.x, 0, MARKET_VENDOR_POS.z);
@@ -2751,8 +2751,8 @@ function createVendorNpc({
   hatColor = null
 } = {}) {
   const npc = new THREE.Group();
-  // Match player height more closely while keeping NPCs visually distinct.
-  const npcScale = 1.28;
+  // Slightly taller than player-height silhouette so vendors stand clearly above stall surfaces.
+  const npcScale = 1.36;
 
   const pantsMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.84 });
   const shirtMat = new THREE.MeshStandardMaterial({ color: shirtColor, roughness: 0.8 });
@@ -2857,8 +2857,8 @@ function createVendorStall({
   const stall = new THREE.Group();
   const width = 4.6;
   const depth = 2.8;
-  const postHeight = 4.75;
-  const roofY = 5.08;
+  const postHeight = 4.05;
+  const roofY = 4.36;
 
   const woodMat = new THREE.MeshStandardMaterial({ color: 0x4a2f1f, roughness: 0.9 });
   const trimMat = new THREE.MeshStandardMaterial({ color: 0x2f1e14, roughness: 0.92 });
@@ -2887,15 +2887,15 @@ function createVendorStall({
   }
 
   const counterTop = new THREE.Mesh(new THREE.BoxGeometry(width - 0.44, 0.15, 0.78), woodMat);
-  counterTop.position.set(0, 2.02, depth * 0.24);
+  counterTop.position.set(0, 1.74, depth * 0.24);
   const counterFront = new THREE.Mesh(new THREE.BoxGeometry(width - 0.58, 0.7, 0.12), woodMat);
-  counterFront.position.set(0, 1.67, depth * 0.58);
+  counterFront.position.set(0, 1.39, depth * 0.58);
   const counterRail = new THREE.Mesh(new THREE.BoxGeometry(width - 0.2, 0.12, 0.14), trimMat);
-  counterRail.position.set(0, 2.35, depth * 0.58);
+  counterRail.position.set(0, 2.07, depth * 0.58);
   stall.add(counterTop, counterFront, counterRail);
 
   const sideRailL = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.64, depth - 0.62), woodMat);
-  sideRailL.position.set(-(width * 0.5 - 0.24), 1.72, 0);
+  sideRailL.position.set(-(width * 0.5 - 0.24), 1.44, 0);
   const sideRailR = sideRailL.clone();
   sideRailR.position.x = width * 0.5 - 0.24;
   stall.add(sideRailL, sideRailR);
@@ -3310,7 +3310,7 @@ function addMineArea() {
     canopyB: 0xf8fafc,
     vendor: mineShopVendor
   });
-  mineShopVendor.position.set(0, VENDOR_STAND_Y, -1.24);
+  mineShopVendor.position.set(0, VENDOR_STAND_Y, -1.34);
   const mineShopLocalPos = new THREE.Vector3(
     MINE_SHOP_NPC_POS.x - MINE_POS.x,
     0,
@@ -3335,7 +3335,7 @@ function addMineArea() {
     canopyB: 0xf8fafc,
     vendor: oreTraderVendor
   });
-  oreTraderVendor.position.set(0, VENDOR_STAND_Y, -1.24);
+  oreTraderVendor.position.set(0, VENDOR_STAND_Y, -1.34);
   const oreTraderLocalPos = new THREE.Vector3(
     MINE_ORE_TRADER_POS.x - MINE_POS.x,
     0,
@@ -3360,7 +3360,7 @@ function addMineArea() {
     canopyB: 0xffffff,
     vendor: questVendor
   });
-  questVendor.position.set(0, VENDOR_STAND_Y, -1.24);
+  questVendor.position.set(0, VENDOR_STAND_Y, -1.34);
   const questLocalPos = new THREE.Vector3(
     QUEST_NPC_POS.x - MINE_POS.x,
     0,
