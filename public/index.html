@@ -755,6 +755,11 @@
         gap: 8px;
       }
 
+      .market-field {
+        display: grid;
+        gap: 6px;
+      }
+
       .market-inline {
         display: flex;
         gap: 8px;
@@ -791,6 +796,188 @@
       #market-fish-index-summary {
         font-size: 12px;
         color: #cbd5e1;
+      }
+
+      #market-panel {
+        width: min(860px, calc(100vw - 24px));
+        gap: 12px;
+        padding: 16px;
+        border-color: rgba(56, 189, 248, 0.3);
+        background:
+          radial-gradient(circle at 14% -8%, rgba(34, 211, 238, 0.14), rgba(34, 211, 238, 0) 42%),
+          radial-gradient(circle at 86% -15%, rgba(250, 204, 21, 0.12), rgba(250, 204, 21, 0) 40%),
+          rgba(5, 12, 26, 0.86);
+      }
+
+      #market-panel .modal-head {
+        padding-bottom: 8px;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.24);
+      }
+
+      #market-panel .modal-head h2 {
+        font-size: 22px;
+        letter-spacing: 0.4px;
+      }
+
+      #market-panel .modal-close {
+        width: 34px;
+        height: 34px;
+        min-height: 34px;
+        border: 1px solid rgba(148, 163, 184, 0.34);
+        border-radius: 10px;
+        background: rgba(2, 10, 22, 0.88);
+        color: #f8fafc;
+      }
+
+      #market-panel .market-grid {
+        gap: 12px;
+      }
+
+      #market-panel .market-section {
+        border-radius: 14px;
+        padding: 12px 14px;
+        gap: 10px;
+        border: 1px solid rgba(148, 163, 184, 0.28);
+        background:
+          linear-gradient(180deg, rgba(8, 15, 30, 0.82), rgba(4, 10, 22, 0.78));
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.05),
+          0 10px 20px rgba(0, 0, 0, 0.2);
+      }
+
+      #market-panel .market-section h3 {
+        font-size: 16px;
+        letter-spacing: 0.25px;
+      }
+
+      #market-panel .market-field {
+        font-size: 12px;
+        color: #b9c8dc;
+        letter-spacing: 0.2px;
+        font-weight: 700;
+      }
+
+      #market-panel .market-form-row {
+        grid-template-columns: minmax(140px, 0.45fr) minmax(0, 1fr);
+        gap: 12px;
+        align-items: end;
+      }
+
+      #market-panel .market-form-row.market-row-amount {
+        grid-template-columns: minmax(140px, 0.42fr) minmax(210px, 1fr);
+      }
+
+      #market-panel .market-form-row.market-row-quest {
+        grid-template-columns: minmax(0, 1fr) minmax(180px, 0.5fr);
+      }
+
+      #market-panel select,
+      #market-panel input[type="number"] {
+        width: 100%;
+        min-height: 40px;
+        border-radius: 10px;
+        border: 1px solid rgba(148, 163, 184, 0.34);
+        background: rgba(3, 10, 22, 0.88);
+        color: #f8fafc;
+        padding: 0 12px;
+        font: inherit;
+        font-size: 16px;
+        outline: none;
+      }
+
+      #market-panel input[type="number"] {
+        max-width: 120px;
+      }
+
+      #market-panel select:focus,
+      #market-panel input[type="number"]:focus {
+        border-color: rgba(34, 211, 238, 0.72);
+        box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.18);
+      }
+
+      #market-panel button {
+        min-height: 38px;
+        border-radius: 11px;
+        transition: transform 120ms ease, filter 120ms ease, box-shadow 120ms ease;
+      }
+
+      #market-panel button:not(:disabled):hover {
+        transform: translateY(-1px);
+      }
+
+      #market-panel button:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+        filter: saturate(0.6);
+      }
+
+      #market-open-index,
+      #market-sell-btn {
+        width: 100%;
+        background: linear-gradient(180deg, #fbd66b, #e7b341);
+        color: #142036;
+        box-shadow: 0 8px 20px rgba(250, 204, 21, 0.2);
+      }
+
+      #market-sell-price-preview {
+        align-self: end;
+        justify-self: start;
+        font-size: 14px;
+        font-weight: 700;
+        color: #fcd34d;
+        background: rgba(2, 8, 20, 0.5);
+        border: 1px solid rgba(250, 204, 21, 0.24);
+        border-radius: 9px;
+        padding: 8px 10px;
+      }
+
+      #market-quest-title {
+        margin: 0;
+        font-size: 17px;
+        font-weight: 800;
+        color: #f8fafc;
+      }
+
+      #market-quest-desc {
+        margin: 0;
+        font-size: 13px;
+        color: #cbd5e1;
+        line-height: 1.35;
+      }
+
+      #market-quest-progress {
+        margin: 0;
+        font-size: 13px;
+        color: #93c5fd;
+        line-height: 1.3;
+      }
+
+      #market-panel .market-inline.market-actions {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      #market-quest-accept-btn {
+        background: linear-gradient(180deg, #60a5fa, #2b6cbf);
+        color: #f0f9ff;
+      }
+
+      #market-quest-turnin-btn {
+        background: linear-gradient(180deg, #22d3ee, #0e7490);
+        color: #ecfeff;
+      }
+
+      #market-quest-claim-btn {
+        background: linear-gradient(180deg, #fcd34d, #eab308);
+        color: #172554;
+      }
+
+      #market-status {
+        padding: 8px 10px;
+        border-radius: 10px;
+        border: 1px solid rgba(148, 163, 184, 0.22);
+        background: rgba(2, 8, 20, 0.45);
       }
 
       body.mining-focus #hud,
@@ -1619,8 +1806,16 @@
         max-height: calc(100vh - 16px);
       }
 
-      body.mobile-ui .market-form-row {
+      body.mobile-ui #market-panel .market-form-row {
         grid-template-columns: 1fr;
+      }
+
+      body.mobile-ui #market-panel .market-inline.market-actions {
+        grid-template-columns: 1fr;
+      }
+
+      body.mobile-ui #market-panel input[type="number"] {
+        max-width: 100%;
       }
     </style>
   </head>
@@ -1848,7 +2043,7 @@
       <section id="market-panel" class="panel modal-panel">
         <div class="modal-head">
           <h2>Market Trader</h2>
-          <button id="market-close" class="modal-close" type="button">X</button>
+          <button id="market-close" class="modal-close" type="button">✕</button>
         </div>
         <div class="market-grid">
           <section class="market-section">
@@ -1859,38 +2054,38 @@
           <section class="market-section">
             <h3>Sell Items</h3>
             <div class="market-form-row">
-              <label>Category
+              <label class="market-field">Category
                 <select id="market-sell-category">
                   <option value="fish">Fish</option>
                   <option value="ore">Ores</option>
                 </select>
               </label>
-              <label>Item
+              <label class="market-field">Item
                 <select id="market-sell-item"></select>
               </label>
             </div>
-            <div class="market-form-row">
-              <label>Amount
+            <div class="market-form-row market-row-amount">
+              <label class="market-field">Amount
                 <input id="market-sell-amount" type="number" min="1" step="1" value="1" />
               </label>
-              <div id="market-sell-price-preview" style="align-self:end;font-size:12px;color:#cbd5e1;">Value: --</div>
+              <div id="market-sell-price-preview">Value: --</div>
             </div>
             <button id="market-sell-btn" type="button">Sell Selected</button>
           </section>
           <section class="market-section">
             <h3>Fishing Quest</h3>
             <div id="market-quest-title">No quest loaded</div>
-            <div id="market-quest-desc" style="font-size:12px;color:#cbd5e1;"></div>
-            <div id="market-quest-progress" style="font-size:12px;color:#93c5fd;"></div>
-            <div class="market-form-row">
-              <label>Quest fish selection
+            <div id="market-quest-desc"></div>
+            <div id="market-quest-progress"></div>
+            <div class="market-form-row market-row-quest">
+              <label class="market-field">Quest fish selection
                 <select id="market-quest-fish-item"></select>
               </label>
-              <label>Turn-in amount
+              <label class="market-field">Turn-in amount
                 <input id="market-quest-fish-amount" type="number" min="1" step="1" value="1" />
               </label>
             </div>
-            <div class="market-inline">
+            <div class="market-inline market-actions">
               <button id="market-quest-accept-btn" type="button">Accept Quest</button>
               <button id="market-quest-turnin-btn" type="button">Turn In Fish</button>
               <button id="market-quest-claim-btn" type="button">Claim Reward</button>
