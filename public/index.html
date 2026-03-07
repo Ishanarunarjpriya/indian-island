@@ -267,13 +267,34 @@
 
       #mining-pickaxe-head {
         position: absolute;
-        left: 5px;
+        left: 7px;
         top: 2px;
-        width: 34px;
-        height: 13px;
-        border-radius: 7px;
+        width: 32px;
+        height: 12px;
+        border-radius: 2px;
         background: #94a3b8;
+        clip-path: polygon(8% 50%, 18% 10%, 82% 10%, 92% 50%, 82% 90%, 18% 90%);
         box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+      }
+
+      #mining-pickaxe-head::before,
+      #mining-pickaxe-head::after {
+        content: '';
+        position: absolute;
+        top: 3px;
+        width: 10px;
+        height: 6px;
+        background: inherit;
+      }
+
+      #mining-pickaxe-head::before {
+        left: -7px;
+        clip-path: polygon(0 50%, 100% 0, 100% 100%);
+      }
+
+      #mining-pickaxe-head::after {
+        right: -7px;
+        clip-path: polygon(0 0, 100% 50%, 0 100%);
       }
 
       #mining-ore-preview.cracked #mining-pickaxe-preview {
@@ -352,6 +373,14 @@
         font-size: 12px;
         color: #fef3c7;
         letter-spacing: 0.2px;
+      }
+
+      #mining-meter-tier-bonus {
+        text-align: center;
+        min-height: 14px;
+        font-size: 11px;
+        color: #bfdbfe;
+        letter-spacing: 0.15px;
       }
 
       #fishing-meter-pointer {
@@ -1549,6 +1578,10 @@
         font-size: 11px;
       }
 
+      body.mobile-ui #mining-meter-tier-bonus {
+        font-size: 10px;
+      }
+
       body.mobile-ui #fishing-meter {
         top: 54%;
         bottom: auto;
@@ -1734,6 +1767,7 @@
         </div>
       </div>
       <div id="mining-meter-status">Hit click or press E while marker is in green.</div>
+      <div id="mining-meter-tier-bonus">Zone bonus: Wood +0% | Stone +14% | Iron +30% | Diamond +50%</div>
     </section>
 
     <section id="fishing-meter" class="panel hidden" aria-live="polite">
