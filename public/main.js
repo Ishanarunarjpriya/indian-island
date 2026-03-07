@@ -1874,7 +1874,7 @@ function addFishingIsland() {
     canopyB: 0xffffff,
     vendor
   });
-  vendor.position.set(0, VENDOR_STAND_Y, -1.34);
+  vendor.position.set(0, VENDOR_STAND_Y, -3);
   const fishingHouseYaw = Math.atan2(-FISHING_VENDOR_POS.x, -FISHING_VENDOR_POS.z);
   addWoodHouse(FISHING_VENDOR_POS.x, FISHING_VENDOR_POS.z, fishingHouseYaw, { collisions: false });
   stall.position.set(FISHING_VENDOR_POS.x, 0, FISHING_VENDOR_POS.z);
@@ -1947,7 +1947,7 @@ function addMarketIsland() {
     canopyB: 0xffffff,
     vendor
   });
-  vendor.position.set(0, VENDOR_STAND_Y, -1.34);
+  vendor.position.set(0, VENDOR_STAND_Y, -3);
   const marketHouseYaw = Math.atan2(-MARKET_VENDOR_POS.x, -MARKET_VENDOR_POS.z);
   addWoodHouse(MARKET_VENDOR_POS.x, MARKET_VENDOR_POS.z, marketHouseYaw, { collisions: false });
   stall.position.set(MARKET_VENDOR_POS.x, 0, MARKET_VENDOR_POS.z);
@@ -2752,7 +2752,7 @@ function createVendorNpc({
 } = {}) {
   const npc = new THREE.Group();
   // Slightly taller than player-height silhouette so vendors stand clearly above stall surfaces.
-  const npcScale = 1.36;
+  const npcScale = 2.3;
 
   const pantsMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.84 });
   const shirtMat = new THREE.MeshStandardMaterial({ color: shirtColor, roughness: 0.8 });
@@ -3310,7 +3310,7 @@ function addMineArea() {
     canopyB: 0xf8fafc,
     vendor: mineShopVendor
   });
-  mineShopVendor.position.set(0, VENDOR_STAND_Y, -1.34);
+  mineShopVendor.position.set(0, VENDOR_STAND_Y, -3);
   const mineShopLocalPos = new THREE.Vector3(
     MINE_SHOP_NPC_POS.x - MINE_POS.x,
     0,
@@ -3335,7 +3335,7 @@ function addMineArea() {
     canopyB: 0xf8fafc,
     vendor: oreTraderVendor
   });
-  oreTraderVendor.position.set(0, VENDOR_STAND_Y, -1.34);
+  oreTraderVendor.position.set(0, VENDOR_STAND_Y, -3);
   const oreTraderLocalPos = new THREE.Vector3(
     MINE_ORE_TRADER_POS.x - MINE_POS.x,
     0,
@@ -3360,7 +3360,7 @@ function addMineArea() {
     canopyB: 0xffffff,
     vendor: questVendor
   });
-  questVendor.position.set(0, VENDOR_STAND_Y, -1.34);
+  questVendor.position.set(0, VENDOR_STAND_Y, -3);
   const questLocalPos = new THREE.Vector3(
     QUEST_NPC_POS.x - MINE_POS.x,
     0,
