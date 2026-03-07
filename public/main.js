@@ -3077,7 +3077,7 @@ function addMineArea() {
       resource: 'stone',
       color: ORE_RESOURCE_COLORS.stone,
       reward: 1,
-      cooldownMs: 2400,
+      cooldownMs: 5200,
       positions: [
         [-26, -18], [-22, -7], [-18, 11], [-12, -22], [-7, -12], [-1, 16], [6, -17], [11, 8], [16, -6], [22, 12], [28, 3], [-14, 22]
       ]
@@ -3086,21 +3086,21 @@ function addMineArea() {
       resource: 'iron',
       color: ORE_RESOURCE_COLORS.iron,
       reward: 2,
-      cooldownMs: 4200,
+      cooldownMs: 7600,
       positions: [[-24, 8], [-16, -25], [-9, -15], [-2, 24], [8, -11], [14, 4], [19, 18], [25, -12], [4, 20]]
     },
     {
       resource: 'gold',
       color: ORE_RESOURCE_COLORS.gold,
       reward: 3,
-      cooldownMs: 6200,
+      cooldownMs: 10400,
       positions: [[-28, 15], [-12, 26], [3, 28], [14, -22], [24, 6], [20, 23], [-4, -26]]
     },
     {
       resource: 'diamond',
       color: ORE_RESOURCE_COLORS.diamond,
       reward: 1,
-      cooldownMs: 9800,
+      cooldownMs: 15600,
       positions: [[-30, -5], [-8, 4], [0, 0], [18, 14], [30, 10]]
     }
   ];
@@ -7321,9 +7321,9 @@ function canMineResource(resource) {
 
 function mineAmountForPickaxe(resource) {
   const power = getPickaxePower();
-  if (resource === 'diamond') return power >= 4 ? 2 : 1;
-  if (resource === 'gold') return Math.max(1, power - 1);
-  return power;
+  if (resource === 'diamond') return power >= 4 ? 3 : 2;
+  if (resource === 'gold') return Math.max(2, power);
+  return power + 1;
 }
 
 function isNearMineCrystal(local) {
