@@ -1284,6 +1284,7 @@ function spawnPlayer(socket, profileId, username) {
     y: ISLAND_SURFACE_Y,
     z: spawnPoint.z,
     inMine: false,
+    isFishing: false,
     torchEquipped: false,
     appearance: sanitizeAppearance(profile?.appearance, {
       ...defaultAppearance(),
@@ -1420,11 +1421,13 @@ io.on('connection', (socket) => {
     const boundedX = clamp(nextX, -PLAYABLE_BOUND, PLAYABLE_BOUND);
     const boundedZ = clamp(nextZ, -PLAYABLE_BOUND, PLAYABLE_BOUND);
     const inMine = payload?.inMine === true;
+    const isFishing = payload?.isFishing === true && current?.progress?.hasFishingRod === true;
     const next = clampToPlayableGround(boundedX, boundedZ, inMine);
 
     current.x = next.x;
     current.y = clamp(nextY, SWIM_MIN_Y, 30);
     current.z = next.z;
+    current.isFishing = isFishing;
     players.set(socket.id, current);
     persistPlayerProgress(current);
 
@@ -1437,7 +1440,10 @@ io.on('connection', (socket) => {
       color: current.color,
       appearance: current.appearance,
       pickaxe: sanitizePickaxe(current?.progress?.pickaxe, 'wood'),
-      torchEquipped: current.torchEquipped === true
+      torchEquipped: current.torchEquipped === true,
+      hasFishingRod: current?.progress?.hasFishingRod === true,
+      fishingRodTier: sanitizeFishingRodTier(current?.progress?.fishingRodTier, 'basic'),
+      isFishing: current.isFishing === true
     });
   });
 
@@ -1553,7 +1559,10 @@ io.on('connection', (socket) => {
     io.emit('playerGear', {
       id: socket.id,
       pickaxe: progress.pickaxe,
-      torchEquipped: actor.torchEquipped === true
+      torchEquipped: actor.torchEquipped === true,
+      hasFishingRod: progress.hasFishingRod === true,
+      fishingRodTier: sanitizeFishingRodTier(progress.fishingRodTier, 'basic'),
+      isFishing: actor.isFishing === true
     });
     if (typeof ack === 'function') ack({ ok: true, tier: requested });
   });
@@ -1602,6 +1611,14 @@ io.on('connection', (socket) => {
     progress.fishingRodTier = 'basic';
     persistPlayerProgress(actor, { immediate: true });
     emitProgress(socket, actor);
+    io.emit('playerGear', {
+      id: socket.id,
+      pickaxe: sanitizePickaxe(progress.pickaxe, 'wood'),
+      torchEquipped: actor.torchEquipped === true,
+      hasFishingRod: progress.hasFishingRod === true,
+      fishingRodTier: sanitizeFishingRodTier(progress.fishingRodTier, 'basic'),
+      isFishing: actor.isFishing === true
+    });
     if (typeof ack === 'function') {
       ack({
         ok: true,
@@ -1660,6 +1677,14 @@ io.on('connection', (socket) => {
     progress.fishingRodTier = sanitizeFishingRodTier(tier.next.tier, progress.fishingRodTier);
     persistPlayerProgress(actor, { immediate: true });
     emitProgress(socket, actor);
+    io.emit('playerGear', {
+      id: socket.id,
+      pickaxe: sanitizePickaxe(progress.pickaxe, 'wood'),
+      torchEquipped: actor.torchEquipped === true,
+      hasFishingRod: progress.hasFishingRod === true,
+      fishingRodTier: sanitizeFishingRodTier(progress.fishingRodTier, 'basic'),
+      isFishing: actor.isFishing === true
+    });
     if (typeof ack === 'function') {
       ack({
         ok: true,
@@ -2085,13 +2110,19 @@ io.on('connection', (socket) => {
     const actor = players.get(socket.id);
     if (!actor || !payload || typeof payload !== 'object') return;
     const wantsTorch = payload.torchEquipped === true;
+    const wantsFishing = payload.isFishing === true;
     const torchCount = Number(actor.progress?.inventory?.torch);
+    const hasRod = actor?.progress?.hasFishingRod === true;
     actor.torchEquipped = wantsTorch && Number.isFinite(torchCount) && torchCount > 0;
+    actor.isFishing = wantsFishing && hasRod;
     players.set(socket.id, actor);
     io.emit('playerGear', {
       id: socket.id,
       pickaxe: sanitizePickaxe(actor?.progress?.pickaxe, 'wood'),
-      torchEquipped: actor.torchEquipped
+      torchEquipped: actor.torchEquipped,
+      hasFishingRod: actor?.progress?.hasFishingRod === true,
+      fishingRodTier: sanitizeFishingRodTier(actor?.progress?.fishingRodTier, 'basic'),
+      isFishing: actor.isFishing === true
     });
   });
 

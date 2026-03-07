@@ -66,6 +66,13 @@ const PICKAXE_HEAD_COLORS = {
   iron: 0xcbd5e1,
   diamond: 0x67e8f9
 };
+const FISHING_ROD_ACCENT_COLORS = {
+  basic: 0x9ca3af,
+  reinforced: 0x34d399,
+  expert: 0x60a5fa,
+  master: 0xa78bfa,
+  mythic: 0xfacc15
+};
 const ORE_RESOURCE_COLORS = {
   stone: 0x9ca3af,
   iron: 0xb45309,
@@ -239,8 +246,10 @@ const miningAccuracyGame = {
 };
 let miningAccuracyUiTimer = null;
 const _mineNodeWorldPos = new THREE.Vector3();
+const _mineCrystalWorldPos = new THREE.Vector3();
 const _mineFocusLook = new THREE.Vector3();
 const _mineFocusCameraPos = new THREE.Vector3();
+const _nameTagWorldPos = new THREE.Vector3();
 let npcDialogueOpen = false;
 let npcDialoguePrimaryAction = null;
 let npcDialogueSecondaryAction = null;
@@ -606,74 +615,66 @@ function setFishIndexOpen(open) {
 
 function setInventoryModalOpen(open) {
   if (!isAuthenticated && open) return;
-  inventoryModalOpen = Boolean(open);
-  inventoryModalEl?.classList.toggle('hidden', !inventoryModalOpen);
-  if (inventoryModalOpen) {
-    setMenuOpen(false);
-    setFishIndexOpen(false);
-    closeNpcDialogue();
-    marketModalOpen = false;
-    rodShopModalOpen = false;
-    oreModalOpen = false;
-    marketModalEl?.classList.add('hidden');
-    rodShopModalEl?.classList.add('hidden');
-    oreModalEl?.classList.add('hidden');
-    renderInventoryModal();
+  if (!open) {
+    inventoryModalOpen = false;
+    inventoryModalEl?.classList.add('hidden');
+    return;
   }
+  setMenuOpen(false);
+  setFishIndexOpen(false);
+  closeNpcDialogue();
+  closeCommerceModals();
+  inventoryModalOpen = true;
+  inventoryModalEl?.classList.remove('hidden');
+  renderInventoryModal();
 }
 
 function setRodShopModalOpen(open) {
   if (!isAuthenticated && open) return;
-  rodShopModalOpen = Boolean(open);
-  rodShopModalEl?.classList.toggle('hidden', !rodShopModalOpen);
-  if (rodShopModalOpen) {
-    setMenuOpen(false);
-    setFishIndexOpen(false);
-    closeNpcDialogue();
-    inventoryModalOpen = false;
-    marketModalOpen = false;
-    oreModalOpen = false;
-    inventoryModalEl?.classList.add('hidden');
-    marketModalEl?.classList.add('hidden');
-    oreModalEl?.classList.add('hidden');
-    renderRodShopModal();
+  if (!open) {
+    rodShopModalOpen = false;
+    rodShopModalEl?.classList.add('hidden');
+    return;
   }
+  setMenuOpen(false);
+  setFishIndexOpen(false);
+  closeNpcDialogue();
+  closeCommerceModals();
+  rodShopModalOpen = true;
+  rodShopModalEl?.classList.remove('hidden');
+  renderRodShopModal();
 }
 
 function setMarketModalOpen(open) {
   if (!isAuthenticated && open) return;
-  marketModalOpen = Boolean(open);
-  marketModalEl?.classList.toggle('hidden', !marketModalOpen);
-  if (marketModalOpen) {
-    setMenuOpen(false);
-    setFishIndexOpen(false);
-    closeNpcDialogue();
-    inventoryModalOpen = false;
-    rodShopModalOpen = false;
-    oreModalOpen = false;
-    inventoryModalEl?.classList.add('hidden');
-    rodShopModalEl?.classList.add('hidden');
-    oreModalEl?.classList.add('hidden');
-    renderMarketModal();
+  if (!open) {
+    marketModalOpen = false;
+    marketModalEl?.classList.add('hidden');
+    return;
   }
+  setMenuOpen(false);
+  setFishIndexOpen(false);
+  closeNpcDialogue();
+  closeCommerceModals();
+  marketModalOpen = true;
+  marketModalEl?.classList.remove('hidden');
+  renderMarketModal();
 }
 
 function setOreModalOpen(open) {
   if (!isAuthenticated && open) return;
-  oreModalOpen = Boolean(open);
-  oreModalEl?.classList.toggle('hidden', !oreModalOpen);
-  if (oreModalOpen) {
-    setMenuOpen(false);
-    setFishIndexOpen(false);
-    closeNpcDialogue();
-    inventoryModalOpen = false;
-    marketModalOpen = false;
-    rodShopModalOpen = false;
-    inventoryModalEl?.classList.add('hidden');
-    marketModalEl?.classList.add('hidden');
-    rodShopModalEl?.classList.add('hidden');
-    renderOreModal();
+  if (!open) {
+    oreModalOpen = false;
+    oreModalEl?.classList.add('hidden');
+    return;
   }
+  setMenuOpen(false);
+  setFishIndexOpen(false);
+  closeNpcDialogue();
+  closeCommerceModals();
+  oreModalOpen = true;
+  oreModalEl?.classList.remove('hidden');
+  renderOreModal();
 }
 
 function updatePerformanceToggleLabel() {
@@ -717,8 +718,10 @@ function setChatPanelOpen(open) {
   }
 }
 
+const _mobileLayoutQuery = window.matchMedia('(max-width: 900px), (max-height: 700px), (pointer: coarse)');
+
 function isMobileLayout() {
-  return window.matchMedia('(max-width: 900px), (max-height: 700px), (pointer: coarse)').matches;
+  return _mobileLayoutQuery.matches;
 }
 
 function applyResponsiveLayout() {
@@ -4480,6 +4483,12 @@ function makePlayerMesh(appearance) {
   heldPickaxe.rotation.set(-1.08, 0.18, 0.42);
   rightHand.add(heldPickaxe);
 
+  const heldFishingRod = createHeldFishingRodMesh(UNIT);
+  heldFishingRod.position.set(0.16 * UNIT, 0.22 * UNIT, 0.16 * UNIT);
+  heldFishingRod.rotation.set(-1.02, 0.18, 0.34);
+  heldFishingRod.visible = false;
+  rightHand.add(heldFishingRod);
+
   const leftLegPivot = new THREE.Group();
   leftLegPivot.position.set(-0.38 * UNIT, 1.02 * UNIT, 0);
   const leftLeg = new THREE.Mesh(
@@ -4748,6 +4757,8 @@ function makePlayerMesh(appearance) {
     heldTorchFlame: heldTorch.userData.flame || null,
     heldPickaxe,
     heldPickaxeHead: heldPickaxe.userData.head || null,
+    heldFishingRod,
+    heldFishingRodAccent: heldFishingRod.userData.accent || null,
     hat,
     glasses,
     backpack,
@@ -4939,6 +4950,9 @@ function addPlayer(data) {
     isSwimming: false,
     isLocal: data.id === localPlayerId,
     heldPickaxe: normalizePickaxeTier(data.pickaxe, 'wood'),
+    hasFishingRod: data?.progress?.hasFishingRod === true || data?.hasFishingRod === true,
+    heldFishingRodTier: normalizeRodTier(data?.progress?.fishingRodTier || data?.fishingRodTier, 'basic'),
+    isFishing: data?.isFishing === true,
     torchEquipped: Boolean(data.torchEquipped),
     mineSwingStartedAt: 0,
     mineSwingUntil: 0,
@@ -5016,6 +5030,50 @@ function createHeldPickaxeMesh(unit) {
   return mesh;
 }
 
+function createHeldFishingRodMesh(unit) {
+  const rod = new THREE.Group();
+  const grip = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.08 * unit, 0.09 * unit, 0.52 * unit, 10),
+    new THREE.MeshStandardMaterial({ color: 0x7c4a26, roughness: 0.84 })
+  );
+  grip.rotation.z = Math.PI / 2;
+  grip.position.x = -0.46 * unit;
+  grip.castShadow = true;
+
+  const shaft = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.028 * unit, 0.033 * unit, 2.25 * unit, 10),
+    new THREE.MeshStandardMaterial({ color: 0xdbeafe, roughness: 0.28, metalness: 0.52 })
+  );
+  shaft.rotation.z = Math.PI / 2;
+  shaft.position.x = 0.36 * unit;
+  shaft.castShadow = true;
+
+  const accent = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.11 * unit, 0.11 * unit, 0.14 * unit, 14),
+    new THREE.MeshStandardMaterial({ color: FISHING_ROD_ACCENT_COLORS.basic, roughness: 0.36, metalness: 0.58 })
+  );
+  accent.position.set(-0.2 * unit, -0.12 * unit, 0);
+  accent.castShadow = true;
+
+  const line = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.007 * unit, 0.007 * unit, 0.56 * unit, 6),
+    new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.22, metalness: 0.1 })
+  );
+  line.position.set(1.44 * unit, -0.28 * unit, 0);
+  line.castShadow = true;
+
+  const hook = new THREE.Mesh(
+    new THREE.SphereGeometry(0.03 * unit, 8, 8),
+    new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.32, metalness: 0.55 })
+  );
+  hook.position.set(1.44 * unit, -0.58 * unit, 0);
+  hook.castShadow = true;
+
+  rod.add(grip, shaft, accent, line, hook);
+  rod.userData.accent = accent;
+  return rod;
+}
+
 function createHeldTorchMesh(unit) {
   const torch = new THREE.Group();
   const handle = new THREE.Mesh(
@@ -5048,11 +5106,25 @@ function applyHeldGearVisual(player) {
   if (!parts) return;
 
   const tier = normalizePickaxeTier(player.heldPickaxe, 'wood');
+  const rodTier = normalizeRodTier(player.heldFishingRodTier, 'basic');
+  const hasRod = player.hasFishingRod === true;
+  const fishingActive = player.isLocal
+    ? Boolean(fishingMiniGame.active || fishingMiniGame.starting)
+    : player.isFishing === true;
+  const rodVisible = hasRod && fishingActive;
+  const pickaxeVisible = !rodVisible;
+
   if (parts.heldPickaxeHead?.material?.color) {
     parts.heldPickaxeHead.material.color.set(PICKAXE_HEAD_COLORS[tier] || PICKAXE_HEAD_COLORS.wood);
   }
   if (parts.heldPickaxe) {
-    parts.heldPickaxe.visible = true;
+    parts.heldPickaxe.visible = pickaxeVisible;
+  }
+  if (parts.heldFishingRodAccent?.material?.color) {
+    parts.heldFishingRodAccent.material.color.set(FISHING_ROD_ACCENT_COLORS[rodTier] || FISHING_ROD_ACCENT_COLORS.basic);
+  }
+  if (parts.heldFishingRod) {
+    parts.heldFishingRod.visible = rodVisible;
   }
 
   const localTorchCount = player.isLocal ? Math.max(0, Math.floor(Number(questState.inventory.torch) || 0)) : 1;
@@ -5068,14 +5140,32 @@ function applyHeldGearVisual(player) {
 function syncLocalHeldGear(emitToServer = false) {
   const local = players.get(localPlayerId);
   if (!local) return;
+  const prevPickaxe = normalizePickaxeTier(local.heldPickaxe, 'wood');
+  const prevTorch = local.torchEquipped === true;
+  const prevHasRod = local.hasFishingRod === true;
+  const prevRodTier = normalizeRodTier(local.heldFishingRodTier, 'basic');
+  const prevIsFishing = local.isFishing === true;
   local.heldPickaxe = normalizePickaxeTier(questState.pickaxe, 'wood');
+  local.hasFishingRod = questState.hasFishingRod === true;
+  local.heldFishingRodTier = normalizeRodTier(questState.fishingRodTier, 'basic');
+  local.isFishing = Boolean(fishingMiniGame.active || fishingMiniGame.starting);
   if (Math.max(0, Math.floor(Number(questState.inventory.torch) || 0)) <= 0) {
     torchEquipped = false;
   }
   local.torchEquipped = torchEquipped;
   applyHeldGearVisual(local);
-  if (emitToServer && isAuthenticated) {
-    socket.emit('player:gear', { torchEquipped });
+  const changed = prevPickaxe !== local.heldPickaxe
+    || prevTorch !== local.torchEquipped
+    || prevHasRod !== local.hasFishingRod
+    || prevRodTier !== local.heldFishingRodTier
+    || prevIsFishing !== local.isFishing;
+  if (emitToServer && isAuthenticated && changed) {
+    socket.emit('player:gear', {
+      torchEquipped,
+      hasFishingRod: local.hasFishingRod,
+      fishingRodTier: local.heldFishingRodTier,
+      isFishing: local.isFishing === true
+    });
   }
 }
 
@@ -5194,6 +5284,7 @@ function resetFishingMiniGame() {
     fishingMeterEl.classList.add('hidden');
   }
   setFishingFocusMode(false);
+  syncLocalHeldGear(true);
 }
 
 function scheduleFishingMiniGameClose(delayMs = 180) {
@@ -5339,7 +5430,8 @@ function fishSellPriceById(fishId) {
 }
 
 function normalizeRodTier(value, fallback = 'basic') {
-  return FISHING_ROD_TIERS.includes(value) ? value : fallback;
+  const tier = typeof value === 'string' ? value.toLowerCase() : '';
+  return FISHING_ROD_TIERS.includes(tier) ? tier : fallback;
 }
 
 function rodTierLabel(value) {
@@ -5852,7 +5944,7 @@ function startMiningAccuracyGame(node) {
     miningMeterPointerEl.style.left = `${(miningAccuracyGame.pointer * 100).toFixed(2)}%`;
   }
   renderMiningTierBonusLegend(pickaxeTier);
-  setMiningMeterStatus(`Mine ${node.resource}: click or press E in green.`, '#fef3c7');
+  setMiningMeterStatus(`Mine ${node.resource}: click/tap or press E/Space in green.`, '#fef3c7');
   if (miningMeterEl) {
     miningMeterEl.classList.remove('hidden');
   }
@@ -6923,6 +7015,7 @@ function startFishingMinigame(spot) {
   setFishingMeterStatus('Casting line...', '#93c5fd');
   fishingMeterEl?.classList.remove('hidden');
   setFishingFocusMode(true);
+  syncLocalHeldGear(true);
   socket.emit('fish:start', { spotId: spot.id }, (resp) => {
     if (!fishingMiniGame.active || fishingMiniGame.spotId !== spot.id) {
       return;
@@ -6979,7 +7072,7 @@ function startFishingMinigame(spot) {
       fishingMeterPreviewRarityEl.style.color = FISH_RARITY_COLORS[rarity] || '#93c5fd';
     }
     applyFishIcon(fishingMeterPreviewIconEl, fish || FISH_CATALOG[0], { locked: false });
-    setFishingMeterStatus('Hold click to move white box right. Release to drift left.', '#fef3c7');
+    setFishingMeterStatus('Hold click/touch/E/Space to move right. Release to drift left.', '#fef3c7');
     updateQuestPanel('Keep the white box inside the moving green zone to catch the fish.');
   });
   return true;
@@ -7211,8 +7304,8 @@ function getNearbyOreNode(local) {
   let best = null;
   for (const node of oreNodes) {
     if (!node.mesh.visible || node.breaking) continue;
-    const pos = node.mesh.getWorldPosition(new THREE.Vector3());
-    const dist = Math.hypot(local.x - pos.x, local.z - pos.z);
+    node.mesh.getWorldPosition(_mineNodeWorldPos);
+    const dist = Math.hypot(local.x - _mineNodeWorldPos.x, local.z - _mineNodeWorldPos.z);
     if (dist <= 3.2 && (!best || dist < best.dist)) {
       best = { node, dist };
     }
@@ -7235,8 +7328,8 @@ function mineAmountForPickaxe(resource) {
 
 function isNearMineCrystal(local) {
   if (!local || !inMine || !mineCentralCrystalMesh) return false;
-  const world = mineCentralCrystalMesh.getWorldPosition(new THREE.Vector3());
-  return Math.hypot(local.x - world.x, local.z - world.z) <= MINE_CRYSTAL_INTERACT_RADIUS;
+  mineCentralCrystalMesh.getWorldPosition(_mineCrystalWorldPos);
+  return Math.hypot(local.x - _mineCrystalWorldPos.x, local.z - _mineCrystalWorldPos.z) <= MINE_CRYSTAL_INTERACT_RADIUS;
 }
 
 function exitMineToEntrance(local) {
@@ -7291,7 +7384,7 @@ function tryMineNode(local) {
     return true;
   }
   if (startMiningAccuracyGame(node)) {
-    updateQuestPanel(`Mine ${node.resource}: click or press E when marker is in green.`);
+    updateQuestPanel(`Mine ${node.resource}: click/tap or press E/Space when marker is in green.`);
   }
   return true;
 }
@@ -7580,7 +7673,20 @@ socket.on('playerLeft', (id) => {
   });
 });
 
-socket.on('playerMoved', ({ id, x, y, z, name, color, appearance, pickaxe, torchEquipped: movedTorchEquipped }) => {
+socket.on('playerMoved', ({
+  id,
+  x,
+  y,
+  z,
+  name,
+  color,
+  appearance,
+  pickaxe,
+  torchEquipped: movedTorchEquipped,
+  hasFishingRod,
+  fishingRodTier,
+  isFishing
+}) => {
   const player = players.get(id);
   if (!player) return;
   player.x = x;
@@ -7592,13 +7698,22 @@ socket.on('playerMoved', ({ id, x, y, z, name, color, appearance, pickaxe, torch
   if (typeof movedTorchEquipped === 'boolean') {
     player.torchEquipped = movedTorchEquipped;
   }
+  if (typeof hasFishingRod === 'boolean') {
+    player.hasFishingRod = hasFishingRod;
+  }
+  if (typeof fishingRodTier === 'string') {
+    player.heldFishingRodTier = normalizeRodTier(fishingRodTier, player.heldFishingRodTier || 'basic');
+  }
+  if (typeof isFishing === 'boolean') {
+    player.isFishing = isFishing;
+  }
   applyHeldGearVisual(player);
   if (typeof name === 'string' || typeof color === 'string' || appearance) {
     applyPlayerCustomization(id, name, color, appearance);
   }
 });
 
-socket.on('playerGear', ({ id, pickaxe, torchEquipped: nextTorchEquipped }) => {
+socket.on('playerGear', ({ id, pickaxe, torchEquipped: nextTorchEquipped, hasFishingRod, fishingRodTier, isFishing }) => {
   const player = players.get(id);
   if (!player) return;
   if (typeof pickaxe === 'string') {
@@ -7610,6 +7725,15 @@ socket.on('playerGear', ({ id, pickaxe, torchEquipped: nextTorchEquipped }) => {
       torchEquipped = nextTorchEquipped;
       renderInventoryBar();
     }
+  }
+  if (typeof hasFishingRod === 'boolean') {
+    player.hasFishingRod = hasFishingRod;
+  }
+  if (typeof fishingRodTier === 'string') {
+    player.heldFishingRodTier = normalizeRodTier(fishingRodTier, player.heldFishingRodTier || 'basic');
+  }
+  if (typeof isFishing === 'boolean') {
+    player.isFishing = isFishing;
   }
   applyHeldGearVisual(player);
 });
@@ -7808,6 +7932,31 @@ window.addEventListener('keydown', (event) => {
 
   if (!isAuthenticated || menuOpen || isAnyGameplayOverlayOpen() || !customizeModalEl.classList.contains('hidden')) return;
   if (typingInInput) return;
+  const local = players.get(localPlayerId);
+  const isInteractKey = key === 'e' || key === ' ' || key === 'space';
+  if (isInteractKey) {
+    event.preventDefault();
+  }
+  if (fishingMiniGame.active || fishingMiniGame.starting) {
+    if (isInteractKey) {
+      setFishingHoldState(true);
+      return;
+    }
+  }
+  if (miningAccuracyGame.active) {
+    if (isInteractKey && !event.repeat) {
+      attemptMiningAccuracyHit(local);
+      return;
+    }
+  }
+  if ((key === ' ' || key === 'space') && !event.repeat && local) {
+    if (inMine && getNearbyOreNode(local) && tryMineNode(local)) {
+      return;
+    }
+    if (!inMine && questState.hasFishingRod && nearestFishingSpot(local) && tryFishingSpotInteract(local)) {
+      return;
+    }
+  }
   if (key === 't' && !event.repeat) {
     event.preventDefault();
     toggleTorchEquip();
@@ -7823,12 +7972,11 @@ window.addEventListener('keydown', (event) => {
     emoteWheelEl?.classList.remove('hidden');
     return;
   }
-  if (key === ' ') {
-    event.preventDefault();
-  }
 
   if (key === 'e' && !event.repeat) {
+    event.preventDefault();
     tryInteract();
+    return;
   }
 
   const emote = keyToEmote(key);
@@ -7848,6 +7996,9 @@ window.addEventListener('keyup', (event) => {
   const key = event.key.toLowerCase();
   // Always release keys even while menus/modals are open, so input cannot get stuck.
   keys.delete(key);
+  if (key === 'e' || key === ' ' || key === 'space') {
+    setFishingHoldState(false);
+  }
   if (!isAuthenticated || menuOpen || isAnyGameplayOverlayOpen() || !customizeModalEl.classList.contains('hidden')) return;
   if (key === 'q') {
     emoteWheelOpen = false;
@@ -8594,6 +8745,20 @@ mobileJumpEl?.addEventListener('click', () => {
   if (!isAuthenticated || menuOpen || isAnyGameplayOverlayOpen() || !customizeModalEl.classList.contains('hidden')) return;
   pendingJump = true;
 });
+mobileUseEl?.addEventListener('pointerdown', (event) => {
+  if (!fishingMiniGame.active && !fishingMiniGame.starting) return;
+  event.preventDefault();
+  setFishingHoldState(true);
+});
+mobileUseEl?.addEventListener('pointerup', () => {
+  setFishingHoldState(false);
+});
+mobileUseEl?.addEventListener('pointercancel', () => {
+  setFishingHoldState(false);
+});
+mobileUseEl?.addEventListener('pointerleave', () => {
+  setFishingHoldState(false);
+});
 mobileUseEl?.addEventListener('click', tryInteract);
 mobileConsumeEl?.addEventListener('click', () => consumeFish(1));
 mobileEmoteEl?.addEventListener('click', () => {
@@ -8739,7 +8904,7 @@ function updateDayAndWeather(delta, nowSeconds) {
   // Center daylight at noon and keep midnight consistently darkest.
   const solarCurve = Math.cos((dayTime - 0.5) * Math.PI * 2);
   const dayFactor = THREE.MathUtils.clamp((solarCurve + 0.2) / 1.2, 0, 1);
-  const insideMine = inMine === true;
+  const insideMine = inMine;
   const outdoorSunIntensity = 0.03 + dayFactor * 1.07;
   const outdoorHemiIntensity = 0.06 + dayFactor * 0.92;
 
@@ -8993,7 +9158,13 @@ function updateLocalPlayer(delta, nowMs) {
       Math.abs(local.y - prevY) > 0.01 ||
       Math.abs(local.z - prevZ) > 0.01;
     if (changed && inServerSyncRange) {
-      socket.emit('move', { x: local.x, y: local.y, z: local.z, inMine });
+      socket.emit('move', {
+        x: local.x,
+        y: local.y,
+        z: local.z,
+        inMine,
+        isFishing: Boolean(fishingMiniGame.active || fishingMiniGame.starting)
+      });
       lastSentAt = nowMs;
     }
   }
@@ -9037,7 +9208,7 @@ function updateNameTags() {
   players.forEach((player) => {
     if (!player.label) return;
 
-    const position = player.mesh.position.clone();
+    const position = _nameTagWorldPos.copy(player.mesh.position);
     position.y += TAG_WORLD_OFFSET_Y;
     position.project(camera);
 
@@ -9092,7 +9263,7 @@ function updateInteractionHint() {
   }
   if (inMine) {
     if (miningAccuracyGame.active) {
-      interactHintEl.textContent = 'Mining meter active: click or press E when marker is in green';
+      interactHintEl.textContent = 'Mining minigame: click/tap or press E/Space in green';
       return;
     }
     if (distance2D(local, MINE_EXIT_POS) < 3.1) {
@@ -9121,7 +9292,7 @@ function updateInteractionHint() {
       return;
     }
     if (getNearbyOreNode(local)) {
-      interactHintEl.textContent = 'Press E or left-click to start mining minigame';
+      interactHintEl.textContent = 'Press E/Space or left-click to start mining minigame';
       return;
     }
     interactHintEl.textContent = 'Mine ore, sell at Ore Trader, and return to Quest Giver';
@@ -9133,7 +9304,7 @@ function updateInteractionHint() {
     return;
   }
   if (fishingMiniGame.active) {
-    interactHintEl.textContent = 'Fishing active: hold click to move white box right, release to drift left';
+    interactHintEl.textContent = 'Fishing minigame: hold click/touch/E/Space to move right, release to drift left';
     return;
   }
   if (isNearFishingVendor(local)) {
@@ -9146,7 +9317,7 @@ function updateInteractionHint() {
   }
   if (!inMine && nearestFishingSpot(local)) {
     interactHintEl.textContent = questState.hasFishingRod
-      ? 'Press E to cast line at this fishing spot'
+      ? 'Press E/Space to cast line at this fishing spot'
       : 'Need fishing rod to fish at these islands';
     return;
   }
@@ -9158,8 +9329,6 @@ function updateInteractionHint() {
     const quest = questState.quest;
     if (quest?.status === 'ready') {
       interactHintEl.textContent = 'Press E to talk to Quest Giver (reward ready)';
-    } else if (quest?.status === 'active') {
-      interactHintEl.textContent = 'Press E to talk to Quest Giver';
     } else {
       interactHintEl.textContent = 'Press E to talk to Quest Giver';
     }
