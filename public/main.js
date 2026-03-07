@@ -2752,7 +2752,7 @@ function createVendorNpc({
 } = {}) {
   const npc = new THREE.Group();
   // Slightly taller than player-height silhouette so vendors stand clearly above stall surfaces.
-  const npcScale = 2.3;
+  const npcScale = 1.7;
 
   const pantsMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.84 });
   const shirtMat = new THREE.MeshStandardMaterial({ color: shirtColor, roughness: 0.8 });
