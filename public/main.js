@@ -124,6 +124,7 @@ const MINE_EXIT_POS = new THREE.Vector3(MINE_POS.x + 2.6, 1.35, MINE_POS.z + 23.
 const MINE_CRYSTAL_INTERACT_RADIUS = 3.0;
 const QUEST_NPC_POS = new THREE.Vector3(MINE_POS.x + 19.5, 1.35, MINE_POS.z + 8.1);
 const MINE_SHOP_NPC_POS = new THREE.Vector3(MINE_POS.x - 18.2, 1.35, MINE_POS.z - 9.2);
+const MINE_ORE_TRADER_POS = new THREE.Vector3(MINE_POS.x + 30.5, 1.35, MINE_POS.z - 22.5);
 const FISHING_VENDOR_POS = new THREE.Vector3(FISHING_ISLAND_POS.x - 1.3, 1.35, FISHING_ISLAND_POS.z + 1.2);
 const MARKET_VENDOR_POS = new THREE.Vector3(MARKET_ISLAND_POS.x + 1.5, 1.35, MARKET_ISLAND_POS.z - 1.2);
 const FISHING_SPOT_RADIUS = 3.2;
@@ -194,6 +195,7 @@ let mineExitMesh = null;
 let mineCentralCrystalMesh = null;
 let mineGroup = null;
 let minePortalPulse = 0;
+let mineOreTraderNpcMesh = null;
 const oreNodes = [];
 const fishingSpots = [];
 const fishingMiniGame = {
@@ -345,7 +347,6 @@ const marketModalEl = document.getElementById('market-modal');
 const marketCloseEl = document.getElementById('market-close');
 const marketOpenIndexEl = document.getElementById('market-open-index');
 const marketFishIndexSummaryEl = document.getElementById('market-fish-index-summary');
-const marketSellCategoryEl = document.getElementById('market-sell-category');
 const marketSellItemEl = document.getElementById('market-sell-item');
 const marketSellAmountEl = document.getElementById('market-sell-amount');
 const marketSellPricePreviewEl = document.getElementById('market-sell-price-preview');
@@ -359,10 +360,17 @@ const marketQuestAcceptBtnEl = document.getElementById('market-quest-accept-btn'
 const marketQuestTurnInBtnEl = document.getElementById('market-quest-turnin-btn');
 const marketQuestClaimBtnEl = document.getElementById('market-quest-claim-btn');
 const marketStatusEl = document.getElementById('market-status');
+const oreModalEl = document.getElementById('ore-modal');
+const oreCloseEl = document.getElementById('ore-close');
+const oreSellItemEl = document.getElementById('ore-sell-item');
+const oreSellAmountEl = document.getElementById('ore-sell-amount');
+const oreSellPricePreviewEl = document.getElementById('ore-sell-price-preview');
+const oreSellBtnEl = document.getElementById('ore-sell-btn');
+const oreStatusEl = document.getElementById('ore-status');
 const gameplayPanels = [
   'hud', 'mini-panel', 'chat-panel', 'world-state', 'top-left-toolbar',
   'inventory-bar', 'mining-meter', 'fishing-meter', 'fish-catch-card',
-  'fish-index-modal', 'inventory-modal', 'market-modal', 'rod-shop-modal'
+  'fish-index-modal', 'inventory-modal', 'market-modal', 'rod-shop-modal', 'ore-modal'
 ]
   .map((id) => document.getElementById(id))
   .filter(Boolean);
@@ -490,6 +498,7 @@ let fishIndexOpen = false;
 let inventoryModalOpen = false;
 let marketModalOpen = false;
 let rodShopModalOpen = false;
+let oreModalOpen = false;
 let inventoryViewTab = 'ores';
 let rodShopSnapshot = null;
 const GRAPHICS_PRESETS = ['quality', 'balanced', 'performance'];
@@ -570,13 +579,15 @@ function closeCommerceModals() {
   inventoryModalOpen = false;
   marketModalOpen = false;
   rodShopModalOpen = false;
+  oreModalOpen = false;
   inventoryModalEl?.classList.add('hidden');
   marketModalEl?.classList.add('hidden');
   rodShopModalEl?.classList.add('hidden');
+  oreModalEl?.classList.add('hidden');
 }
 
 function isAnyGameplayOverlayOpen() {
-  return fishIndexOpen || inventoryModalOpen || marketModalOpen || rodShopModalOpen;
+  return fishIndexOpen || inventoryModalOpen || marketModalOpen || rodShopModalOpen || oreModalOpen;
 }
 
 function setFishIndexOpen(open) {
@@ -602,8 +613,10 @@ function setInventoryModalOpen(open) {
     closeNpcDialogue();
     marketModalOpen = false;
     rodShopModalOpen = false;
+    oreModalOpen = false;
     marketModalEl?.classList.add('hidden');
     rodShopModalEl?.classList.add('hidden');
+    oreModalEl?.classList.add('hidden');
     renderInventoryModal();
   }
 }
@@ -618,8 +631,10 @@ function setRodShopModalOpen(open) {
     closeNpcDialogue();
     inventoryModalOpen = false;
     marketModalOpen = false;
+    oreModalOpen = false;
     inventoryModalEl?.classList.add('hidden');
     marketModalEl?.classList.add('hidden');
+    oreModalEl?.classList.add('hidden');
     renderRodShopModal();
   }
 }
@@ -634,9 +649,29 @@ function setMarketModalOpen(open) {
     closeNpcDialogue();
     inventoryModalOpen = false;
     rodShopModalOpen = false;
+    oreModalOpen = false;
     inventoryModalEl?.classList.add('hidden');
     rodShopModalEl?.classList.add('hidden');
+    oreModalEl?.classList.add('hidden');
     renderMarketModal();
+  }
+}
+
+function setOreModalOpen(open) {
+  if (!isAuthenticated && open) return;
+  oreModalOpen = Boolean(open);
+  oreModalEl?.classList.toggle('hidden', !oreModalOpen);
+  if (oreModalOpen) {
+    setMenuOpen(false);
+    setFishIndexOpen(false);
+    closeNpcDialogue();
+    inventoryModalOpen = false;
+    marketModalOpen = false;
+    rodShopModalOpen = false;
+    inventoryModalEl?.classList.add('hidden');
+    marketModalEl?.classList.add('hidden');
+    rodShopModalEl?.classList.add('hidden');
+    renderOreModal();
   }
 }
 
@@ -3249,6 +3284,31 @@ function addMineArea() {
   mineShopNpcMesh = mineShopVendor;
   addWorldCollider(MINE_SHOP_NPC_POS.x, MINE_SHOP_NPC_POS.z, 1.04, 'npc');
 
+  const oreTraderVendor = createVendorNpc({
+    shirtColor: 0x7c2d12,
+    skinColor: 0xd6a581,
+    hairColor: 0x111827,
+    hatColor: 0x334155
+  });
+  const oreTraderStall = createVendorStall({
+    label: 'Ores',
+    signColor: '#3b1909',
+    canopyA: 0xf59e0b,
+    canopyB: 0xf8fafc,
+    vendor: oreTraderVendor
+  });
+  oreTraderVendor.position.z = -0.5;
+  const oreTraderLocalPos = new THREE.Vector3(
+    MINE_ORE_TRADER_POS.x - MINE_POS.x,
+    0,
+    MINE_ORE_TRADER_POS.z - MINE_POS.z
+  );
+  oreTraderStall.position.copy(oreTraderLocalPos);
+  oreTraderStall.rotation.y = Math.atan2(-oreTraderLocalPos.x, -oreTraderLocalPos.z);
+  mine.add(oreTraderStall);
+  mineOreTraderNpcMesh = oreTraderVendor;
+  addWorldCollider(MINE_ORE_TRADER_POS.x, MINE_ORE_TRADER_POS.z, 1.04, 'npc');
+
   const questVendor = createVendorNpc({
     shirtColor: 0x7c3aed,
     skinColor: 0xe0b18f,
@@ -5261,6 +5321,12 @@ function setMarketStatus(text, color = '#cbd5e1') {
   marketStatusEl.style.color = color;
 }
 
+function setOreStatus(text, color = '#cbd5e1') {
+  if (!oreStatusEl) return;
+  oreStatusEl.textContent = text || '';
+  oreStatusEl.style.color = color;
+}
+
 function inventoryEntriesForTab(tab = 'ores') {
   if (tab === 'fish') {
     return FISH_CATALOG_SORTED
@@ -5410,21 +5476,15 @@ function marketSellEntries(category = 'fish') {
     .filter(Boolean);
 }
 
-function selectedMarketCategory() {
-  return marketSellCategoryEl?.value === 'ore' ? 'ore' : 'fish';
-}
-
 function selectedMarketSellEntry() {
-  const category = selectedMarketCategory();
   const selectedId = typeof marketSellItemEl?.value === 'string' ? marketSellItemEl.value : '';
-  const entry = marketSellEntries(category).find((item) => item.id === selectedId) || null;
-  return { category, entry };
+  const entry = marketSellEntries('fish').find((item) => item.id === selectedId) || null;
+  return { category: 'fish', entry };
 }
 
 function renderMarketSellOptions() {
   if (!marketSellItemEl) return;
-  const category = selectedMarketCategory();
-  const entries = marketSellEntries(category);
+  const entries = marketSellEntries('fish');
   const previous = marketSellItemEl.value;
   marketSellItemEl.innerHTML = '';
   if (!entries.length) {
@@ -5548,6 +5608,66 @@ function renderMarketModal() {
   renderMarketSellOptions();
   renderMarketSellPreview();
   renderMarketQuestSection();
+}
+
+function selectedOreSellEntry() {
+  const selectedId = typeof oreSellItemEl?.value === 'string' ? oreSellItemEl.value : '';
+  const entry = marketSellEntries('ore').find((item) => item.id === selectedId) || null;
+  return { category: 'ore', entry };
+}
+
+function renderOreSellOptions() {
+  if (!oreSellItemEl) return;
+  const entries = marketSellEntries('ore');
+  const previous = oreSellItemEl.value;
+  oreSellItemEl.innerHTML = '';
+  if (!entries.length) {
+    const empty = document.createElement('option');
+    empty.value = '';
+    empty.textContent = 'No ores available';
+    oreSellItemEl.appendChild(empty);
+    oreSellItemEl.disabled = true;
+    if (oreSellAmountEl) {
+      oreSellAmountEl.value = '1';
+      oreSellAmountEl.max = '1';
+    }
+    if (oreSellBtnEl) oreSellBtnEl.disabled = true;
+    return;
+  }
+  for (const entry of entries) {
+    const option = document.createElement('option');
+    option.value = entry.id;
+    option.textContent = `${entry.name} (x${entry.qty.toLocaleString()})`;
+    oreSellItemEl.appendChild(option);
+  }
+  oreSellItemEl.disabled = false;
+  oreSellItemEl.value = entries.some((row) => row.id === previous) ? previous : entries[0].id;
+}
+
+function renderOreSellPreview() {
+  const { entry } = selectedOreSellEntry();
+  if (!entry) {
+    if (oreSellPricePreviewEl) oreSellPricePreviewEl.textContent = 'Value: --';
+    if (oreSellBtnEl) oreSellBtnEl.disabled = true;
+    return;
+  }
+  const maxOwned = Math.max(1, entry.qty);
+  const requested = Number(oreSellAmountEl?.value);
+  const amount = Number.isFinite(requested) ? THREE.MathUtils.clamp(Math.floor(requested), 1, maxOwned) : 1;
+  if (oreSellAmountEl) {
+    oreSellAmountEl.value = String(amount);
+    oreSellAmountEl.max = String(maxOwned);
+  }
+  const total = amount * entry.unitPrice;
+  if (oreSellPricePreviewEl) {
+    oreSellPricePreviewEl.textContent = `Value: ${amount.toLocaleString()} x ${entry.unitPrice.toLocaleString()} = ${total.toLocaleString()} coins`;
+  }
+  if (oreSellBtnEl) oreSellBtnEl.disabled = false;
+}
+
+function renderOreModal() {
+  renderOreSellOptions();
+  renderOreSellPreview();
 }
 
 function showFishCatchCard(fish, amount = 1) {
@@ -5928,6 +6048,9 @@ function applyProgressState(progress) {
   }
   if (rodShopModalOpen) {
     renderRodShopModal();
+  }
+  if (oreModalOpen) {
+    renderOreModal();
   }
   refreshConsumeActionVisibility(local);
   updateQuestPanel();
@@ -6936,7 +7059,16 @@ function fishMarketInteract(local) {
   if (!isNearFishMarket(local)) return false;
   setMarketModalOpen(true);
   renderMarketModal();
-  setMarketStatus('Select fish/ore to sell, or manage your fishing quest.', '#cbd5e1');
+  setMarketStatus('Sell fish, or manage your fishing quest.', '#cbd5e1');
+  return true;
+}
+
+function oreTraderInteract(local) {
+  if (!local || !inMine) return false;
+  if (distance2D(local, MINE_ORE_TRADER_POS) > 3.2) return false;
+  setOreModalOpen(true);
+  renderOreModal();
+  setOreStatus('Sell mined ores for coins.', '#cbd5e1');
   return true;
 }
 
@@ -7183,6 +7315,7 @@ function hasManualInteractTarget(local) {
   if (inMine && isNearMineCrystal(local)) return true;
   if (inMine && getNearbyOreNode(local)) return true;
   if (inMine && distance2D(local, MINE_SHOP_NPC_POS) <= 3.2) return true;
+  if (inMine && distance2D(local, MINE_ORE_TRADER_POS) <= 3.2) return true;
   if (distance2D(local, QUEST_NPC_POS) <= 3.2) return true;
   if (isNearFishingVendor(local)) return true;
   if (isNearFishMarket(local)) return true;
@@ -7276,6 +7409,11 @@ function tryInteract() {
   }
 
   if (mineShopInteract(local)) {
+    lastInteractAt = now;
+    return;
+  }
+
+  if (oreTraderInteract(local)) {
     lastInteractAt = now;
     return;
   }
@@ -7562,6 +7700,10 @@ window.addEventListener('keydown', (event) => {
     }
     if (marketModalOpen) {
       setMarketModalOpen(false);
+      return;
+    }
+    if (oreModalOpen) {
+      setOreModalOpen(false);
       return;
     }
     if (fishIndexOpen) {
@@ -8126,16 +8268,18 @@ marketCloseEl?.addEventListener('click', () => setMarketModalOpen(false));
 marketModalEl?.addEventListener('click', (event) => {
   if (event.target === marketModalEl) setMarketModalOpen(false);
 });
+oreCloseEl?.addEventListener('click', () => setOreModalOpen(false));
+oreModalEl?.addEventListener('click', (event) => {
+  if (event.target === oreModalEl) setOreModalOpen(false);
+});
 marketOpenIndexEl?.addEventListener('click', () => {
   setMarketModalOpen(false);
   setFishIndexOpen(true);
 });
-marketSellCategoryEl?.addEventListener('change', () => {
-  renderMarketSellOptions();
-  renderMarketSellPreview();
-});
 marketSellItemEl?.addEventListener('change', renderMarketSellPreview);
 marketSellAmountEl?.addEventListener('input', renderMarketSellPreview);
+oreSellItemEl?.addEventListener('change', renderOreSellPreview);
+oreSellAmountEl?.addEventListener('input', renderOreSellPreview);
 marketSellBtnEl?.addEventListener('click', () => {
   const { category, entry } = selectedMarketSellEntry();
   if (!entry) {
@@ -8156,6 +8300,28 @@ marketSellBtnEl?.addEventListener('click', () => {
     const sold = Math.max(1, Math.floor(Number(resp.sold) || amount));
     const coinsEarned = Math.max(0, Math.floor(Number(resp.coinsEarned) || 0));
     setMarketStatus(`Sold ${sold.toLocaleString()} for ${coinsEarned.toLocaleString()} coins.`, '#86efac');
+  });
+});
+oreSellBtnEl?.addEventListener('click', () => {
+  const { category, entry } = selectedOreSellEntry();
+  if (!entry) {
+    setOreStatus('No ore selected to sell.', '#fecaca');
+    return;
+  }
+  const requested = Number(oreSellAmountEl?.value);
+  const amount = Number.isFinite(requested) ? THREE.MathUtils.clamp(Math.floor(requested), 1, entry.qty) : 1;
+  socket.emit('market:sellSelection', { category, itemId: entry.id, amount }, (resp) => {
+    if (!resp?.ok) {
+      setOreStatus(resp?.error || 'Could not sell ore.', '#fecaca');
+      return;
+    }
+    if (resp.progress) {
+      applyProgressState(resp.progress);
+    }
+    renderOreModal();
+    const sold = Math.max(1, Math.floor(Number(resp.sold) || amount));
+    const coinsEarned = Math.max(0, Math.floor(Number(resp.coinsEarned) || 0));
+    setOreStatus(`Sold ${sold.toLocaleString()} for ${coinsEarned.toLocaleString()} coins.`, '#86efac');
   });
 });
 marketQuestFishItemEl?.addEventListener('change', renderMarketQuestSection);
@@ -8912,11 +9078,15 @@ function updateInteractionHint() {
       interactHintEl.textContent = 'Press E to talk to Mine Merchant';
       return;
     }
+    if (distance2D(local, MINE_ORE_TRADER_POS) < 3.2) {
+      interactHintEl.textContent = 'Press E to talk to Ore Trader';
+      return;
+    }
     if (getNearbyOreNode(local)) {
       interactHintEl.textContent = 'Press E or left-click to start mining minigame';
       return;
     }
-    interactHintEl.textContent = 'Mine ore and return to the quest giver';
+    interactHintEl.textContent = 'Mine ore, sell at Ore Trader, and return to Quest Giver';
     return;
   }
   const swimHint = surfaceHintOverride(local);
@@ -9055,6 +9225,10 @@ function drawMinimap() {
   minimapCtx.fillStyle = '#a855f7';
   minimapCtx.beginPath();
   minimapCtx.arc(center + QUEST_NPC_POS.x * scale, center + QUEST_NPC_POS.z * scale, 3, 0, Math.PI * 2);
+  minimapCtx.fill();
+  minimapCtx.fillStyle = '#f59e0b';
+  minimapCtx.beginPath();
+  minimapCtx.arc(center + MINE_ORE_TRADER_POS.x * scale, center + MINE_ORE_TRADER_POS.z * scale, 3, 0, Math.PI * 2);
   minimapCtx.fill();
 
   minimapCtx.fillStyle = '#60a5fa';

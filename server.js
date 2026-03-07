@@ -51,6 +51,7 @@ const MINE_POS = { x: 140, z: 140 };
 const MINE_RADIUS = 52;
 const MINE_PLAY_RADIUS = MINE_RADIUS - 3;
 const MINE_SWIM_BLOCK_RADIUS = MINE_RADIUS + 34;
+const MINE_ORE_TRADER_POS = { x: MINE_POS.x + 30.5, z: MINE_POS.z - 22.5 };
 const MINE_ENTRY_ISLAND_POS = { x: -WORLD_LIMIT * 1.95, z: -WORLD_LIMIT * 1.2 };
 const MINE_ENTRY_ISLAND_RADIUS = 11.4;
 const FISHING_ISLAND_POS = { x: WORLD_LIMIT * 2.2, z: WORLD_LIMIT * 1.85 };
@@ -839,6 +840,10 @@ function isNearFishingIsland(actor, extra = 4.4) {
 
 function isNearMarketIsland(actor, extra = 4.4) {
   return distance2DPoint(actor, MARKET_ISLAND_POS) <= (MARKET_ISLAND_RADIUS + extra);
+}
+
+function isNearMineOreTrader(actor, extra = 3.8) {
+  return distance2DPoint(actor, MINE_ORE_TRADER_POS) <= extra;
 }
 
 function fishMatchesQuestTarget(quest, fishId) {
@@ -1779,16 +1784,16 @@ io.on('connection', (socket) => {
       if (typeof ack === 'function') ack({ ok: false, error: 'Not authenticated.' });
       return;
     }
-    if (!isNearMarketIsland(actor)) {
-      if (typeof ack === 'function') ack({ ok: false, error: 'Sell items at the Market island.' });
-      return;
-    }
     ensureFishingProgressShape(progress);
     const category = payload?.category === 'ore' ? 'ore' : 'fish';
     const itemId = typeof payload?.itemId === 'string' ? payload.itemId.trim() : '';
     const rawAmount = Number(payload?.amount);
     const amount = Number.isFinite(rawAmount) ? clamp(Math.floor(rawAmount), 1, 1_000_000) : 1;
     if (category === 'ore') {
+      if (!isNearMineOreTrader(actor)) {
+        if (typeof ack === 'function') ack({ ok: false, error: 'Sell ores at the Mine Ore Trader.' });
+        return;
+      }
       if (!ORE_TYPES.has(itemId)) {
         if (typeof ack === 'function') ack({ ok: false, error: 'Select a valid ore.' });
         return;
@@ -1816,6 +1821,10 @@ io.on('connection', (socket) => {
           progress: progressSnapshot(progress)
         });
       }
+      return;
+    }
+    if (!isNearMarketIsland(actor)) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Sell fish at the Market island.' });
       return;
     }
     if (!FISH_SPECIES_IDS.has(itemId)) {
