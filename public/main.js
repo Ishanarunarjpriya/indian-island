@@ -1873,7 +1873,7 @@ function addFishingIsland() {
     canopyB: 0xffffff,
     vendor
   });
-  vendor.position.z = -0.46;
+  vendor.position.z = -0.9;
   const fishingHouseYaw = Math.atan2(-FISHING_VENDOR_POS.x, -FISHING_VENDOR_POS.z);
   addWoodHouse(FISHING_VENDOR_POS.x, FISHING_VENDOR_POS.z, fishingHouseYaw, { collisions: false });
   stall.position.set(FISHING_VENDOR_POS.x, 0, FISHING_VENDOR_POS.z);
@@ -1946,7 +1946,7 @@ function addMarketIsland() {
     canopyB: 0xffffff,
     vendor
   });
-  vendor.position.z = -0.5;
+  vendor.position.z = -0.9;
   const marketHouseYaw = Math.atan2(-MARKET_VENDOR_POS.x, -MARKET_VENDOR_POS.z);
   addWoodHouse(MARKET_VENDOR_POS.x, MARKET_VENDOR_POS.z, marketHouseYaw, { collisions: false });
   stall.position.set(MARKET_VENDOR_POS.x, 0, MARKET_VENDOR_POS.z);
@@ -2750,7 +2750,7 @@ function createVendorNpc({
   hatColor = null
 } = {}) {
   const npc = new THREE.Group();
-  const npcScale = 1.52;
+  const npcScale = 1.58;
 
   const legsMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.84 });
   const shirtMat = new THREE.MeshStandardMaterial({ color: shirtColor, roughness: 0.8 });
@@ -3272,7 +3272,7 @@ function addMineArea() {
     canopyB: 0xf8fafc,
     vendor: mineShopVendor
   });
-  mineShopVendor.position.z = -0.42;
+  mineShopVendor.position.z = -0.95;
   const mineShopLocalPos = new THREE.Vector3(
     MINE_SHOP_NPC_POS.x - MINE_POS.x,
     0,
@@ -3297,7 +3297,7 @@ function addMineArea() {
     canopyB: 0xf8fafc,
     vendor: oreTraderVendor
   });
-  oreTraderVendor.position.z = -0.5;
+  oreTraderVendor.position.z = -0.95;
   const oreTraderLocalPos = new THREE.Vector3(
     MINE_ORE_TRADER_POS.x - MINE_POS.x,
     0,
@@ -3322,7 +3322,7 @@ function addMineArea() {
     canopyB: 0xffffff,
     vendor: questVendor
   });
-  questVendor.position.z = -0.52;
+  questVendor.position.z = -0.96;
   const questLocalPos = new THREE.Vector3(
     QUEST_NPC_POS.x - MINE_POS.x,
     0,
