@@ -39,10 +39,17 @@ const FISH_FOCUS_CAMERA_BACK = 2.95;
 const FISH_FOCUS_CAMERA_SIDE = 0.92;
 const FISH_FOCUS_CAMERA_HEIGHT = 2.15;
 const STAMINA_BASE_MAX = 100;
+const MAX_PLAYER_LEVEL = 60;
+const BASE_XP_TO_LEVEL = 110;
+const XP_PER_LEVEL_STEP = 35;
 let torchEquipped = false;
 
 const questState = {
   coins: 0,
+  xp: 0,
+  level: 1,
+  xpIntoLevel: 0,
+  xpToNextLevel: BASE_XP_TO_LEVEL,
   pickaxe: 'wood',
   inventory: { stone: 0, iron: 0, gold: 0, diamond: 0, torch: 1, fish: 0 },
   fishBag: {},
@@ -55,11 +62,13 @@ const questState = {
   quest: null,
   shop: {
     order: ['wood', 'stone', 'iron', 'diamond'],
-    price: { stone: 120, iron: 280, diamond: 620 }
+    price: { stone: 120, iron: 280, diamond: 620 },
+    levelReq: { wood: 1, stone: 2, iron: 5, diamond: 9 }
   }
 };
 
 const PICKAXE_TIERS = ['wood', 'stone', 'iron', 'diamond'];
+const PICKAXE_LEVEL_REQUIREMENT = { wood: 1, stone: 2, iron: 5, diamond: 9 };
 const PICKAXE_HEAD_COLORS = {
   wood: 0x8b5a2b,
   stone: 0x94a3b8,
@@ -73,6 +82,7 @@ const FISHING_ROD_ACCENT_COLORS = {
   master: 0xa78bfa,
   mythic: 0xfacc15
 };
+const FISHING_ROD_LEVEL_REQUIREMENT = { basic: 1, reinforced: 4, expert: 7, master: 11, mythic: 15 };
 const ORE_RESOURCE_COLORS = {
   stone: 0x9ca3af,
   iron: 0xb45309,
