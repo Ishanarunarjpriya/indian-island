@@ -8913,7 +8913,7 @@ function updateInteractionHint() {
       return;
     }
     if (getNearbyOreNode(local)) {
-      interactHintEl.textContent = 'Press E or left-click to start mining meter';
+      interactHintEl.textContent = 'Press E or left-click to start mining minigame';
       return;
     }
     interactHintEl.textContent = 'Mine ore and return to the quest giver';
