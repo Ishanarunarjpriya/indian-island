@@ -88,6 +88,22 @@ const PICKAXE_PRICE = {
   iron: 280,
   diamond: 620
 };
+const PICKAXE_LEVEL_REQUIREMENT = {
+  wood: 1,
+  stone: 2,
+  iron: 5,
+  diamond: 9
+};
+const FISHING_ROD_LEVEL_REQUIREMENT = {
+  basic: 1,
+  reinforced: 4,
+  expert: 7,
+  master: 11,
+  mythic: 15
+};
+const MAX_PLAYER_LEVEL = 60;
+const BASE_XP_TO_LEVEL = 110;
+const XP_PER_LEVEL_STEP = 35;
 const FISHING_ROD_PRICE = 260;
 const MAX_STAMINA_BONUS_PCT = 50;
 const FISH_STAMINA_GAIN_PER_FISH = 5;
@@ -222,6 +238,55 @@ app.use(express.static('public'));
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
+}
+
+function xpNeededForLevel(level) {
+  const safeLevel = clamp(Math.floor(Number(level) || 1), 1, MAX_PLAYER_LEVEL);
+  return BASE_XP_TO_LEVEL + (safeLevel - 1) * XP_PER_LEVEL_STEP;
+}
+
+function levelProgressFromXp(totalXpRaw) {
+  let remainingXp = clamp(Math.floor(Number(totalXpRaw) || 0), 0, 2_000_000_000);
+  let level = 1;
+  while (level < MAX_PLAYER_LEVEL) {
+    const needed = xpNeededForLevel(level);
+    if (remainingXp < needed) break;
+    remainingXp -= needed;
+    level += 1;
+  }
+  return {
+    level,
+    xpIntoLevel: remainingXp,
+    xpToNextLevel: level >= MAX_PLAYER_LEVEL ? 0 : xpNeededForLevel(level)
+  };
+}
+
+function normalizeProgressLevel(progress) {
+  if (!progress || typeof progress !== 'object') {
+    return levelProgressFromXp(0);
+  }
+  progress.xp = clamp(Math.floor(Number(progress.xp) || 0), 0, 2_000_000_000);
+  const levelState = levelProgressFromXp(progress.xp);
+  progress.level = levelState.level;
+  return levelState;
+}
+
+function grantExperience(progress, amount) {
+  const gained = clamp(Math.floor(Number(amount) || 0), 0, 2_000_000_000);
+  const before = normalizeProgressLevel(progress);
+  if (gained > 0) {
+    progress.xp = clamp((progress.xp || 0) + gained, 0, 2_000_000_000);
+  }
+  const after = normalizeProgressLevel(progress);
+  return {
+    gained,
+    previousLevel: before.level,
+    level: after.level,
+    xpIntoLevel: after.xpIntoLevel,
+    xpToNextLevel: after.xpToNextLevel,
+    levelsGained: Math.max(0, after.level - before.level),
+    leveledUp: after.level > before.level
+  };
 }
 
 function distance2DPoint(a, b) {
@@ -435,10 +500,10 @@ function defaultFishingQuest(completions = 0, seed = 1) {
     targetFishId = pickFishByRarity(template.rarity)?.id || null;
   }
   const rarityBase = FISH_RARITY_ORDER.indexOf(template.rarity) + 1;
-  const rewardCoins = clamp(
-    Math.floor(60 + targetCount * (18 + rarityBase * 8) + completions * 26),
-    80,
-    120_000
+  const rewardXp = clamp(
+    Math.floor(42 + targetCount * (9 + rarityBase * 4) + completions * 10),
+    55,
+    45_000
   );
   const targetFishName = targetFishId ? (FISH_SPECIES_BY_ID.get(targetFishId)?.name || 'fish') : `${template.rarity} fish`;
   return {
@@ -449,7 +514,7 @@ function defaultFishingQuest(completions = 0, seed = 1) {
     targetFishId,
     targetCount,
     progress: 0,
-    rewardCoins,
+    rewardXp,
     title: `Turn in ${targetCount} ${targetFishName}`,
     description: targetFishId
       ? `Bring ${targetCount} ${targetFishName} to the Market Trader.`
@@ -459,15 +524,15 @@ function defaultFishingQuest(completions = 0, seed = 1) {
 
 function defaultQuest(seed = 1) {
   const pool = [
-    { resource: 'stone', min: 14, max: 28, rewardPerItem: 3, diamondBonusChance: 0.08 },
-    { resource: 'iron', min: 8, max: 18, rewardPerItem: 7, diamondBonusChance: 0.12 },
-    { resource: 'gold', min: 6, max: 14, rewardPerItem: 11, diamondBonusChance: 0.16 },
-    { resource: 'diamond', min: 2, max: 7, rewardPerItem: 32, diamondBonusChance: 0.2 }
+    { resource: 'stone', min: 14, max: 28, xpPerItem: 5, diamondBonusChance: 0.08 },
+    { resource: 'iron', min: 8, max: 18, xpPerItem: 10, diamondBonusChance: 0.12 },
+    { resource: 'gold', min: 6, max: 14, xpPerItem: 16, diamondBonusChance: 0.16 },
+    { resource: 'diamond', min: 2, max: 7, xpPerItem: 30, diamondBonusChance: 0.2 }
   ];
   const entry = pool[seed % pool.length];
   const span = entry.max - entry.min + 1;
   const targetCount = entry.min + ((seed * 7) % span);
-  const rewardCoins = Math.round(targetCount * entry.rewardPerItem + 24 + Math.min(160, seed * 2.8));
+  const rewardXp = Math.round(targetCount * entry.xpPerItem + 24 + Math.min(220, seed * 2.5));
   const rewardDiamonds = Math.random() < entry.diamondBonusChance ? 1 : 0;
   return {
     id: `q-${Date.now()}-${seed}`,
@@ -475,7 +540,7 @@ function defaultQuest(seed = 1) {
     resource: entry.resource,
     targetCount,
     progress: 0,
-    rewardCoins,
+    rewardXp,
     rewardDiamonds,
     title: `Mine ${targetCount} ore`,
     description: `Collect ${targetCount} ore chunks in the mine.`,
@@ -486,6 +551,8 @@ function defaultQuest(seed = 1) {
 function defaultProgress() {
   return {
     coins: 0,
+    xp: 0,
+    level: 1,
     pickaxe: 'wood',
     inventory: defaultInventory(),
     fishBag: defaultFishBag(),
@@ -503,6 +570,14 @@ function defaultProgress() {
 
 function sanitizePickaxe(value, fallback = 'wood') {
   return PICKAXE_ORDER.includes(value) ? value : fallback;
+}
+
+function levelRequirementForPickaxe(tier) {
+  return clamp(Math.floor(Number(PICKAXE_LEVEL_REQUIREMENT[tier]) || 1), 1, MAX_PLAYER_LEVEL);
+}
+
+function levelRequirementForRod(tier) {
+  return clamp(Math.floor(Number(FISHING_ROD_LEVEL_REQUIREMENT[tier]) || 1), 1, MAX_PLAYER_LEVEL);
 }
 
 function sanitizeInventory(value) {
@@ -557,7 +632,12 @@ function sanitizeFishingQuest(value, completions = 0, seed = 1) {
     : null;
   const targetCount = clamp(Math.floor(Number(value.targetCount) || fallback.targetCount), 1, 500);
   const progress = clamp(Math.floor(Number(value.progress) || 0), 0, targetCount);
-  const rewardCoins = clamp(Math.floor(Number(value.rewardCoins) || fallback.rewardCoins), 10, 1_000_000);
+  const rewardXpRaw = Number(value.rewardXp);
+  const legacyRewardCoinsRaw = Number(value.rewardCoins);
+  const rewardXpSource = Number.isFinite(rewardXpRaw)
+    ? rewardXpRaw
+    : (Number.isFinite(legacyRewardCoinsRaw) ? legacyRewardCoinsRaw : fallback.rewardXp);
+  const rewardXp = clamp(Math.floor(rewardXpSource), 20, 1_000_000);
   const statusRaw = typeof value.status === 'string' ? value.status : fallback.status;
   const status = ['available', 'active', 'ready'].includes(statusRaw)
     ? statusRaw
@@ -573,7 +653,7 @@ function sanitizeFishingQuest(value, completions = 0, seed = 1) {
     targetFishId,
     targetCount,
     progress,
-    rewardCoins,
+    rewardXp,
     title: `Turn in ${targetCount} ${name}`,
     description: targetFishId
       ? `Bring ${targetCount} ${name} to the Market Trader.`
@@ -587,7 +667,12 @@ function sanitizeQuest(value, fallbackSeed = 1) {
   const resource = ORE_TYPES.has(value.resource) ? value.resource : fallback.resource;
   const targetCount = clamp(Math.floor(Number(value.targetCount) || fallback.targetCount), 1, 2000);
   const progress = clamp(Math.floor(Number(value.progress) || 0), 0, targetCount);
-  const rewardCoins = clamp(Math.floor(Number(value.rewardCoins) || fallback.rewardCoins), 5, 50_000);
+  const rewardXpRaw = Number(value.rewardXp);
+  const legacyRewardCoinsRaw = Number(value.rewardCoins);
+  const rewardXpSource = Number.isFinite(rewardXpRaw)
+    ? rewardXpRaw
+    : (Number.isFinite(legacyRewardCoinsRaw) ? legacyRewardCoinsRaw : fallback.rewardXp);
+  const rewardXp = clamp(Math.floor(rewardXpSource), 8, 1_000_000);
   const rewardDiamonds = clamp(Math.floor(Number(value.rewardDiamonds) || 0), 0, 50);
   const status = ['available', 'active', 'ready'].includes(value.status) ? value.status : fallback.status;
   return {
@@ -596,7 +681,7 @@ function sanitizeQuest(value, fallbackSeed = 1) {
     resource,
     targetCount,
     progress,
-    rewardCoins,
+    rewardXp,
     rewardDiamonds,
     title: `Mine ${targetCount} ore`,
     description: `Collect ${targetCount} ore chunks in the mine.`,
@@ -619,8 +704,12 @@ function sanitizeProgress(value) {
   const fishingQuestSeed = clamp(Math.floor(Number(value.fishingQuestSeed) || 1), 1, 1_000_000);
   const fishingQuest = sanitizeFishingQuest(value.fishingQuest, fishingQuestCompletions, fishingQuestSeed);
   const maxStaminaBonusPct = clamp(Math.floor(Number(value.maxStaminaBonusPct) || 0), 0, MAX_STAMINA_BONUS_PCT);
+  const xp = clamp(Math.floor(Number(value.xp) || 0), 0, 2_000_000_000);
+  const levelState = levelProgressFromXp(xp);
   return {
     coins: clamp(Math.floor(Number(value.coins) || 0), 0, 100_000_000),
+    xp,
+    level: levelState.level,
     pickaxe: sanitizePickaxe(value.pickaxe, 'wood'),
     inventory,
     fishBag,
@@ -642,8 +731,13 @@ function nextQuest(progress) {
 }
 
 function progressSnapshot(progress) {
+  const levelState = normalizeProgressLevel(progress);
   return {
     coins: progress.coins,
+    xp: clamp(Math.floor(Number(progress.xp) || 0), 0, 2_000_000_000),
+    level: levelState.level,
+    xpIntoLevel: levelState.xpIntoLevel,
+    xpToNextLevel: levelState.xpToNextLevel,
     pickaxe: progress.pickaxe,
     inventory: { ...progress.inventory },
     fishBag: { ...(progress.fishBag || {}) },
@@ -658,7 +752,8 @@ function progressSnapshot(progress) {
     fishingQuest: progress.fishingQuest ? { ...progress.fishingQuest } : defaultFishingQuest(0, 1),
     shop: {
       order: [...PICKAXE_ORDER],
-      price: { ...PICKAXE_PRICE }
+      price: { ...PICKAXE_PRICE },
+      levelReq: { ...PICKAXE_LEVEL_REQUIREMENT }
     }
   };
 }
@@ -796,9 +891,11 @@ function ensureFishingProgressShape(progress) {
   }
   progress.fishingRodTier = sanitizeFishingRodTier(progress.fishingRodTier, 'basic');
   progress.inventory.fish = clamp(computeTotalFishInBag(progress.fishBag) || Number(progress.inventory.fish) || 0, 0, 1_000_000);
+  normalizeProgressLevel(progress);
 }
 
 function rodUpgradeSnapshot(progress) {
+  const levelState = normalizeProgressLevel(progress);
   const tierId = sanitizeFishingRodTier(progress.fishingRodTier, 'basic');
   const tier = FISH_ROD_DATA[tierId] || FISH_ROD_DATA.basic;
   const next = tier.next;
@@ -806,6 +903,7 @@ function rodUpgradeSnapshot(progress) {
     return {
       currentTier: tierId,
       currentLabel: tier.label,
+      currentLevel: levelState.level,
       next: null
     };
   }
@@ -817,15 +915,20 @@ function rodUpgradeSnapshot(progress) {
   }));
   const hasFish = fishCost.every((row) => row.owned >= row.amount);
   const hasCoins = (Number(progress.coins) || 0) >= next.coins;
+  const levelRequired = levelRequirementForRod(next.tier);
+  const meetsLevel = levelState.level >= levelRequired;
   return {
     currentTier: tierId,
     currentLabel: tier.label,
+    currentLevel: levelState.level,
     next: {
       tier: next.tier,
       label: FISH_ROD_DATA[next.tier]?.label || next.tier,
       coins: next.coins,
       fishCost,
-      affordable: hasFish && hasCoins
+      levelRequired,
+      meetsLevel,
+      affordable: hasFish && hasCoins && meetsLevel
     }
   };
 }
@@ -1476,22 +1579,29 @@ io.on('connection', (socket) => {
       if (typeof ack === 'function') ack({ ok: false, error: 'No completed quest to claim.' });
       return;
     }
-    progress.coins += quest.rewardCoins;
+    const rewardXp = clamp(Math.floor(Number(quest.rewardXp) || 0), 0, 1_000_000);
+    const xpResult = grantExperience(progress, rewardXp);
     if (quest.rewardDiamonds > 0) {
       progress.inventory.diamond += quest.rewardDiamonds;
     }
     const title = quest.title;
-    const coins = quest.rewardCoins;
     const bonus = quest.rewardDiamonds;
     nextQuest(progress);
     persistPlayerProgress(actor, { immediate: true });
     emitProgress(socket, actor);
     io.emit('chat', {
       fromName: 'System',
-      text: `${actor.name} completed "${title}" for ${coins} coins${bonus ? ` and ${bonus} diamond` : ''}.`,
+      text: `${actor.name} completed "${title}" for ${xpResult.gained} XP${bonus ? ` and ${bonus} diamond` : ''}.`,
       sentAt: Date.now()
     });
-    if (typeof ack === 'function') ack({ ok: true });
+    if (typeof ack === 'function') {
+      ack({
+        ok: true,
+        rewardXp: xpResult.gained,
+        level: xpResult.level,
+        leveledUp: xpResult.leveledUp
+      });
+    }
   });
 
   socket.on('mine:collect', (payload, ack) => {
@@ -1544,6 +1654,14 @@ io.on('connection', (socket) => {
     const requestedIdx = PICKAXE_ORDER.indexOf(requested);
     if (requestedIdx !== currentIdx + 1) {
       if (typeof ack === 'function') ack({ ok: false, error: 'Buy pickaxes in order.' });
+      return;
+    }
+    const currentLevel = normalizeProgressLevel(progress).level;
+    const requiredLevel = levelRequirementForPickaxe(requested);
+    if (currentLevel < requiredLevel) {
+      if (typeof ack === 'function') {
+        ack({ ok: false, error: `Need level ${requiredLevel} for ${requested} pickaxe.` });
+      }
       return;
     }
     const price = PICKAXE_PRICE[requested] || 0;
@@ -1648,6 +1766,17 @@ io.on('connection', (socket) => {
     const tier = FISH_ROD_DATA[sanitizeFishingRodTier(progress.fishingRodTier, 'basic')] || FISH_ROD_DATA.basic;
     if (!tier.next) {
       if (typeof ack === 'function') ack({ ok: false, error: 'Rod is already max tier.' });
+      return;
+    }
+    const currentLevel = normalizeProgressLevel(progress).level;
+    const requiredLevel = levelRequirementForRod(tier.next.tier);
+    if (currentLevel < requiredLevel) {
+      if (typeof ack === 'function') {
+        ack({
+          ok: false,
+          error: `Need level ${requiredLevel} for ${FISH_ROD_DATA[tier.next.tier]?.label || tier.next.tier}.`
+        });
+      }
       return;
     }
     if (progress.coins < tier.next.coins) {
@@ -1995,8 +2124,8 @@ io.on('connection', (socket) => {
       if (typeof ack === 'function') ack({ ok: false, error: 'No completed fishing quest to claim.' });
       return;
     }
-    const rewardCoins = clamp(Math.floor(Number(quest.rewardCoins) || 0), 0, 1_000_000);
-    progress.coins = clamp((progress.coins || 0) + rewardCoins, 0, 100_000_000);
+    const rewardXp = clamp(Math.floor(Number(quest.rewardXp) || 0), 0, 1_000_000);
+    const xpResult = grantExperience(progress, rewardXp);
     progress.fishingQuestCompletions = clamp((progress.fishingQuestCompletions || 0) + 1, 0, 1_000_000);
     const questTitle = quest.title;
     nextFishingQuest(progress);
@@ -2004,13 +2133,15 @@ io.on('connection', (socket) => {
     emitProgress(socket, actor);
     io.emit('chat', {
       fromName: 'System',
-      text: `${actor.name} completed fishing quest "${questTitle}" for ${rewardCoins} coins.`,
+      text: `${actor.name} completed fishing quest "${questTitle}" for ${xpResult.gained} XP.`,
       sentAt: Date.now()
     });
     if (typeof ack === 'function') {
       ack({
         ok: true,
-        rewardCoins,
+        rewardXp: xpResult.gained,
+        level: xpResult.level,
+        leveledUp: xpResult.leveledUp,
         quest: fishingQuestSnapshot(progress),
         progress: progressSnapshot(progress)
       });
