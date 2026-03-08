@@ -26,6 +26,12 @@ const MINE_TIMING_PROFILES = {
   gold: { speed: 1.42, zoneWidth: 0.17, timeoutMs: 4400 },
   diamond: { speed: 1.78, zoneWidth: 0.12, timeoutMs: 3800 }
 };
+const MINE_REQUIRED_HITS = {
+  stone: 1,
+  iron: 2,
+  gold: 3,
+  diamond: 4
+};
 const PICKAXE_ACCURACY_ZONE_MULTIPLIER = {
   wood: 1.0,
   stone: 1.14,
@@ -62,7 +68,7 @@ const questState = {
   quest: null,
   shop: {
     order: ['wood', 'stone', 'iron', 'diamond'],
-    price: { stone: 120, iron: 280, diamond: 620 },
+    price: { stone: 360, iron: 840, diamond: 1860 },
     levelReq: { wood: 1, stone: 2, iron: 5, diamond: 9 }
   }
 };
@@ -146,7 +152,7 @@ const VENDOR_STAND_Y = 1.35;
 const FISHING_VENDOR_POS = new THREE.Vector3(FISHING_ISLAND_POS.x - 1.3, 1.35, FISHING_ISLAND_POS.z + 1.2);
 const MARKET_VENDOR_POS = new THREE.Vector3(MARKET_ISLAND_POS.x + 1.5, 1.35, MARKET_ISLAND_POS.z - 1.2);
 const FISHING_SPOT_RADIUS = 3.2;
-const FISHING_ROD_PRICE = 260;
+const FISHING_ROD_PRICE = 780;
 const ORE_SELL_PRICE = { stone: 2, iron: 8, gold: 22, diamond: 120 };
 const FISH_SELL_BY_RARITY = {
   common: 18,
@@ -252,7 +258,9 @@ const miningAccuracyGame = {
   zoneCenter: 0.5,
   zoneWidth: 0.2,
   speed: 1.0,
-  timeoutAt: 0
+  timeoutAt: 0,
+  hitCount: 0,
+  requiredHits: 1
 };
 let miningAccuracyUiTimer = null;
 const _mineNodeWorldPos = new THREE.Vector3();
@@ -303,11 +311,14 @@ const outfitSaveButtons = Array.from(document.querySelectorAll('[data-outfit-sav
 const outfitLoadButtons = Array.from(document.querySelectorAll('[data-outfit-load]'));
 const staminaFillEl = document.getElementById('stamina-fill');
 const voiceToggleEl = document.getElementById('voice-toggle');
-const menuToggleEl = document.getElementById('menu-toggle');
+const settingsToggleEl = document.getElementById('settings-toggle');
+const menuToggleEl = settingsToggleEl || document.getElementById('menu-toggle');
 const chatToggleEl = document.getElementById('chat-toggle');
 const voiceQuickToggleEl = document.getElementById('voice-quick-toggle');
 const fullscreenToggleEl = document.getElementById('fullscreen-toggle');
 const menuOverlayEl = document.getElementById('menu-overlay');
+const menuEmoteSelectEl = document.getElementById('menu-emote-select');
+const menuEmotePlayEl = document.getElementById('menu-emote-play');
 const saveQuitEl = document.getElementById('save-quit');
 const authModalEl = document.getElementById('auth-modal');
 const authUsernameEl = document.getElementById('auth-username');
@@ -318,7 +329,6 @@ const authStatusEl = document.getElementById('auth-status');
 const emoteWheelEl = document.getElementById('emote-wheel');
 const wheelButtons = Array.from(document.querySelectorAll('[data-wheel-emote]'));
 const nameTagsEl = document.getElementById('name-tags');
-const emoteButtons = Array.from(document.querySelectorAll('[data-emote]'));
 const inventoryBarEl = document.getElementById('inventory-bar');
 const inventoryCoinsEl = document.getElementById('inventory-coins');
 const inventoryPickaxeEl = document.getElementById('inventory-pickaxe');
@@ -5853,6 +5863,31 @@ function mineTimingProfile(resource) {
   };
 }
 
+function mineRequiredHits(resource) {
+  return Math.max(1, Math.floor(Number(MINE_REQUIRED_HITS[resource]) || 1));
+}
+
+function randomMiningZoneCenter(zoneWidth) {
+  const half = zoneWidth * 0.5;
+  const minCenter = half + 0.06;
+  const maxCenter = 1 - half - 0.06;
+  return minCenter + Math.random() * Math.max(0.01, maxCenter - minCenter);
+}
+
+function setMiningZoneLayout(zoneCenter, zoneWidth) {
+  if (!miningMeterZoneEl) return;
+  const left = (zoneCenter - zoneWidth * 0.5) * 100;
+  miningMeterZoneEl.style.left = `${left.toFixed(2)}%`;
+  miningMeterZoneEl.style.width = `${(zoneWidth * 100).toFixed(2)}%`;
+}
+
+function setMiningCrackProgress(progress) {
+  if (!miningOrePreviewEl) return;
+  const clamped = THREE.MathUtils.clamp(Number(progress) || 0, 0, 1);
+  miningOrePreviewEl.style.setProperty('--crack-progress', clamped.toFixed(3));
+  miningOrePreviewEl.classList.toggle('cracked', clamped >= 0.999);
+}
+
 function setMiningMeterStatus(text, color = '#fef3c7') {
   if (!miningMeterStatusEl) return;
   miningMeterStatusEl.textContent = text;
@@ -5887,12 +5922,14 @@ function resetMiningAccuracyGame() {
   miningAccuracyGame.zoneWidth = 0.2;
   miningAccuracyGame.speed = 1.0;
   miningAccuracyGame.timeoutAt = 0;
+  miningAccuracyGame.hitCount = 0;
+  miningAccuracyGame.requiredHits = 1;
   if (miningAccuracyUiTimer) {
     clearTimeout(miningAccuracyUiTimer);
     miningAccuracyUiTimer = null;
   }
   if (miningOrePreviewEl) {
-    miningOrePreviewEl.classList.remove('cracked');
+    setMiningCrackProgress(0);
   }
   if (miningMeterEl) {
     miningMeterEl.classList.add('hidden');
@@ -5918,10 +5955,8 @@ function startMiningAccuracyGame(node) {
   const pickaxeTier = normalizePickaxeTier(questState.pickaxe, 'wood');
   const zoneMultiplier = PICKAXE_ACCURACY_ZONE_MULTIPLIER[pickaxeTier] || 1;
   const zoneWidth = THREE.MathUtils.clamp(profile.zoneWidth * zoneMultiplier, 0.08, 0.46);
-  const half = zoneWidth * 0.5;
-  const minCenter = half + 0.06;
-  const maxCenter = 1 - half - 0.06;
-  const zoneCenter = minCenter + Math.random() * Math.max(0.01, maxCenter - minCenter);
+  const zoneCenter = randomMiningZoneCenter(zoneWidth);
+  const requiredHits = mineRequiredHits(node.resource);
   const pickaxeHead = PICKAXE_HEAD_COLORS[pickaxeTier] || PICKAXE_HEAD_COLORS.wood;
   const oreColor = node.colorHex ?? ORE_RESOURCE_COLORS[node.resource] ?? ORE_RESOURCE_COLORS.stone;
 
@@ -5937,24 +5972,23 @@ function startMiningAccuracyGame(node) {
   miningAccuracyGame.zoneWidth = zoneWidth;
   miningAccuracyGame.speed = Math.max(0.65, Number(profile.speed) || 1);
   miningAccuracyGame.timeoutAt = performance.now() + Math.max(1200, Number(profile.timeoutMs) || MINE_TIMING_TIMEOUT_FALLBACK_MS);
+  miningAccuracyGame.hitCount = 0;
+  miningAccuracyGame.requiredHits = requiredHits;
 
   if (miningOrePreviewEl) {
-    miningOrePreviewEl.classList.remove('cracked');
     miningOrePreviewEl.style.setProperty('--ore-color', hexToCss(oreColor));
+    setMiningCrackProgress(0);
   }
   if (miningPickaxeHeadEl) {
     miningPickaxeHeadEl.style.background = hexToCss(pickaxeHead, '#94a3b8');
   }
-  if (miningMeterZoneEl) {
-    const left = (zoneCenter - half) * 100;
-    miningMeterZoneEl.style.left = `${left.toFixed(2)}%`;
-    miningMeterZoneEl.style.width = `${(zoneWidth * 100).toFixed(2)}%`;
-  }
+  setMiningZoneLayout(zoneCenter, zoneWidth);
   if (miningMeterPointerEl) {
+    miningMeterPointerEl.style.setProperty('--pickaxe-head-color', hexToCss(pickaxeHead, '#94a3b8'));
     miningMeterPointerEl.style.left = `${(miningAccuracyGame.pointer * 100).toFixed(2)}%`;
   }
   renderMiningTierBonusLegend(pickaxeTier);
-  setMiningMeterStatus(`Mine ${node.resource}: click/tap or press E/Space in green.`, '#fef3c7');
+  setMiningMeterStatus(`Mine ${node.resource}: hit green ${requiredHits}x (${miningAccuracyGame.hitCount}/${requiredHits}).`, '#fef3c7');
   if (miningMeterEl) {
     miningMeterEl.classList.remove('hidden');
   }
@@ -6001,9 +6035,9 @@ function attemptMiningAccuracyHit(local) {
   const zoneMin = miningAccuracyGame.zoneCenter - zoneHalf;
   const zoneMax = miningAccuracyGame.zoneCenter + zoneHalf;
   const hit = miningAccuracyGame.pointer >= zoneMin && miningAccuracyGame.pointer <= zoneMax;
-  miningAccuracyGame.active = false;
 
   if (!hit) {
+    miningAccuracyGame.active = false;
     mineRetryBlockedUntil = now + MINE_MISS_RETRY_COOLDOWN_MS;
     setMiningMeterStatus(`Missed. Retry in ${(MINE_MISS_RETRY_COOLDOWN_MS / 1000).toFixed(1)}s.`, '#fecaca');
     updateQuestPanel(`Missed timing on ${node.resource}. Retry in ${(MINE_MISS_RETRY_COOLDOWN_MS / 1000).toFixed(1)}s.`);
@@ -6011,12 +6045,39 @@ function attemptMiningAccuracyHit(local) {
     return true;
   }
 
-  if (miningOrePreviewEl) {
-    miningOrePreviewEl.classList.add('cracked');
-  }
-  setMiningMeterStatus('Hit! Ore cracking open...', '#86efac');
-  const amount = mineAmountForPickaxe(node.resource);
+  const requiredHits = Math.max(1, Math.floor(Number(miningAccuracyGame.requiredHits) || mineRequiredHits(node.resource)));
+  miningAccuracyGame.requiredHits = requiredHits;
+  miningAccuracyGame.hitCount = Math.min(requiredHits, miningAccuracyGame.hitCount + 1);
+  const crackProgress = miningAccuracyGame.hitCount / requiredHits;
+  setMiningCrackProgress(crackProgress);
   startMineSwing(localPlayerId, Date.now());
+
+  if (miningAccuracyGame.hitCount < requiredHits) {
+    miningAccuracyGame.zoneCenter = randomMiningZoneCenter(miningAccuracyGame.zoneWidth);
+    miningAccuracyGame.pointer = 0.08 + Math.random() * 0.84;
+    miningAccuracyGame.direction = Math.random() < 0.5 ? -1 : 1;
+    const stageTimeout = Math.max(
+      1000,
+      Math.floor((Number(mineTimingProfile(node.resource).timeoutMs) || MINE_TIMING_TIMEOUT_FALLBACK_MS) * 0.92)
+    );
+    miningAccuracyGame.timeoutAt = now + stageTimeout;
+    setMiningZoneLayout(miningAccuracyGame.zoneCenter, miningAccuracyGame.zoneWidth);
+    if (miningMeterPointerEl) {
+      miningMeterPointerEl.style.left = `${(miningAccuracyGame.pointer * 100).toFixed(2)}%`;
+    }
+    setMiningMeterStatus(
+      `Crack ${miningAccuracyGame.hitCount}/${requiredHits}. Hit green again with your pickaxe.`,
+      '#86efac'
+    );
+    updateQuestPanel(
+      `Crack ${miningAccuracyGame.hitCount}/${requiredHits} on ${node.resource}. Keep landing green hits.`
+    );
+    return true;
+  }
+
+  miningAccuracyGame.active = false;
+  setMiningMeterStatus(`Crack ${requiredHits}/${requiredHits}! Ore shattered.`, '#86efac');
+  const amount = mineAmountForPickaxe(node.resource);
   beginOreBreak(node, now);
   scheduleMiningAccuracyClose(220);
   socket.emit('mine:collect', { resource: node.resource, amount }, (resp) => {
@@ -7394,7 +7455,8 @@ function tryMineNode(local) {
     return true;
   }
   if (startMiningAccuracyGame(node)) {
-    updateQuestPanel(`Mine ${node.resource}: click/tap or press E/Space when marker is in green.`);
+    const requiredHits = mineRequiredHits(node.resource);
+    updateQuestPanel(`Mine ${node.resource}: hit the green zone ${requiredHits}x with your pickaxe slider.`);
   }
   return true;
 }
@@ -8615,11 +8677,10 @@ rodUpgradeBtnEl?.addEventListener('click', () => {
   });
 });
 
-emoteButtons.forEach((button) => {
-  button.addEventListener('click', () => {
-    const type = button.dataset.emote;
-    if (type) triggerEmote(type);
-  });
+menuEmotePlayEl?.addEventListener('click', () => {
+  const type = typeof menuEmoteSelectEl?.value === 'string' ? menuEmoteSelectEl.value : '';
+  if (!type) return;
+  triggerEmote(type);
 });
 
 wheelButtons.forEach((button) => {

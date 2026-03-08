@@ -208,6 +208,7 @@
 
       #mining-ore-preview {
         --ore-color: #9ca3af;
+        --crack-progress: 0;
         position: relative;
         width: min(188px, 40vw);
         height: 74px;
@@ -234,15 +235,38 @@
           rgba(15, 23, 42, 0.35) 6px,
           rgba(15, 23, 42, 0.35) 10px
         );
-        transform: rotate(14deg) scaleY(0);
+        transform: rotate(14deg) scaleY(calc(0.02 + var(--crack-progress)));
         transform-origin: top;
-        opacity: 0;
+        opacity: calc(0.08 + var(--crack-progress) * 0.92);
         transition: transform 120ms ease, opacity 120ms ease;
       }
 
+      #mining-ore-crack::before,
+      #mining-ore-crack::after {
+        content: '';
+        position: absolute;
+        width: 24px;
+        height: 3px;
+        border-radius: 999px;
+        background: rgba(15, 23, 42, 0.88);
+        left: -12px;
+        opacity: calc(var(--crack-progress) * 0.92);
+        transform-origin: left center;
+        transition: transform 120ms ease, opacity 120ms ease;
+      }
+
+      #mining-ore-crack::before {
+        top: 14px;
+        transform: rotate(-32deg) scaleX(var(--crack-progress));
+      }
+
+      #mining-ore-crack::after {
+        top: 38px;
+        transform: rotate(31deg) scaleX(var(--crack-progress));
+      }
+
       #mining-ore-preview.cracked #mining-ore-crack {
-        transform: rotate(14deg) scaleY(1);
-        opacity: 1;
+        filter: drop-shadow(0 0 5px rgba(15, 23, 42, 0.35));
       }
 
       #mining-pickaxe-preview {
@@ -339,7 +363,43 @@
         box-shadow: inset 0 0 0 2px rgba(6, 95, 70, 0.7), 0 0 10px rgba(74, 222, 128, 0.45);
       }
 
-      #mining-meter-pointer,
+      #mining-meter-pointer {
+        position: absolute;
+        top: -12px;
+        left: 50%;
+        width: 22px;
+        height: 30px;
+        transform: translateX(-50%);
+        background: transparent;
+        pointer-events: none;
+      }
+
+      #mining-meter-pointer::before {
+        content: '';
+        position: absolute;
+        left: 8px;
+        top: 6px;
+        width: 5px;
+        height: 22px;
+        border-radius: 4px;
+        background: linear-gradient(to bottom, #8b5a2b, #5a3412);
+        transform: rotate(-18deg);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.38);
+      }
+
+      #mining-meter-pointer::after {
+        content: '';
+        position: absolute;
+        left: 1px;
+        top: 0;
+        width: 20px;
+        height: 10px;
+        border-radius: 3px;
+        background: var(--pickaxe-head-color, #cbd5e1);
+        clip-path: polygon(8% 50%, 18% 10%, 82% 10%, 92% 50%, 82% 90%, 18% 90%);
+        box-shadow: 0 2px 6px rgba(15, 23, 42, 0.45);
+      }
+
       #fishing-meter-pointer {
         position: absolute;
         top: -2px;
@@ -352,7 +412,6 @@
         transform: translateX(-50%);
       }
 
-      #mining-meter-pointer::before,
       #fishing-meter-pointer::before {
         content: '';
         position: absolute;
@@ -1120,7 +1179,8 @@
         color: #f8fafc;
       }
 
-      #menu-toggle {
+      #menu-toggle,
+      #settings-toggle {
         width: 44px;
         height: 44px;
       }
@@ -1595,10 +1655,36 @@
         gap: 8px;
       }
 
-      #menu-emote-buttons {
+      #menu-emote-picker {
+        margin-top: 8px;
         display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: minmax(0, 1fr) auto;
         gap: 8px;
+        align-items: end;
+      }
+
+      #menu-emote-select-wrap {
+        display: grid;
+        gap: 6px;
+      }
+
+      #menu-emote-select-wrap label {
+        font-size: 12px;
+        color: #cbd5e1;
+      }
+
+      #menu-emote-select {
+        width: 100%;
+        padding: 10px 12px;
+        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background: rgba(2, 8, 23, 0.7);
+        color: #f8fafc;
+        font-size: 13px;
+      }
+
+      #menu-emote-play {
+        min-width: 112px;
       }
 
       #mobile-controls {
@@ -1848,7 +1934,9 @@
       }
 
       body.mobile-ui #mining-meter-pointer {
-        height: 28px;
+        top: -10px;
+        width: 20px;
+        height: 26px;
       }
 
       body.mobile-ui #mining-meter-status {
@@ -1925,9 +2013,7 @@
     </div>
 
     <div id="top-left-toolbar" class="panel">
-      <button id="menu-toggle" class="toolbar-btn" type="button" aria-label="Open menu">
-        <span class="line-stack"><span></span><span></span><span></span></span>
-      </button>
+      <button id="settings-toggle" class="toolbar-btn" type="button" aria-label="Open settings">⚙️</button>
       <button id="minimap-quick-toggle" class="toolbar-btn" type="button" aria-label="Toggle minimap">🗺️</button>
       <button id="fish-index-toggle" class="toolbar-btn" type="button" aria-label="Open fish index">🐟</button>
       <button id="inventory-toggle" class="toolbar-btn" type="button" aria-label="Open inventory">🎒</button>
@@ -1966,10 +2052,16 @@
             <button id="minimap-toggle" type="button">Minimap: On</button>
             <button id="performance-toggle" type="button">Graphics: Quality</button>
           </div>
-          <div id="menu-emote-buttons" style="margin-top:8px;">
-            <button type="button" data-emote="wave">Wave</button>
-            <button type="button" data-emote="dance">Dance</button>
-            <button type="button" data-emote="cheer">Cheer</button>
+          <div id="menu-emote-picker">
+            <div id="menu-emote-select-wrap">
+              <label for="menu-emote-select">Emote</label>
+              <select id="menu-emote-select">
+                <option value="wave">Wave</option>
+                <option value="dance">Dance</option>
+                <option value="cheer">Cheer</option>
+              </select>
+            </div>
+            <button id="menu-emote-play" type="button">Play Emote</button>
           </div>
         </section>
         <section class="menu-section">
@@ -2059,7 +2151,7 @@
           <div id="mining-meter-pointer"></div>
         </div>
       </div>
-      <div id="mining-meter-status">Hit click/tap or press E/Space while marker is in green.</div>
+      <div id="mining-meter-status">Hit click/tap or press E/Space while pickaxe slider is in green.</div>
       <div id="mining-meter-tier-bonus">Zone bonus: Wood +0% | Stone +14% | Iron +30% | Diamond +50%</div>
     </section>
 

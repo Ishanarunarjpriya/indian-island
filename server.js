@@ -84,9 +84,9 @@ const ACCESSORY_TYPES = new Set(['hat', 'glasses', 'backpack']);
 const ORE_TYPES = new Set(['stone', 'iron', 'gold', 'diamond']);
 const PICKAXE_ORDER = ['wood', 'stone', 'iron', 'diamond'];
 const PICKAXE_PRICE = {
-  stone: 120,
-  iron: 280,
-  diamond: 620
+  stone: 360,
+  iron: 840,
+  diamond: 1860
 };
 const PICKAXE_LEVEL_REQUIREMENT = {
   wood: 1,
@@ -104,7 +104,7 @@ const FISHING_ROD_LEVEL_REQUIREMENT = {
 const MAX_PLAYER_LEVEL = 60;
 const BASE_XP_TO_LEVEL = 110;
 const XP_PER_LEVEL_STEP = 35;
-const FISHING_ROD_PRICE = 260;
+const FISHING_ROD_PRICE = 780;
 const MAX_STAMINA_BONUS_PCT = 50;
 const FISH_STAMINA_GAIN_PER_FISH = 5;
 const FISH_CATCH_COOLDOWN_MS = 1800;
@@ -132,7 +132,7 @@ const FISH_ROD_DATA = {
     difficultyAssist: { zoneBonus: 0, requiredHoldScale: 1.0 },
     next: {
       tier: 'reinforced',
-      coins: 650,
+      coins: 1950,
       fishCost: { 'pond-minnow': 12, 'coral-perch': 6 }
     }
   },
@@ -142,7 +142,7 @@ const FISH_ROD_DATA = {
     difficultyAssist: { zoneBonus: 0.02, requiredHoldScale: 0.93 },
     next: {
       tier: 'expert',
-      coins: 1800,
+      coins: 5400,
       fishCost: { 'drift-trout': 8, 'thunder-pike': 4 }
     }
   },
@@ -152,7 +152,7 @@ const FISH_ROD_DATA = {
     difficultyAssist: { zoneBonus: 0.035, requiredHoldScale: 0.88 },
     next: {
       tier: 'master',
-      coins: 4200,
+      coins: 12600,
       fishCost: { 'lava-char': 8, 'sunblade-mako': 4 }
     }
   },
@@ -162,7 +162,7 @@ const FISH_ROD_DATA = {
     difficultyAssist: { zoneBonus: 0.05, requiredHoldScale: 0.82 },
     next: {
       tier: 'mythic',
-      coins: 9600,
+      coins: 28800,
       fishCost: { 'deepfin-marlin': 8, 'void-whalelet': 2 }
     }
   },
