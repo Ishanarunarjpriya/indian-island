@@ -768,7 +768,7 @@ function updateVoiceButtonLabels() {
   }
   if (voiceToggleEl) {
     if (!voiceEnabled) {
-      voiceToggleEl.textContent = 'Enable Proximity Voice';
+      voiceToggleEl.textContent = 'Enable Voice Chat';
     } else if (voiceMuted) {
       voiceToggleEl.textContent = 'Unmute Mic (Voice On)';
     } else {
@@ -918,7 +918,6 @@ const VOICE_ICE_SERVERS = [
   { urls: 'stun:stun1.l.google.com:19302' },
   { urls: 'stun:stun2.l.google.com:19302' }
 ];
-const VOICE_RADIUS = 180;
 const MAX_PENDING_VOICE_ICE = 64;
 
 const scene = new THREE.Scene();
@@ -6556,6 +6555,7 @@ function ensureVoicePeer(peerId, shouldOffer) {
       voiceAudioEls.set(peerId, audio);
     }
     audio.srcObject = event.streams[0];
+    audio.volume = 1;
     const startPlayback = audio.play();
     if (startPlayback?.catch) {
       startPlayback.catch(() => {});
@@ -6607,19 +6607,10 @@ async function toggleVoiceQuick() {
 }
 
 function updateVoiceVolumes() {
-  if (!voiceEnabled || !localPlayerId) return;
-  const local = players.get(localPlayerId);
-  if (!local) return;
-  voiceAudioEls.forEach((audio, peerId) => {
-    const remote = players.get(peerId);
-    if (!remote || !audio) return;
-    const distance = Math.hypot(local.x - remote.x, local.z - remote.z);
-    if (distance >= VOICE_RADIUS) {
-      audio.volume = 0;
-      return;
-    }
-    const ratio = 1 - distance / VOICE_RADIUS;
-    audio.volume = Math.max(0, Math.min(1, ratio));
+  if (!voiceEnabled) return;
+  voiceAudioEls.forEach((audio) => {
+    if (!audio) return;
+    audio.volume = 1;
   });
 }
 
