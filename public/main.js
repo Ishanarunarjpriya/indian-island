@@ -317,8 +317,6 @@ const chatToggleEl = document.getElementById('chat-toggle');
 const voiceQuickToggleEl = document.getElementById('voice-quick-toggle');
 const fullscreenToggleEl = document.getElementById('fullscreen-toggle');
 const menuOverlayEl = document.getElementById('menu-overlay');
-const menuEmoteSelectEl = document.getElementById('menu-emote-select');
-const menuEmotePlayEl = document.getElementById('menu-emote-play');
 const saveQuitEl = document.getElementById('save-quit');
 const authModalEl = document.getElementById('auth-modal');
 const authUsernameEl = document.getElementById('auth-username');
@@ -910,7 +908,6 @@ const joystickStickEl = document.getElementById('joystick-stick');
 const mobileJumpEl = document.getElementById('btn-jump');
 const mobileUseEl = document.getElementById('btn-use');
 const mobileConsumeEl = document.getElementById('btn-consume');
-const mobileEmoteEl = document.getElementById('btn-emote');
 
 let localVoiceStream = null;
 const voicePeers = new Map();
@@ -8677,12 +8674,6 @@ rodUpgradeBtnEl?.addEventListener('click', () => {
   });
 });
 
-menuEmotePlayEl?.addEventListener('click', () => {
-  const type = typeof menuEmoteSelectEl?.value === 'string' ? menuEmoteSelectEl.value : '';
-  if (!type) return;
-  triggerEmote(type);
-});
-
 wheelButtons.forEach((button) => {
   button.addEventListener('click', () => {
     const type = button.dataset.wheelEmote;
@@ -8832,10 +8823,6 @@ mobileUseEl?.addEventListener('pointerleave', () => {
 });
 mobileUseEl?.addEventListener('click', tryInteract);
 mobileConsumeEl?.addEventListener('click', () => consumeFish(1));
-mobileEmoteEl?.addEventListener('click', () => {
-  if (!isAuthenticated || menuOpen || isAnyGameplayOverlayOpen() || !customizeModalEl.classList.contains('hidden')) return;
-  triggerEmote('dance');
-});
 
 let lastSentAt = 0;
 const WALK_SPEED = 12;
