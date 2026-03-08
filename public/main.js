@@ -5137,7 +5137,7 @@ function applyPlayerCustomization(id, name, color, appearancePayload) {
   applyHeldGearVisual(player);
 
   if (player.label) {
-    player.label.textContent = displayNameWithTag(player.name, player.accountTag);
+    applyTaggedNameToElement(player.label, player.name, player.accountTag);
   }
 
   if (id === localPlayerId) {
@@ -5183,7 +5183,7 @@ function addPlayer(data) {
   tag.className = 'player-tag';
   const baseName = data.name || `Player-${String(data.id).slice(0, 4)}`;
   const accountTag = normalizeAccountTag(data?.accountTag);
-  tag.textContent = displayNameWithTag(baseName, accountTag);
+  applyTaggedNameToElement(tag, baseName, accountTag);
   nameTagsEl.appendChild(tag);
 
   const bubble = document.createElement('div');
@@ -5263,6 +5263,21 @@ function normalizeAccountTag(value) {
   const raw = typeof value === 'string' ? value.trim() : '';
   if (!raw) return null;
   return raw.slice(0, 24);
+}
+
+function applyTaggedNameToElement(element, name, accountTag = null) {
+  if (!element) return;
+  const base = String(name || '').trim() || 'Player';
+  const tag = normalizeAccountTag(accountTag);
+  element.textContent = '';
+  if (tag) {
+    const badge = document.createElement('span');
+    badge.className = 'account-role-tag';
+    badge.textContent = `[${tag}]`;
+    element.appendChild(badge);
+    element.appendChild(document.createTextNode(' '));
+  }
+  element.appendChild(document.createTextNode(base));
 }
 
 function displayNameWithTag(name, accountTag = null) {
@@ -6680,13 +6695,30 @@ function appendChatLine({
     minute: '2-digit'
   });
 
-  const safeName = isSystem ? 'System' : displayNameWithTag(fromName || 'Player', fromTag);
-  const label = isPrivate
-    ? (isOutgoingPrivate ? `To ${safeName} (private)` : `${safeName} (private)`)
-    : safeName;
   const meta = document.createElement('span');
   meta.className = 'meta';
-  meta.textContent = `[${time}] ${label}:`;
+  const safeName = String(fromName || '').trim() || 'Player';
+  const safeTag = isSystem ? null : normalizeAccountTag(fromTag);
+  meta.appendChild(document.createTextNode(`[${time}] `));
+  if (isPrivate && isOutgoingPrivate) {
+    meta.appendChild(document.createTextNode('To '));
+  }
+  if (isSystem) {
+    meta.appendChild(document.createTextNode('System'));
+  } else {
+    if (safeTag) {
+      const badge = document.createElement('span');
+      badge.className = 'chat-role-tag';
+      badge.textContent = `[${safeTag}]`;
+      meta.appendChild(badge);
+      meta.appendChild(document.createTextNode(' '));
+    }
+    meta.appendChild(document.createTextNode(safeName));
+  }
+  if (isPrivate) {
+    meta.appendChild(document.createTextNode(' (private)'));
+  }
+  meta.appendChild(document.createTextNode(':'));
   row.appendChild(meta);
   row.appendChild(document.createTextNode(` ${text}`));
   chatLogEl.appendChild(row);
@@ -8139,7 +8171,7 @@ socket.on('playerMoved', ({
   if (typeof accountTag === 'string' || accountTag == null) {
     player.accountTag = normalizeAccountTag(accountTag);
     if (player.label) {
-      player.label.textContent = displayNameWithTag(player.name, player.accountTag);
+      applyTaggedNameToElement(player.label, player.name, player.accountTag);
     }
   }
   applyHeldGearVisual(player);

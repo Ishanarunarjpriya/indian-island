@@ -97,6 +97,8 @@ const MARKET_ISLAND_POS = { x: -WORLD_LIMIT * 2.35, z: WORLD_LIMIT * 1.2 };
 const MARKET_ISLAND_RADIUS = 11.5;
 const LEADERBOARD_ISLAND_POS = { x: WORLD_LIMIT * 2.8, z: -WORLD_LIMIT * 0.95 };
 const LEADERBOARD_ISLAND_RADIUS = 11.2;
+const MAIN_HOUSE_POS = { x: -WORLD_LIMIT * 0.33, z: WORLD_LIMIT * 0.12 };
+const MAIN_HOUSE_NO_SPAWN_RADIUS = 8.8;
 const INTERACT_RANGE = 4;
 const CHAT_MAX_LEN = 220;
 const NAME_MAX_LEN = 18;
@@ -483,6 +485,18 @@ function randomSpawn(limit) {
     x: Math.cos(angle) * radius,
     z: Math.sin(angle) * radius
   };
+}
+
+function randomMainIslandSpawn(limit = WORLD_LIMIT * 0.65) {
+  const safeLimit = Math.max(6, Number(limit) || (WORLD_LIMIT * 0.65));
+  for (let i = 0; i < 36; i += 1) {
+    const point = randomSpawn(safeLimit);
+    if (distance2DPoint(point, MAIN_HOUSE_POS) >= MAIN_HOUSE_NO_SPAWN_RADIUS) {
+      return point;
+    }
+  }
+  // deterministic fallback away from the main house entrance zone
+  return { x: safeLimit * 0.55, z: -safeLimit * 0.25 };
 }
 
 function randomHexColor() {
@@ -1487,7 +1501,7 @@ function ensureProfileExists(profileId, username, options = {}) {
 function spawnPlayer(socket, profileId, username) {
   ensureProfileExists(profileId, username);
   const profile = profiles.get(profileId);
-  const spawnPoint = randomSpawn(WORLD_LIMIT * 0.65);
+  const spawnPoint = randomMainIslandSpawn(WORLD_LIMIT * 0.65);
   const spawn = {
     id: socket.id,
     profileId,
