@@ -183,6 +183,18 @@
         min-width: 188px;
       }
 
+      #inventory-xp-headline {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 16px;
+      }
+
+      #inventory-xp-meta {
+        white-space: nowrap;
+        text-align: right;
+      }
+
       #inventory-xp-track {
         height: 7px;
         border-radius: 999px;
@@ -1908,6 +1920,10 @@
         height: 6px;
       }
 
+      body.mobile-ui #inventory-xp-headline {
+        gap: 10px;
+      }
+
       body.mobile-ui #mining-meter {
         top: 54%;
         bottom: auto;
@@ -2116,9 +2132,11 @@
       </div>
       <div class="inventory-slot xp-slot">
         <span class="label">XP</span>
-        <span class="value" id="inventory-level">Lv 1</span>
+        <div id="inventory-xp-headline">
+          <span class="value" id="inventory-level">Lv 1</span>
+          <span class="subvalue" id="inventory-xp-meta">0 / 110</span>
+        </div>
         <div id="inventory-xp-track"><div id="inventory-xp-fill"></div></div>
-        <span class="subvalue" id="inventory-xp-meta">0 / 110</span>
       </div>
       <div class="inventory-slot">
         <span class="label">Pickaxe</span>
