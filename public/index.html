@@ -174,6 +174,31 @@
         color: #f8fafc;
       }
 
+      .inventory-slot .subvalue {
+        font-size: 11px;
+        color: #bfdbfe;
+      }
+
+      .inventory-slot.xp-slot {
+        min-width: 188px;
+      }
+
+      #inventory-xp-track {
+        height: 7px;
+        border-radius: 999px;
+        border: 1px solid rgba(255, 255, 255, 0.24);
+        background: rgba(15, 23, 42, 0.7);
+        overflow: hidden;
+      }
+
+      #inventory-xp-fill {
+        width: 0%;
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, #38bdf8, #6366f1);
+        transition: width 140ms ease;
+      }
+
       #mining-meter,
       #fishing-meter {
         position: fixed;
@@ -1871,6 +1896,18 @@
         font-size: 12px;
       }
 
+      body.mobile-ui .inventory-slot .subvalue {
+        font-size: 10px;
+      }
+
+      body.mobile-ui .inventory-slot.xp-slot {
+        min-width: 128px;
+      }
+
+      body.mobile-ui #inventory-xp-track {
+        height: 6px;
+      }
+
       body.mobile-ui #mining-meter {
         top: 54%;
         bottom: auto;
@@ -2076,6 +2113,12 @@
       <div class="inventory-slot">
         <span class="label">Coins</span>
         <span class="value" id="inventory-coins">0</span>
+      </div>
+      <div class="inventory-slot xp-slot">
+        <span class="label">XP</span>
+        <span class="value" id="inventory-level">Lv 1</span>
+        <div id="inventory-xp-track"><div id="inventory-xp-fill"></div></div>
+        <span class="subvalue" id="inventory-xp-meta">0 / 110</span>
       </div>
       <div class="inventory-slot">
         <span class="label">Pickaxe</span>

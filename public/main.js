@@ -329,6 +329,9 @@ const wheelButtons = Array.from(document.querySelectorAll('[data-wheel-emote]'))
 const nameTagsEl = document.getElementById('name-tags');
 const inventoryBarEl = document.getElementById('inventory-bar');
 const inventoryCoinsEl = document.getElementById('inventory-coins');
+const inventoryLevelEl = document.getElementById('inventory-level');
+const inventoryXpFillEl = document.getElementById('inventory-xp-fill');
+const inventoryXpMetaEl = document.getElementById('inventory-xp-meta');
 const inventoryPickaxeEl = document.getElementById('inventory-pickaxe');
 const inventoryTorchEl = document.getElementById('inventory-torch');
 const inventoryFishEl = document.getElementById('inventory-fish');
@@ -6206,6 +6209,17 @@ function updateFishingFocusCamera(local, delta) {
 function applyProgressState(progress) {
   if (!progress || typeof progress !== 'object') return;
   questState.coins = Math.max(0, Math.floor(Number(progress.coins) || 0));
+  questState.xp = Math.max(0, Math.floor(Number(progress.xp) || 0));
+  questState.level = Math.max(1, Math.min(MAX_PLAYER_LEVEL, Math.floor(Number(progress.level) || 1)));
+  const xpIntoLevel = Math.max(0, Math.floor(Number(progress.xpIntoLevel) || 0));
+  const xpToNextLevel = Math.max(0, Math.floor(Number(progress.xpToNextLevel) || 0));
+  if (questState.level >= MAX_PLAYER_LEVEL) {
+    questState.xpIntoLevel = 0;
+    questState.xpToNextLevel = 0;
+  } else {
+    questState.xpToNextLevel = xpToNextLevel > 0 ? xpToNextLevel : BASE_XP_TO_LEVEL;
+    questState.xpIntoLevel = Math.min(questState.xpToNextLevel, xpIntoLevel);
+  }
   questState.pickaxe = normalizePickaxeTier(progress.pickaxe, 'wood');
   const inv = progress.inventory || {};
   questState.inventory.stone = Math.max(0, Math.floor(Number(inv.stone) || 0));
@@ -6295,6 +6309,22 @@ function renderInventoryBar() {
   if (inventoryBarEl) inventoryBarEl.classList.remove('hidden');
   if (inventoryCoinsEl) {
     inventoryCoinsEl.textContent = Math.max(0, Math.floor(Number(questState.coins) || 0)).toLocaleString();
+  }
+  const level = Math.max(1, Math.floor(Number(questState.level) || 1));
+  const xpInto = Math.max(0, Math.floor(Number(questState.xpIntoLevel) || 0));
+  const xpNeed = Math.max(0, Math.floor(Number(questState.xpToNextLevel) || 0));
+  const maxLevel = level >= MAX_PLAYER_LEVEL || xpNeed <= 0;
+  const xpPct = maxLevel ? 100 : THREE.MathUtils.clamp((xpInto / Math.max(1, xpNeed)) * 100, 0, 100);
+  if (inventoryLevelEl) {
+    inventoryLevelEl.textContent = `Lv ${level}`;
+  }
+  if (inventoryXpFillEl) {
+    inventoryXpFillEl.style.width = `${xpPct.toFixed(1)}%`;
+  }
+  if (inventoryXpMetaEl) {
+    inventoryXpMetaEl.textContent = maxLevel
+      ? 'MAX LEVEL'
+      : `${xpInto.toLocaleString()} / ${xpNeed.toLocaleString()}`;
   }
   if (inventoryPickaxeEl) {
     inventoryPickaxeEl.textContent = capitalizeWord(questState.pickaxe || 'wood');
