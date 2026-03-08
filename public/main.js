@@ -912,12 +912,15 @@ const mobileConsumeEl = document.getElementById('btn-consume');
 let localVoiceStream = null;
 const voicePeers = new Map();
 const voiceAudioEls = new Map();
+const voicePeerStreams = new Map();
 const pendingVoiceIce = new Map();
-const VOICE_ICE_SERVERS = [
+const DEFAULT_VOICE_ICE_SERVERS = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
   { urls: 'stun:stun2.l.google.com:19302' }
 ];
+let voiceIceServers = [...DEFAULT_VOICE_ICE_SERVERS];
+let voiceConfigLoadPromise = null;
 const MAX_PENDING_VOICE_ICE = 64;
 
 const scene = new THREE.Scene();
@@ -5532,6 +5535,8 @@ function renderRodShopModal() {
   const currentTier = normalizeRodTier(questState.fishingRodTier, 'basic');
   const shopData = rodShopSnapshot?.rodShop || null;
   const buyPrice = Math.max(0, Math.floor(Number(rodShopSnapshot?.buyPrice) || FISHING_ROD_PRICE));
+  const basicRodLevelReq = Math.max(1, Math.floor(Number(FISHING_ROD_LEVEL_REQUIREMENT.basic) || 1));
+  const canBuyBasicRod = questState.level >= basicRodLevelReq;
   const currentLabel = hasFishingRod ? rodTierLabel(currentTier) : 'None';
   if (rodCurrentTierEl) {
     rodCurrentTierEl.textContent = `Current rod: ${currentLabel}`;
@@ -5539,11 +5544,18 @@ function renderRodShopModal() {
   const next = shopData?.next || null;
   if (!hasFishingRod) {
     if (rodNextTierEl) rodNextTierEl.textContent = 'Next upgrade: Buy your first rod';
-    if (rodUpgradeCostEl) rodUpgradeCostEl.textContent = `First rod price: ${buyPrice.toLocaleString()} coins`;
+    if (rodUpgradeCostEl) {
+      const levelText = `Level required: ${basicRodLevelReq} (you: ${questState.level})`;
+      rodUpgradeCostEl.textContent = `First rod price: ${buyPrice.toLocaleString()} coins | ${levelText}`;
+    }
     if (rodUpgradeFishCostEl) rodUpgradeFishCostEl.innerHTML = '<li>No fish required for first rod.</li>';
   } else if (shopData && next) {
     if (rodNextTierEl) rodNextTierEl.textContent = `Next upgrade: ${next.label || rodTierLabel(next.tier)}`;
-    if (rodUpgradeCostEl) rodUpgradeCostEl.textContent = `Coins required: ${Math.max(0, Math.floor(Number(next.coins) || 0)).toLocaleString()}`;
+    if (rodUpgradeCostEl) {
+      const coinsRequired = Math.max(0, Math.floor(Number(next.coins) || 0)).toLocaleString();
+      const levelRequired = Math.max(1, Math.floor(Number(next.levelRequired) || 1));
+      rodUpgradeCostEl.textContent = `Coins required: ${coinsRequired} | Level required: ${levelRequired} (you: ${questState.level})`;
+    }
     if (rodUpgradeFishCostEl) {
       rodUpgradeFishCostEl.innerHTML = '';
       for (const cost of next.fishCost || []) {
@@ -5567,13 +5579,16 @@ function renderRodShopModal() {
   }
 
   if (rodBuyBtnEl) {
-    rodBuyBtnEl.disabled = hasFishingRod;
+    rodBuyBtnEl.disabled = hasFishingRod || !canBuyBasicRod;
     rodBuyBtnEl.textContent = hasFishingRod
       ? 'Rod Owned'
-      : `Buy Fishing Rod (${buyPrice.toLocaleString()} coins)`;
+      : (canBuyBasicRod
+        ? `Buy Fishing Rod (${buyPrice.toLocaleString()} coins)`
+        : `Locked: Level ${basicRodLevelReq}`);
   }
   if (rodUpgradeBtnEl) {
-    rodUpgradeBtnEl.disabled = !hasFishingRod || !next;
+    const meetsLevel = Boolean(next?.meetsLevel);
+    rodUpgradeBtnEl.disabled = !hasFishingRod || !next || !meetsLevel;
   }
 }
 
@@ -5589,7 +5604,7 @@ function loadRodShopModal(statusText = '') {
     }
     rodShopSnapshot = resp;
     renderRodShopModal();
-    setRodShopStatus(statusText || 'Use fish and coins to upgrade your rod.', '#cbd5e1');
+    setRodShopStatus(statusText || 'Use fish, coins, and level requirements to upgrade your rod.', '#cbd5e1');
   });
 }
 
@@ -5737,8 +5752,8 @@ function renderMarketQuestSection() {
   if (marketQuestProgressEl) {
     const status = capitalizeWord(quest.status || 'available');
     const progress = `${Math.max(0, Math.floor(Number(quest.progress) || 0))}/${Math.max(1, Math.floor(Number(quest.targetCount) || 1))}`;
-    const reward = Math.max(0, Math.floor(Number(quest.rewardCoins) || 0)).toLocaleString();
-    marketQuestProgressEl.textContent = `Status: ${status} | Progress: ${progress} | Reward: ${reward} coins`;
+    const rewardXp = Math.max(0, Math.floor(Number(quest.rewardXp) || 0)).toLocaleString();
+    marketQuestProgressEl.textContent = `Status: ${status} | Progress: ${progress} | Reward: ${rewardXp} XP`;
   }
   renderMarketQuestFishOptions();
   if (marketQuestAcceptBtnEl) marketQuestAcceptBtnEl.disabled = quest.status !== 'available';
@@ -6475,6 +6490,42 @@ function applyEmote(id, type, sentAt = Date.now()) {
   player.emoteUntil = sentAt + 2200;
 }
 
+function normalizeClientIceServer(entry) {
+  if (!entry || typeof entry !== 'object') return null;
+  const urlsRaw = entry.urls;
+  const urls = Array.isArray(urlsRaw)
+    ? urlsRaw.filter((value) => typeof value === 'string' && value.trim())
+    : (typeof urlsRaw === 'string' && urlsRaw.trim() ? [urlsRaw.trim()] : []);
+  if (!urls.length) return null;
+  const normalized = { urls: urls.length === 1 ? urls[0] : urls };
+  if (typeof entry.username === 'string' && entry.username.trim()) {
+    normalized.username = entry.username.trim();
+  }
+  if (typeof entry.credential === 'string' && entry.credential.trim()) {
+    normalized.credential = entry.credential.trim();
+  }
+  return normalized;
+}
+
+async function ensureVoiceConfigLoaded() {
+  if (voiceConfigLoadPromise) return voiceConfigLoadPromise;
+  voiceConfigLoadPromise = (async () => {
+    try {
+      const resp = await fetch('/voice-config', { cache: 'no-store' });
+      const payload = await resp.json().catch(() => null);
+      const list = Array.isArray(payload?.iceServers)
+        ? payload.iceServers.map(normalizeClientIceServer).filter(Boolean)
+        : [];
+      if (list.length) {
+        voiceIceServers = list;
+      }
+    } catch {
+      voiceIceServers = [...DEFAULT_VOICE_ICE_SERVERS];
+    }
+  })();
+  return voiceConfigLoadPromise;
+}
+
 function removeVoicePeer(peerId) {
   const pc = voicePeers.get(peerId);
   if (pc) {
@@ -6491,6 +6542,7 @@ function removeVoicePeer(peerId) {
     voiceAudioEls.delete(peerId);
   }
   pendingVoiceIce.delete(peerId);
+  voicePeerStreams.delete(peerId);
 }
 
 function queueVoiceIce(peerId, candidate) {
@@ -6523,7 +6575,7 @@ function ensureVoicePeer(peerId, shouldOffer) {
   if (voicePeers.has(peerId)) return voicePeers.get(peerId);
 
   const pc = new RTCPeerConnection({
-    iceServers: VOICE_ICE_SERVERS
+    iceServers: voiceIceServers
   });
   const audioTransceiver = pc.addTransceiver('audio', { direction: 'sendrecv' });
   const localTrack = localVoiceStream?.getAudioTracks?.()[0] || null;
@@ -6554,7 +6606,18 @@ function ensureVoicePeer(peerId, shouldOffer) {
       document.body.appendChild(audio);
       voiceAudioEls.set(peerId, audio);
     }
-    audio.srcObject = event.streams[0];
+    let stream = event.streams?.[0] || null;
+    if (!stream) {
+      stream = voicePeerStreams.get(peerId) || new MediaStream();
+      if (event.track && !stream.getTracks().some((track) => track.id === event.track.id)) {
+        stream.addTrack(event.track);
+      }
+      voicePeerStreams.set(peerId, stream);
+    } else {
+      voicePeerStreams.set(peerId, stream);
+    }
+    audio.srcObject = stream;
+    audio.muted = false;
     audio.volume = 1;
     const startPlayback = audio.play();
     if (startPlayback?.catch) {
@@ -6580,6 +6643,7 @@ async function enableVoice() {
     if (voiceToggleEl) voiceToggleEl.textContent = 'Voice not supported';
     return;
   }
+  await ensureVoiceConfigLoaded();
   voiceEnabled = true;
   await setVoiceMuted(false);
   socket.emit('voice:join');
@@ -7276,9 +7340,10 @@ function questInteract(local) {
     return true;
   }
   if (quest.status === 'ready') {
+    const rewardXp = Math.max(0, Math.floor(Number(quest.rewardXp) || 0));
     openNpcDialogue({
       name: 'Quest Giver',
-      text: `Great work. Reward: ${quest.rewardCoins || 0} coins${quest.rewardDiamonds ? ` + ${quest.rewardDiamonds} diamonds` : ''}.`,
+      text: `Great work. Reward: ${rewardXp} XP${quest.rewardDiamonds ? ` + ${quest.rewardDiamonds} diamonds` : ''}.`,
       primaryLabel: 'Claim Reward',
       secondaryLabel: 'Later',
       onPrimary: () => {
@@ -7288,7 +7353,8 @@ function questInteract(local) {
             return;
           }
           closeNpcDialogue();
-          updateQuestPanel('Quest reward claimed.');
+          const gainedXp = Math.max(0, Math.floor(Number(resp.rewardXp) || rewardXp));
+          updateQuestPanel(`Quest reward claimed: +${gainedXp} XP.`);
         });
       },
       onSecondary: closeNpcDialogue
@@ -7339,9 +7405,20 @@ function mineShopInteract(local) {
     return true;
   }
   const price = questState.shop.price[nextTier] || 0;
+  const requiredLevel = Math.max(1, Math.floor(Number(questState.shop?.levelReq?.[nextTier]) || 1));
+  const levelMet = questState.level >= requiredLevel;
+  if (!levelMet) {
+    openNpcDialogue({
+      name: 'Mine Merchant',
+      text: `The ${capitalizeWord(nextTier)} pickaxe unlocks at level ${requiredLevel}. You are level ${questState.level}.`,
+      primaryLabel: 'Okay',
+      secondaryLabel: 'Close'
+    });
+    return true;
+  }
   openNpcDialogue({
     name: 'Mine Merchant',
-    text: `I can sell you a ${capitalizeWord(nextTier)} pickaxe for ${price} coins. You currently have ${questState.coins} coins.`,
+    text: `I can sell you a ${capitalizeWord(nextTier)} pickaxe for ${price} coins. Requirement: level ${requiredLevel}. You are level ${questState.level} with ${questState.coins} coins.`,
     primaryLabel: `Buy ${capitalizeWord(nextTier)} Pickaxe`,
     secondaryLabel: 'Cancel',
     onPrimary: () => {
@@ -8620,8 +8697,8 @@ marketQuestClaimBtnEl?.addEventListener('click', () => {
       applyProgressState(resp.progress);
     }
     renderMarketModal();
-    const rewardCoins = Math.max(0, Math.floor(Number(resp.rewardCoins) || 0));
-    setMarketStatus(`Claimed ${rewardCoins.toLocaleString()} coins. New fishing quest generated.`, '#86efac');
+    const rewardXp = Math.max(0, Math.floor(Number(resp.rewardXp) || 0));
+    setMarketStatus(`Claimed ${rewardXp.toLocaleString()} XP. New fishing quest generated.`, '#86efac');
   });
 });
 rodBuyBtnEl?.addEventListener('click', () => {

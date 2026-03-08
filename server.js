@@ -11,6 +11,42 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
+function normalizeIceServerEntry(entry) {
+  if (!entry || typeof entry !== 'object') return null;
+  const urlsRaw = entry.urls;
+  const urls = Array.isArray(urlsRaw)
+    ? urlsRaw.filter((u) => typeof u === 'string' && u.trim())
+    : (typeof urlsRaw === 'string' && urlsRaw.trim() ? [urlsRaw.trim()] : []);
+  if (!urls.length) return null;
+  const normalized = { urls };
+  if (typeof entry.username === 'string' && entry.username.trim()) {
+    normalized.username = entry.username.trim();
+  }
+  if (typeof entry.credential === 'string' && entry.credential.trim()) {
+    normalized.credential = entry.credential.trim();
+  }
+  return normalized;
+}
+
+function parseIceServersFromEnv(rawValue) {
+  const fallback = [
+    { urls: ['stun:stun.l.google.com:19302'] },
+    { urls: ['stun:stun1.l.google.com:19302'] },
+    { urls: ['stun:stun2.l.google.com:19302'] }
+  ];
+  if (!rawValue || typeof rawValue !== 'string') return fallback;
+  try {
+    const parsed = JSON.parse(rawValue);
+    if (!Array.isArray(parsed)) return fallback;
+    const normalized = parsed
+      .map(normalizeIceServerEntry)
+      .filter(Boolean);
+    return normalized.length ? normalized : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 app.get('/db-test', async (req, res) => {
   if (!USE_TURSO) {
     res.status(400).json({ ok: false, error: 'TURSO_DATABASE_URL not configured.' });
@@ -34,6 +70,7 @@ const TURSO_AUTH_TOKEN = typeof process.env.TURSO_AUTH_TOKEN === 'string'
   ? process.env.TURSO_AUTH_TOKEN.trim()
   : '';
 const USE_TURSO = TURSO_DATABASE_URL.length > 0;
+const VOICE_ICE_SERVERS = parseIceServersFromEnv(process.env.VOICE_ICE_SERVERS_JSON);
 const WORLD_LIMIT = 40;
 const ISLAND_SURFACE_Y = 1.35;
 const LIGHTHOUSE_POS = {
@@ -235,6 +272,10 @@ let dbClient = null;
 let dbReady = false;
 
 app.use(express.static('public'));
+
+app.get('/voice-config', (req, res) => {
+  res.json({ ok: true, iceServers: VOICE_ICE_SERVERS });
+});
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -1717,6 +1758,12 @@ io.on('connection', (socket) => {
     }
     if (progress.hasFishingRod === true) {
       if (typeof ack === 'function') ack({ ok: false, error: 'You already own a fishing rod.' });
+      return;
+    }
+    const currentLevel = normalizeProgressLevel(progress).level;
+    const requiredLevel = levelRequirementForRod('basic');
+    if (currentLevel < requiredLevel) {
+      if (typeof ack === 'function') ack({ ok: false, error: `Need level ${requiredLevel} for a Fishing Rod.` });
       return;
     }
     if (progress.coins < FISHING_ROD_PRICE) {
