@@ -110,6 +110,8 @@ const FISHING_ISLAND_POS = new THREE.Vector3(worldLimit * 2.2, 0, worldLimit * 1
 const FISHING_ISLAND_RADIUS = 11.9;
 const MARKET_ISLAND_POS = new THREE.Vector3(-worldLimit * 2.35, 0, worldLimit * 1.2);
 const MARKET_ISLAND_RADIUS = 11.5;
+const LEADERBOARD_ISLAND_POS = new THREE.Vector3(worldLimit * 2.8, 0, -worldLimit * 0.95);
+const LEADERBOARD_ISLAND_RADIUS = 11.2;
 const toMainFromMineEntryX = -MINE_ENTRY_ISLAND_POS.x;
 const toMainFromMineEntryZ = -MINE_ENTRY_ISLAND_POS.z;
 const toMainFromMineEntryLen = Math.hypot(toMainFromMineEntryX, toMainFromMineEntryZ) || 1;
@@ -137,6 +139,20 @@ const MARKET_DOCK_POS = new THREE.Vector3(
   MARKET_ISLAND_POS.z + (toMainFromMarketZ / toMainFromMarketLen) * 10.6
 );
 const MARKET_DOCK_YAW = Math.atan2(-(MARKET_DOCK_POS.z - MARKET_ISLAND_POS.z), MARKET_DOCK_POS.x - MARKET_ISLAND_POS.x);
+const toMainFromLeaderboardX = -LEADERBOARD_ISLAND_POS.x;
+const toMainFromLeaderboardZ = -LEADERBOARD_ISLAND_POS.z;
+const toMainFromLeaderboardLen = Math.hypot(toMainFromLeaderboardX, toMainFromLeaderboardZ) || 1;
+const LEADERBOARD_DOCK_POS = new THREE.Vector3(
+  LEADERBOARD_ISLAND_POS.x + (toMainFromLeaderboardX / toMainFromLeaderboardLen) * 10.5,
+  1.36,
+  LEADERBOARD_ISLAND_POS.z + (toMainFromLeaderboardZ / toMainFromLeaderboardLen) * 10.5
+);
+const LEADERBOARD_DOCK_YAW = Math.atan2(
+  -(LEADERBOARD_DOCK_POS.z - LEADERBOARD_ISLAND_POS.z),
+  LEADERBOARD_DOCK_POS.x - LEADERBOARD_ISLAND_POS.x
+);
+const LEADERBOARD_BOARD_REFRESH_MS = 12_000;
+const LEADERBOARD_BOARD_ROW_LIMIT = 8;
 const MINE_ENTRY_POS = new THREE.Vector3(
   MINE_ENTRY_ISLAND_POS.x - (toMainFromMineEntryX / toMainFromMineEntryLen) * 2.4,
   1.35,
@@ -220,6 +236,13 @@ let mineCentralCrystalMesh = null;
 let mineGroup = null;
 let minePortalPulse = 0;
 let mineOreTraderNpcMesh = null;
+let leaderboardBoardCanvas = null;
+let leaderboardBoardCtx = null;
+let leaderboardBoardTexture = null;
+let leaderboardBoardRows = [];
+let leaderboardBoardNeedsRedraw = false;
+let leaderboardBoardFetchInFlight = false;
+let leaderboardBoardLastFetchAt = 0;
 const oreNodes = [];
 const fishingSpots = [];
 const fishingMiniGame = {
@@ -1499,6 +1522,7 @@ const BOAT_CLEARANCE_LIGHTHOUSE = 12.6;
 const BOAT_CLEARANCE_MINE_ENTRY = MINE_ENTRY_ISLAND_RADIUS + 1.8;
 const BOAT_CLEARANCE_FISHING = FISHING_ISLAND_RADIUS + 1.9;
 const BOAT_CLEARANCE_MARKET = MARKET_ISLAND_RADIUS + 1.9;
+const BOAT_CLEARANCE_LEADERBOARD = LEADERBOARD_ISLAND_RADIUS + 1.9;
 addWorldCollider(LIGHTHOUSE_POS.x, LIGHTHOUSE_POS.z, 2.32, 'lighthouse-shell');
 
 function dockOffsetPosition(dock, yaw, forward = 0, side = 0) {
@@ -1528,7 +1552,8 @@ function dockSlots() {
     { dock: LIGHTHOUSE_DOCK_POS, yaw: LIGHTHOUSE_DOCK_YAW },
     { dock: MINE_ENTRY_DOCK_POS, yaw: MINE_ENTRY_DOCK_YAW },
     { dock: FISHING_DOCK_POS, yaw: FISHING_DOCK_YAW },
-    { dock: MARKET_DOCK_POS, yaw: MARKET_DOCK_YAW }
+    { dock: MARKET_DOCK_POS, yaw: MARKET_DOCK_YAW },
+    { dock: LEADERBOARD_DOCK_POS, yaw: LEADERBOARD_DOCK_YAW }
   ];
 }
 
@@ -2000,6 +2025,195 @@ function addMarketIsland() {
       marker
     });
   }
+}
+
+function drawLeaderboardBoardTexture() {
+  if (!leaderboardBoardCtx || !leaderboardBoardCanvas || !leaderboardBoardTexture) return;
+  const ctx = leaderboardBoardCtx;
+  const canvas = leaderboardBoardCanvas;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  const bgGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+  bgGrad.addColorStop(0, '#0b1726');
+  bgGrad.addColorStop(0.55, '#11263a');
+  bgGrad.addColorStop(1, '#0a1522');
+  ctx.fillStyle = bgGrad;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.strokeStyle = 'rgba(236, 253, 245, 0.2)';
+  ctx.lineWidth = 8;
+  ctx.strokeRect(14, 14, canvas.width - 28, canvas.height - 28);
+
+  const now = new Date();
+  ctx.fillStyle = '#f8fafc';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = '800 62px "Trebuchet MS", "Segoe UI", sans-serif';
+  ctx.fillText('Top Islanders', canvas.width * 0.5, 74);
+  ctx.font = '500 24px "Trebuchet MS", "Segoe UI", sans-serif';
+  ctx.fillStyle = '#bfdbfe';
+  ctx.fillText(`Updated ${now.toLocaleTimeString()}`, canvas.width * 0.5, 120);
+
+  const rows = Array.isArray(leaderboardBoardRows) ? leaderboardBoardRows.slice(0, LEADERBOARD_BOARD_ROW_LIMIT) : [];
+  if (!rows.length) {
+    ctx.fillStyle = '#cbd5e1';
+    ctx.font = '600 38px "Trebuchet MS", "Segoe UI", sans-serif';
+    ctx.fillText('No leaderboard data yet', canvas.width * 0.5, canvas.height * 0.5);
+    leaderboardBoardTexture.needsUpdate = true;
+    leaderboardBoardNeedsRedraw = false;
+    return;
+  }
+
+  const rowStartY = 174;
+  const rowHeight = 66;
+  for (let i = 0; i < rows.length; i += 1) {
+    const row = rows[i];
+    const y = rowStartY + i * rowHeight;
+    const odd = i % 2 === 1;
+    ctx.fillStyle = odd ? 'rgba(30, 64, 95, 0.38)' : 'rgba(15, 30, 48, 0.28)';
+    ctx.fillRect(34, y - 25, canvas.width - 68, 50);
+
+    ctx.textAlign = 'left';
+    ctx.font = '700 30px "Trebuchet MS", "Segoe UI", sans-serif';
+    ctx.fillStyle = '#e2e8f0';
+    ctx.fillText(`#${row.rank || (i + 1)}`, 56, y);
+    ctx.fillStyle = '#f8fafc';
+    const safeName = String(row.name || 'Player').slice(0, 20);
+    ctx.fillText(safeName, 138, y);
+
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#facc15';
+    ctx.fillText(`${Math.max(0, Math.floor(Number(row.coins) || 0)).toLocaleString()}c`, canvas.width - 56, y);
+    ctx.fillStyle = '#93c5fd';
+    ctx.font = '600 24px "Trebuchet MS", "Segoe UI", sans-serif';
+    ctx.fillText(
+      `Lv ${Math.max(1, Math.floor(Number(row.level) || 1))}  XP ${Math.max(0, Math.floor(Number(row.xp) || 0)).toLocaleString()}`,
+      canvas.width - 252,
+      y
+    );
+  }
+
+  leaderboardBoardTexture.needsUpdate = true;
+  leaderboardBoardNeedsRedraw = false;
+}
+
+async function refreshLeaderboardBoard(force = false) {
+  if (!leaderboardBoardCanvas) return;
+  if (leaderboardBoardFetchInFlight) return;
+  const now = performance.now();
+  if (!force && now - leaderboardBoardLastFetchAt < LEADERBOARD_BOARD_REFRESH_MS) return;
+  leaderboardBoardLastFetchAt = now;
+  leaderboardBoardFetchInFlight = true;
+  try {
+    const response = await fetch(`/leaderboard?limit=${LEADERBOARD_BOARD_ROW_LIMIT}`, { cache: 'no-store' });
+    if (!response.ok) return;
+    const payload = await response.json();
+    if (!payload?.ok || !Array.isArray(payload.rows)) return;
+    leaderboardBoardRows = payload.rows.map((row, index) => ({
+      rank: Math.max(1, Math.floor(Number(row?.rank) || (index + 1))),
+      name: typeof row?.name === 'string' && row.name.trim() ? row.name.trim() : 'Player',
+      level: Math.max(1, Math.floor(Number(row?.level) || 1)),
+      xp: Math.max(0, Math.floor(Number(row?.xp) || 0)),
+      coins: Math.max(0, Math.floor(Number(row?.coins) || 0))
+    }));
+    leaderboardBoardNeedsRedraw = true;
+  } catch {
+    // Keep last rendered board state if network fetch fails.
+  } finally {
+    leaderboardBoardFetchInFlight = false;
+  }
+}
+
+function updateLeaderboardBoard(nowMs) {
+  if (!leaderboardBoardCanvas) return;
+  if (leaderboardBoardNeedsRedraw) {
+    drawLeaderboardBoardTexture();
+  }
+  if (nowMs - leaderboardBoardLastFetchAt >= LEADERBOARD_BOARD_REFRESH_MS) {
+    void refreshLeaderboardBoard();
+  }
+}
+
+function addLeaderboardIsland() {
+  const base = new THREE.Mesh(
+    new THREE.CylinderGeometry(LEADERBOARD_ISLAND_RADIUS + 1.7, LEADERBOARD_ISLAND_RADIUS + 3.3, 3.2, 34),
+    new THREE.MeshStandardMaterial({ color: 0x87684a, roughness: 0.95 })
+  );
+  base.position.set(LEADERBOARD_ISLAND_POS.x, -0.35, LEADERBOARD_ISLAND_POS.z);
+  base.receiveShadow = true;
+  scene.add(base);
+
+  const top = new THREE.Mesh(
+    new THREE.CylinderGeometry(LEADERBOARD_ISLAND_RADIUS, LEADERBOARD_ISLAND_RADIUS + 1.1, 1.2, 34),
+    new THREE.MeshStandardMaterial({ color: 0x6d945f, roughness: 0.9 })
+  );
+  top.position.set(LEADERBOARD_ISLAND_POS.x, 1.35, LEADERBOARD_ISLAND_POS.z);
+  top.receiveShadow = true;
+  scene.add(top);
+
+  const accentRing = new THREE.Mesh(
+    new THREE.RingGeometry(LEADERBOARD_ISLAND_RADIUS - 1.2, LEADERBOARD_ISLAND_RADIUS + 0.25, 42),
+    new THREE.MeshStandardMaterial({ color: 0xc7a67b, roughness: 0.92 })
+  );
+  accentRing.rotation.x = -Math.PI / 2;
+  accentRing.position.set(LEADERBOARD_ISLAND_POS.x, 1.38, LEADERBOARD_ISLAND_POS.z);
+  accentRing.receiveShadow = true;
+  scene.add(accentRing);
+
+  leaderboardBoardCanvas = document.createElement('canvas');
+  leaderboardBoardCanvas.width = 1024;
+  leaderboardBoardCanvas.height = 768;
+  leaderboardBoardCtx = leaderboardBoardCanvas.getContext('2d');
+  leaderboardBoardTexture = new THREE.CanvasTexture(leaderboardBoardCanvas);
+  leaderboardBoardTexture.colorSpace = THREE.SRGBColorSpace;
+  leaderboardBoardTexture.minFilter = THREE.LinearFilter;
+  leaderboardBoardTexture.magFilter = THREE.LinearFilter;
+
+  const boardFacingYaw = Math.atan2(-LEADERBOARD_ISLAND_POS.x, -LEADERBOARD_ISLAND_POS.z);
+  const board = new THREE.Group();
+  board.position.set(LEADERBOARD_ISLAND_POS.x, 0, LEADERBOARD_ISLAND_POS.z);
+  board.rotation.y = boardFacingYaw;
+
+  const postMat = new THREE.MeshStandardMaterial({ color: 0x4a311f, roughness: 0.92 });
+  const frameMat = new THREE.MeshStandardMaterial({ color: 0x5e4026, roughness: 0.9 });
+  const panelBackMat = new THREE.MeshStandardMaterial({ color: 0x14263a, roughness: 0.86 });
+  const postGeo = new THREE.BoxGeometry(0.24, 3.9, 0.24);
+  for (const x of [-2.5, 2.5]) {
+    const post = new THREE.Mesh(postGeo, postMat);
+    post.position.set(x, 2.05, -0.45);
+    post.castShadow = true;
+    post.receiveShadow = true;
+    board.add(post);
+  }
+  const topBeam = new THREE.Mesh(new THREE.BoxGeometry(5.35, 0.28, 0.26), frameMat);
+  topBeam.position.set(0, 3.94, -0.45);
+  topBeam.castShadow = true;
+  board.add(topBeam);
+
+  const boardBack = new THREE.Mesh(new THREE.BoxGeometry(5.2, 3.0, 0.26), panelBackMat);
+  boardBack.position.set(0, 2.2, -0.36);
+  boardBack.castShadow = true;
+  boardBack.receiveShadow = true;
+  board.add(boardBack);
+
+  const boardFace = new THREE.Mesh(
+    new THREE.PlaneGeometry(4.9, 2.7),
+    new THREE.MeshStandardMaterial({ map: leaderboardBoardTexture, roughness: 0.8, metalness: 0.02 })
+  );
+  boardFace.position.set(0, 2.2, -0.2);
+  boardFace.castShadow = true;
+  board.add(boardFace);
+
+  const sign = makeTextSign('Leaderboard', 3.0, 0.72, '#14263a', '#f8fafc');
+  sign.position.set(0, 4.35, -0.22);
+  board.add(sign);
+  scene.add(board);
+  addWorldCollider(LEADERBOARD_ISLAND_POS.x, LEADERBOARD_ISLAND_POS.z, 2.9, 'stall');
+
+  leaderboardBoardRows = [];
+  leaderboardBoardNeedsRedraw = true;
+  drawLeaderboardBoardTexture();
+  void refreshLeaderboardBoard(true);
 }
 
 function addLighthouseInterior() {
@@ -3408,6 +3622,8 @@ function addLandmarks() {
   addDock(FISHING_DOCK_POS, FISHING_DOCK_YAW, { segments: 11, plankLength: 2.8, plankWidth: 2.2, spacing: 1.05 });
   addMarketIsland();
   addDock(MARKET_DOCK_POS, MARKET_DOCK_YAW, { segments: 11, plankLength: 2.8, plankWidth: 2.2, spacing: 1.05 });
+  addLeaderboardIsland();
+  addDock(LEADERBOARD_DOCK_POS, LEADERBOARD_DOCK_YAW, { segments: 11, plankLength: 2.8, plankWidth: 2.2, spacing: 1.05 });
   addLighthouseInterior();
   populateMainIslandNature();
   addBeaconIslandLights();
@@ -3561,7 +3777,8 @@ function resolveBoatShoreCollision(x, z) {
     { cx: LIGHTHOUSE_POS.x, cz: LIGHTHOUSE_POS.z, radius: BOAT_CLEARANCE_LIGHTHOUSE },
     { cx: MINE_ENTRY_ISLAND_POS.x, cz: MINE_ENTRY_ISLAND_POS.z, radius: BOAT_CLEARANCE_MINE_ENTRY },
     { cx: FISHING_ISLAND_POS.x, cz: FISHING_ISLAND_POS.z, radius: BOAT_CLEARANCE_FISHING },
-    { cx: MARKET_ISLAND_POS.x, cz: MARKET_ISLAND_POS.z, radius: BOAT_CLEARANCE_MARKET }
+    { cx: MARKET_ISLAND_POS.x, cz: MARKET_ISLAND_POS.z, radius: BOAT_CLEARANCE_MARKET },
+    { cx: LEADERBOARD_ISLAND_POS.x, cz: LEADERBOARD_ISLAND_POS.z, radius: BOAT_CLEARANCE_LEADERBOARD }
   ];
   for (const circle of circles) {
     const dx = nextX - circle.cx;
@@ -3782,6 +3999,7 @@ function clampToPlayableGround(x, z, allowMine = false) {
   const MINE_ENTRY_RADIUS = MINE_ENTRY_ISLAND_RADIUS;
   const FISHING_RADIUS = FISHING_ISLAND_RADIUS;
   const MARKET_RADIUS = MARKET_ISLAND_RADIUS;
+  const LEADERBOARD_RADIUS = LEADERBOARD_ISLAND_RADIUS;
   const INTERIOR_RADIUS = INTERIOR_PLAY_RADIUS;
   const mineSwimBlocked = allowMine && blocksMineEscapeSwim(x, z);
   const inSwim = isSwimZone(x, z) && !mineSwimBlocked;
@@ -3799,13 +4017,16 @@ function clampToPlayableGround(x, z, allowMine = false) {
   const dxK = x - MARKET_ISLAND_POS.x;
   const dzK = z - MARKET_ISLAND_POS.z;
   const inMarketIsland = Math.hypot(dxK, dzK) <= MARKET_RADIUS;
+  const dxB = x - LEADERBOARD_ISLAND_POS.x;
+  const dzB = z - LEADERBOARD_ISLAND_POS.z;
+  const inLeaderboardIsland = Math.hypot(dxB, dzB) <= LEADERBOARD_RADIUS;
   const dxI = x - LIGHTHOUSE_INTERIOR_BASE.x;
   const dzI = z - LIGHTHOUSE_INTERIOR_BASE.z;
   const inInterior = Math.hypot(dxI, dzI) <= INTERIOR_RADIUS;
   const dxM = x - MINE_POS.x;
   const dzM = z - MINE_POS.z;
   const inMine = allowMine && mineDistance(x, z) <= MINE_PLAY_RADIUS;
-  if (inMain || inLighthouse || inMineEntryIsland || inFishingIsland || inMarketIsland || inInterior || inMine || inSwim) {
+  if (inMain || inLighthouse || inMineEntryIsland || inFishingIsland || inMarketIsland || inLeaderboardIsland || inInterior || inMine || inSwim) {
     return { x, z };
   }
 
@@ -3835,6 +4056,12 @@ function clampToPlayableGround(x, z, allowMine = false) {
     z: MARKET_ISLAND_POS.z + (dzK / lenK) * MARKET_RADIUS
   };
   const distMarket = Math.hypot(x - toMarket.x, z - toMarket.z);
+  const lenB = Math.hypot(dxB, dzB) || 1;
+  const toLeaderboard = {
+    x: LEADERBOARD_ISLAND_POS.x + (dxB / lenB) * LEADERBOARD_RADIUS,
+    z: LEADERBOARD_ISLAND_POS.z + (dzB / lenB) * LEADERBOARD_RADIUS
+  };
+  const distLeaderboard = Math.hypot(x - toLeaderboard.x, z - toLeaderboard.z);
   const lenI = Math.hypot(dxI, dzI) || 1;
   const toInterior = {
     x: LIGHTHOUSE_INTERIOR_BASE.x + (dxI / lenI) * INTERIOR_RADIUS,
@@ -3849,11 +4076,12 @@ function clampToPlayableGround(x, z, allowMine = false) {
   const distMine = allowMine ? Math.hypot(x - toMine.x, z - toMine.z) : Number.POSITIVE_INFINITY;
   const toSwim = clampToRing(x, z, SWIM_MIN_RADIUS, SWIM_MAX_RADIUS);
   const distSwim = mineSwimBlocked ? Number.POSITIVE_INFINITY : Math.hypot(x - toSwim.x, z - toSwim.z);
-  if (distMain <= distLight && distMain <= distMineEntry && distMain <= distFishing && distMain <= distMarket && distMain <= distInterior && distMain <= distMine && distMain <= distSwim) return toMain;
-  if (distLight <= distMineEntry && distLight <= distFishing && distLight <= distMarket && distLight <= distInterior && distLight <= distMine && distLight <= distSwim) return toLight;
-  if (distMineEntry <= distFishing && distMineEntry <= distMarket && distMineEntry <= distInterior && distMineEntry <= distMine && distMineEntry <= distSwim) return toMineEntry;
-  if (distFishing <= distMarket && distFishing <= distInterior && distFishing <= distMine && distFishing <= distSwim) return toFishing;
-  if (distMarket <= distInterior && distMarket <= distMine && distMarket <= distSwim) return toMarket;
+  if (distMain <= distLight && distMain <= distMineEntry && distMain <= distFishing && distMain <= distMarket && distMain <= distLeaderboard && distMain <= distInterior && distMain <= distMine && distMain <= distSwim) return toMain;
+  if (distLight <= distMineEntry && distLight <= distFishing && distLight <= distMarket && distLight <= distLeaderboard && distLight <= distInterior && distLight <= distMine && distLight <= distSwim) return toLight;
+  if (distMineEntry <= distFishing && distMineEntry <= distMarket && distMineEntry <= distLeaderboard && distMineEntry <= distInterior && distMineEntry <= distMine && distMineEntry <= distSwim) return toMineEntry;
+  if (distFishing <= distMarket && distFishing <= distLeaderboard && distFishing <= distInterior && distFishing <= distMine && distFishing <= distSwim) return toFishing;
+  if (distMarket <= distLeaderboard && distMarket <= distInterior && distMarket <= distMine && distMarket <= distSwim) return toMarket;
+  if (distLeaderboard <= distInterior && distLeaderboard <= distMine && distLeaderboard <= distSwim) return toLeaderboard;
   if (distInterior <= distMine && distInterior <= distSwim) return toInterior;
   if (distMine <= distSwim) return toMine;
   return toSwim;
@@ -3870,6 +4098,7 @@ function isWaterAt(x, z) {
   if (Math.hypot(x - MINE_ENTRY_DOCK_POS.x, z - MINE_ENTRY_DOCK_POS.z) <= 14) return false;
   if (Math.hypot(x - FISHING_DOCK_POS.x, z - FISHING_DOCK_POS.z) <= 14) return false;
   if (Math.hypot(x - MARKET_DOCK_POS.x, z - MARKET_DOCK_POS.z) <= 14) return false;
+  if (Math.hypot(x - LEADERBOARD_DOCK_POS.x, z - LEADERBOARD_DOCK_POS.z) <= 14) return false;
 
   // Hard land-safe radius for the main island footprint.
   if (radius <= worldLimit + 8.4) return false;
@@ -3903,6 +4132,10 @@ function isWaterAt(x, z) {
   const dzK = z - MARKET_ISLAND_POS.z;
   const onMarketIslandLand = Math.hypot(dxK, dzK) <= MARKET_ISLAND_RADIUS + 3.2;
   if (onMarketIslandLand) return false;
+  const dxB = x - LEADERBOARD_ISLAND_POS.x;
+  const dzB = z - LEADERBOARD_ISLAND_POS.z;
+  const onLeaderboardIslandLand = Math.hypot(dxB, dzB) <= LEADERBOARD_ISLAND_RADIUS + 3.2;
+  if (onLeaderboardIslandLand) return false;
 
   if (isInDockWalkZone(x, z, 3.0, 2.5)) return false;
 
@@ -4163,6 +4396,7 @@ function canBoardBoat(local) {
     || distance2D(local, MINE_ENTRY_DOCK_POS) < 5
     || distance2D(local, FISHING_DOCK_POS) < 5
     || distance2D(local, MARKET_DOCK_POS) < 5
+    || distance2D(local, LEADERBOARD_DOCK_POS) < 5
   );
   const nearBoat = Boolean(boatState.mesh) && distance2D(local, boatState) < 5.2;
   if (nearBoat) return true;
@@ -4331,6 +4565,7 @@ function isWithinPlayableWorld(x, z, allowMine = false) {
   const MINE_ENTRY_RADIUS = MINE_ENTRY_ISLAND_RADIUS;
   const FISHING_RADIUS = FISHING_ISLAND_RADIUS;
   const MARKET_RADIUS = MARKET_ISLAND_RADIUS;
+  const LEADERBOARD_RADIUS = LEADERBOARD_ISLAND_RADIUS;
   const INTERIOR_RADIUS = INTERIOR_PLAY_RADIUS;
   const mineSwimBlocked = allowMine && blocksMineEscapeSwim(x, z);
   const onMain = Math.hypot(x, z) <= MAIN_RADIUS;
@@ -4338,10 +4573,11 @@ function isWithinPlayableWorld(x, z, allowMine = false) {
   const onMineEntryIsland = Math.hypot(x - MINE_ENTRY_ISLAND_POS.x, z - MINE_ENTRY_ISLAND_POS.z) <= MINE_ENTRY_RADIUS;
   const onFishingIsland = Math.hypot(x - FISHING_ISLAND_POS.x, z - FISHING_ISLAND_POS.z) <= FISHING_RADIUS;
   const onMarketIsland = Math.hypot(x - MARKET_ISLAND_POS.x, z - MARKET_ISLAND_POS.z) <= MARKET_RADIUS;
+  const onLeaderboardIsland = Math.hypot(x - LEADERBOARD_ISLAND_POS.x, z - LEADERBOARD_ISLAND_POS.z) <= LEADERBOARD_RADIUS;
   const inInterior = Math.hypot(x - LIGHTHOUSE_INTERIOR_BASE.x, z - LIGHTHOUSE_INTERIOR_BASE.z) <= INTERIOR_RADIUS;
   const inMine = allowMine && mineDistance(x, z) <= MINE_PLAY_RADIUS;
   const inSwim = isSwimZone(x, z) && !mineSwimBlocked;
-  return onMain || onLighthouse || onMineEntryIsland || onFishingIsland || onMarketIsland || inInterior || inMine || inSwim;
+  return onMain || onLighthouse || onMineEntryIsland || onFishingIsland || onMarketIsland || onLeaderboardIsland || inInterior || inMine || inSwim;
 }
 
 function setBeaconVisual(active) {
@@ -9508,12 +9744,17 @@ function updateInteractionHint() {
     interactHintEl.textContent = 'Walk through the lighthouse door to enter';
     return;
   }
+  if (distance2D(local, LEADERBOARD_ISLAND_POS) < LEADERBOARD_ISLAND_RADIUS - 2.1) {
+    interactHintEl.textContent = 'Leaderboard Island: top players are shown on the board';
+    return;
+  }
   if (
     distance2D(local, ISLAND_DOCK_POS) < 6
     || distance2D(local, LIGHTHOUSE_DOCK_POS) < 6
     || distance2D(local, MINE_ENTRY_DOCK_POS) < 6
     || distance2D(local, FISHING_DOCK_POS) < 6
     || distance2D(local, MARKET_DOCK_POS) < 6
+    || distance2D(local, LEADERBOARD_DOCK_POS) < 6
   ) {
     interactHintEl.textContent = 'Press E to board boat';
     return;
@@ -9582,6 +9823,9 @@ function drawMinimap() {
   minimapCtx.beginPath();
   minimapCtx.arc(center + MARKET_DOCK_POS.x * scale, center + MARKET_DOCK_POS.z * scale, 3, 0, Math.PI * 2);
   minimapCtx.fill();
+  minimapCtx.beginPath();
+  minimapCtx.arc(center + LEADERBOARD_DOCK_POS.x * scale, center + LEADERBOARD_DOCK_POS.z * scale, 3, 0, Math.PI * 2);
+  minimapCtx.fill();
   minimapCtx.fillStyle = '#f8fafc';
   minimapCtx.beginPath();
   minimapCtx.arc(center + LIGHTHOUSE_POS.x * scale, center + LIGHTHOUSE_POS.z * scale, 4, 0, Math.PI * 2);
@@ -9607,6 +9851,10 @@ function drawMinimap() {
   minimapCtx.fillStyle = '#f59e0b';
   minimapCtx.beginPath();
   minimapCtx.arc(center + MARKET_ISLAND_POS.x * scale, center + MARKET_ISLAND_POS.z * scale, 3, 0, Math.PI * 2);
+  minimapCtx.fill();
+  minimapCtx.fillStyle = '#a78bfa';
+  minimapCtx.beginPath();
+  minimapCtx.arc(center + LEADERBOARD_ISLAND_POS.x * scale, center + LEADERBOARD_ISLAND_POS.z * scale, 3, 0, Math.PI * 2);
   minimapCtx.fill();
 
   if (boatState.mesh) {
@@ -9723,6 +9971,7 @@ function animate(nowMs) {
     _waterfallAccumDelta = 0;
   }
   updateMineVisuals(nowMs, delta);
+  updateLeaderboardBoard(nowMs);
 
   const local = players.get(localPlayerId);
   updateTorchLight(local, nowMs);

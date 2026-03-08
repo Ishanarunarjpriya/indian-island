@@ -95,6 +95,8 @@ const FISHING_ISLAND_POS = { x: WORLD_LIMIT * 2.2, z: WORLD_LIMIT * 1.85 };
 const FISHING_ISLAND_RADIUS = 11.9;
 const MARKET_ISLAND_POS = { x: -WORLD_LIMIT * 2.35, z: WORLD_LIMIT * 1.2 };
 const MARKET_ISLAND_RADIUS = 11.5;
+const LEADERBOARD_ISLAND_POS = { x: WORLD_LIMIT * 2.8, z: -WORLD_LIMIT * 0.95 };
+const LEADERBOARD_ISLAND_RADIUS = 11.2;
 const INTERACT_RANGE = 4;
 const CHAT_MAX_LEN = 220;
 const NAME_MAX_LEN = 18;
@@ -349,6 +351,7 @@ function clampToPlayableGround(x, z, allowMine = false) {
   const MINE_ENTRY_RADIUS = MINE_ENTRY_ISLAND_RADIUS;
   const FISHING_RADIUS = FISHING_ISLAND_RADIUS;
   const MARKET_RADIUS = MARKET_ISLAND_RADIUS;
+  const LEADERBOARD_RADIUS = LEADERBOARD_ISLAND_RADIUS;
   const mineDist = Math.hypot(x - MINE_POS.x, z - MINE_POS.z);
   const mineSwimBlocked = allowMine && mineDist <= MINE_SWIM_BLOCK_RADIUS;
   const onMain = Math.hypot(x, z) <= MAIN_RADIUS;
@@ -356,11 +359,12 @@ function clampToPlayableGround(x, z, allowMine = false) {
   const onMineEntryIsland = Math.hypot(x - MINE_ENTRY_ISLAND_POS.x, z - MINE_ENTRY_ISLAND_POS.z) <= MINE_ENTRY_RADIUS;
   const onFishingIsland = Math.hypot(x - FISHING_ISLAND_POS.x, z - FISHING_ISLAND_POS.z) <= FISHING_RADIUS;
   const onMarketIsland = Math.hypot(x - MARKET_ISLAND_POS.x, z - MARKET_ISLAND_POS.z) <= MARKET_RADIUS;
+  const onLeaderboardIsland = Math.hypot(x - LEADERBOARD_ISLAND_POS.x, z - LEADERBOARD_ISLAND_POS.z) <= LEADERBOARD_RADIUS;
   const onInterior = Math.hypot(x - INTERIOR_POS.x, z - INTERIOR_POS.z) <= INTERIOR_RADIUS;
   const onMine = allowMine && mineDist <= MINE_PLAY_RADIUS;
   const radius = Math.hypot(x, z);
   const onSwimRing = radius >= SWIM_MIN_RADIUS && radius <= SWIM_MAX_RADIUS && !mineSwimBlocked;
-  if (onMain || onLighthouse || onMineEntryIsland || onFishingIsland || onMarketIsland || onInterior || onMine || onSwimRing) {
+  if (onMain || onLighthouse || onMineEntryIsland || onFishingIsland || onMarketIsland || onLeaderboardIsland || onInterior || onMine || onSwimRing) {
     return { x, z };
   }
 
@@ -399,6 +403,14 @@ function clampToPlayableGround(x, z, allowMine = false) {
     z: MARKET_ISLAND_POS.z + (dzK / lenK) * MARKET_RADIUS
   };
   const distMarket = Math.hypot(x - toMarket.x, z - toMarket.z);
+  const dxB = x - LEADERBOARD_ISLAND_POS.x;
+  const dzB = z - LEADERBOARD_ISLAND_POS.z;
+  const lenB = Math.hypot(dxB, dzB) || 1;
+  const toLeaderboard = {
+    x: LEADERBOARD_ISLAND_POS.x + (dxB / lenB) * LEADERBOARD_RADIUS,
+    z: LEADERBOARD_ISLAND_POS.z + (dzB / lenB) * LEADERBOARD_RADIUS
+  };
+  const distLeaderboard = Math.hypot(x - toLeaderboard.x, z - toLeaderboard.z);
 
   const dxI = x - INTERIOR_POS.x;
   const dzI = z - INTERIOR_POS.z;
@@ -429,6 +441,7 @@ function clampToPlayableGround(x, z, allowMine = false) {
     && distMain <= distMineEntry
     && distMain <= distFishing
     && distMain <= distMarket
+    && distMain <= distLeaderboard
     && distMain <= distInterior
     && distMain <= distSwim
     && distMain <= distMine
@@ -437,6 +450,7 @@ function clampToPlayableGround(x, z, allowMine = false) {
     distLighthouse <= distMineEntry
     && distLighthouse <= distFishing
     && distLighthouse <= distMarket
+    && distLighthouse <= distLeaderboard
     && distLighthouse <= distInterior
     && distLighthouse <= distSwim
     && distLighthouse <= distMine
@@ -444,12 +458,14 @@ function clampToPlayableGround(x, z, allowMine = false) {
   if (
     distMineEntry <= distFishing
     && distMineEntry <= distMarket
+    && distMineEntry <= distLeaderboard
     && distMineEntry <= distInterior
     && distMineEntry <= distSwim
     && distMineEntry <= distMine
   ) return toMineEntry;
-  if (distFishing <= distMarket && distFishing <= distInterior && distFishing <= distSwim && distFishing <= distMine) return toFishing;
-  if (distMarket <= distInterior && distMarket <= distSwim && distMarket <= distMine) return toMarket;
+  if (distFishing <= distMarket && distFishing <= distLeaderboard && distFishing <= distInterior && distFishing <= distSwim && distFishing <= distMine) return toFishing;
+  if (distMarket <= distLeaderboard && distMarket <= distInterior && distMarket <= distSwim && distMarket <= distMine) return toMarket;
+  if (distLeaderboard <= distInterior && distLeaderboard <= distSwim && distLeaderboard <= distMine) return toLeaderboard;
   if (distInterior <= distSwim && distInterior <= distMine) return toInterior;
   if (distMine <= distSwim) return toMine;
   return toSwim;
@@ -798,6 +814,48 @@ function progressSnapshot(progress) {
     }
   };
 }
+
+function buildLeaderboardRows(limitRaw = 8) {
+  const limit = clamp(Math.floor(Number(limitRaw) || 8), 1, 20);
+  const rows = [];
+  for (const [profileId, profile] of profiles.entries()) {
+    const progress = profile?.progress && typeof profile.progress === 'object'
+      ? profile.progress
+      : defaultProgress();
+    const xp = clamp(Math.floor(Number(progress.xp) || 0), 0, 2_000_000_000);
+    const level = levelProgressFromXp(xp).level;
+    const coins = clamp(Math.floor(Number(progress.coins) || 0), 0, 100_000_000);
+    rows.push({
+      profileId,
+      name: sanitizeName(profile?.name, `Player-${String(profileId).slice(0, 4)}`),
+      level,
+      xp,
+      coins
+    });
+  }
+  rows.sort((a, b) => {
+    if (b.coins !== a.coins) return b.coins - a.coins;
+    if (b.level !== a.level) return b.level - a.level;
+    if (b.xp !== a.xp) return b.xp - a.xp;
+    return a.name.localeCompare(b.name);
+  });
+  return rows.slice(0, limit).map((row, index) => ({
+    rank: index + 1,
+    name: row.name,
+    level: row.level,
+    xp: row.xp,
+    coins: row.coins
+  }));
+}
+
+app.get('/leaderboard', (req, res) => {
+  const limit = clamp(Math.floor(Number(req.query?.limit) || 8), 1, 20);
+  res.json({
+    ok: true,
+    generatedAt: Date.now(),
+    rows: buildLeaderboardRows(limit)
+  });
+});
 
 function fishCatchSnapshot(fish) {
   if (!fish || typeof fish !== 'object') return null;
