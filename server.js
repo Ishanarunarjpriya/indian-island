@@ -100,6 +100,11 @@ const LEADERBOARD_ISLAND_RADIUS = 11.2;
 const INTERACT_RANGE = 4;
 const CHAT_MAX_LEN = 220;
 const NAME_MAX_LEN = 18;
+const ACCOUNT_ROLE_TAG_BY_PROFILE_ID = new Map([
+  ['acct-devansh', 'Creator'],
+  ['acct-ishyfishyinthedishy', 'Co-Creator'],
+  ['acct-eye_wonder_who', 'Co-Creator']
+]);
 const CHAT_FILTER_WORDS = [
   'fuck',
   'fucking',
@@ -1104,6 +1109,11 @@ function filterChatText(text) {
   return String(text).replace(chatFilterPattern, (word) => '#'.repeat(word.length));
 }
 
+function accountRoleTagForProfileId(profileId) {
+  const key = String(profileId || '').trim().toLowerCase();
+  return ACCOUNT_ROLE_TAG_BY_PROFILE_ID.get(key) || null;
+}
+
 function hashPassword(password, salt = crypto.randomBytes(16).toString('hex')) {
   const hash = crypto.scryptSync(password, salt, 64).toString('hex');
   return { salt, hash };
@@ -1481,6 +1491,7 @@ function spawnPlayer(socket, profileId, username) {
   const spawn = {
     id: socket.id,
     profileId,
+    accountTag: accountRoleTagForProfileId(profileId),
     name: profile?.name || username || `Player-${socket.id.slice(0, 4)}`,
     x: spawnPoint.x,
     y: ISLAND_SURFACE_Y,
@@ -1638,6 +1649,7 @@ io.on('connection', (socket) => {
       x: current.x,
       y: current.y,
       z: current.z,
+      accountTag: accountRoleTagForProfileId(current.profileId),
       name: current.name,
       color: current.color,
       appearance: current.appearance,
@@ -2394,6 +2406,7 @@ io.on('connection', (socket) => {
 
     io.emit('chat', {
       fromId: socket.id,
+      fromTag: accountRoleTagForProfileId(sender.profileId),
       fromName: sender.name,
       text,
       sentAt: Date.now()
@@ -2428,8 +2441,10 @@ io.on('connection', (socket) => {
     const sentAt = Date.now();
     io.to(target.id).emit('private:message', {
       fromId: socket.id,
+      fromTag: accountRoleTagForProfileId(sender.profileId),
       fromName: sender.name,
       toId: target.id,
+      toTag: accountRoleTagForProfileId(target.profileId),
       toName: target.name,
       text,
       sentAt
@@ -2438,6 +2453,7 @@ io.on('connection', (socket) => {
     if (typeof ack === 'function') ack({
       ok: true,
       toId: target.id,
+      toTag: accountRoleTagForProfileId(target.profileId),
       toName: target.name,
       text,
       sentAt

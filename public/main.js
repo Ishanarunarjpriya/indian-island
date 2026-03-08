@@ -2177,35 +2177,35 @@ function addLeaderboardIsland() {
   const postMat = new THREE.MeshStandardMaterial({ color: 0x4a311f, roughness: 0.92 });
   const frameMat = new THREE.MeshStandardMaterial({ color: 0x5e4026, roughness: 0.9 });
   const panelBackMat = new THREE.MeshStandardMaterial({ color: 0x14263a, roughness: 0.86 });
-  const postGeo = new THREE.BoxGeometry(0.24, 3.9, 0.24);
+  const postGeo = new THREE.BoxGeometry(0.24, 5.6, 0.24);
   for (const x of [-2.5, 2.5]) {
     const post = new THREE.Mesh(postGeo, postMat);
-    post.position.set(x, 2.05, -0.45);
+    post.position.set(x, 2.9, -0.45);
     post.castShadow = true;
     post.receiveShadow = true;
     board.add(post);
   }
   const topBeam = new THREE.Mesh(new THREE.BoxGeometry(5.35, 0.28, 0.26), frameMat);
-  topBeam.position.set(0, 3.94, -0.45);
+  topBeam.position.set(0, 5.6, -0.45);
   topBeam.castShadow = true;
   board.add(topBeam);
 
-  const boardBack = new THREE.Mesh(new THREE.BoxGeometry(5.2, 3.0, 0.26), panelBackMat);
-  boardBack.position.set(0, 2.2, -0.36);
+  const boardBack = new THREE.Mesh(new THREE.BoxGeometry(5.2, 4.6, 0.26), panelBackMat);
+  boardBack.position.set(0, 2.9, -0.36);
   boardBack.castShadow = true;
   boardBack.receiveShadow = true;
   board.add(boardBack);
 
   const boardFace = new THREE.Mesh(
-    new THREE.PlaneGeometry(4.9, 2.7),
+    new THREE.PlaneGeometry(4.9, 4.25),
     new THREE.MeshStandardMaterial({ map: leaderboardBoardTexture, roughness: 0.8, metalness: 0.02 })
   );
-  boardFace.position.set(0, 2.2, -0.2);
+  boardFace.position.set(0, 2.9, -0.2);
   boardFace.castShadow = true;
   board.add(boardFace);
 
   const sign = makeTextSign('Leaderboard', 3.0, 0.72, '#14263a', '#f8fafc');
-  sign.position.set(0, 4.35, -0.22);
+  sign.position.set(0, 6.05, -0.22);
   board.add(sign);
   scene.add(board);
   addWorldCollider(LEADERBOARD_ISLAND_POS.x, LEADERBOARD_ISLAND_POS.z, 2.9, 'stall');
@@ -5137,7 +5137,7 @@ function applyPlayerCustomization(id, name, color, appearancePayload) {
   applyHeldGearVisual(player);
 
   if (player.label) {
-    player.label.textContent = player.name;
+    player.label.textContent = displayNameWithTag(player.name, player.accountTag);
   }
 
   if (id === localPlayerId) {
@@ -5181,7 +5181,9 @@ function addPlayer(data) {
 
   const tag = document.createElement('div');
   tag.className = 'player-tag';
-  tag.textContent = data.name || `Player-${String(data.id).slice(0, 4)}`;
+  const baseName = data.name || `Player-${String(data.id).slice(0, 4)}`;
+  const accountTag = normalizeAccountTag(data?.accountTag);
+  tag.textContent = displayNameWithTag(baseName, accountTag);
   nameTagsEl.appendChild(tag);
 
   const bubble = document.createElement('div');
@@ -5195,7 +5197,8 @@ function addPlayer(data) {
     y: data.y ?? 0,
     vy: 0,
     z: data.z,
-    name: data.name || `Player-${String(data.id).slice(0, 4)}`,
+    name: baseName,
+    accountTag,
     color: appearance.shirt,
     appearance,
     emoteType: null,
@@ -5254,6 +5257,18 @@ function showChatBubble(id, text) {
   player.bubble.style.display = 'block';
   player.bubble.style.opacity = '1';
   player.bubbleUntil = Date.now() + CHAT_BUBBLE_MS;
+}
+
+function normalizeAccountTag(value) {
+  const raw = typeof value === 'string' ? value.trim() : '';
+  if (!raw) return null;
+  return raw.slice(0, 24);
+}
+
+function displayNameWithTag(name, accountTag = null) {
+  const base = String(name || '').trim() || 'Player';
+  const tag = normalizeAccountTag(accountTag);
+  return tag ? `[${tag}] ${base}` : base;
 }
 
 function capitalizeWord(value) {
@@ -6647,7 +6662,15 @@ function updateHud() {
   updateQuestPanel();
 }
 
-function appendChatLine({ fromName, text, sentAt, isSystem = false, isPrivate = false, isOutgoingPrivate = false }) {
+function appendChatLine({
+  fromName,
+  fromTag = null,
+  text,
+  sentAt,
+  isSystem = false,
+  isPrivate = false,
+  isOutgoingPrivate = false
+}) {
   const row = document.createElement('li');
   if (isSystem) row.classList.add('system');
   if (isPrivate) row.classList.add('private');
@@ -6657,7 +6680,7 @@ function appendChatLine({ fromName, text, sentAt, isSystem = false, isPrivate = 
     minute: '2-digit'
   });
 
-  const safeName = isSystem ? 'System' : fromName || 'Player';
+  const safeName = isSystem ? 'System' : displayNameWithTag(fromName || 'Player', fromTag);
   const label = isPrivate
     ? (isOutgoingPrivate ? `To ${safeName} (private)` : `${safeName} (private)`)
     : safeName;
@@ -8063,7 +8086,7 @@ socket.on('playerJoined', (payload) => {
   if (!isAuthenticated) return;
   addPlayer(payload);
   appendChatLine({
-    text: `${payload.name || 'A player'} joined the island.`,
+    text: `${displayNameWithTag(payload.name || 'A player', payload?.accountTag)} joined the island.`,
     isSystem: true
   });
 });
@@ -8073,7 +8096,7 @@ socket.on('playerLeft', (id) => {
   const player = players.get(id);
   removePlayer(id);
   appendChatLine({
-    text: `${player?.name || `Player-${id.slice(0, 4)}`} left the island.`,
+    text: `${displayNameWithTag(player?.name || `Player-${id.slice(0, 4)}`, player?.accountTag)} left the island.`,
     isSystem: true
   });
 });
@@ -8083,6 +8106,7 @@ socket.on('playerMoved', ({
   x,
   y,
   z,
+  accountTag,
   name,
   color,
   appearance,
@@ -8111,6 +8135,12 @@ socket.on('playerMoved', ({
   }
   if (typeof isFishing === 'boolean') {
     player.isFishing = isFishing;
+  }
+  if (typeof accountTag === 'string' || accountTag == null) {
+    player.accountTag = normalizeAccountTag(accountTag);
+    if (player.label) {
+      player.label.textContent = displayNameWithTag(player.name, player.accountTag);
+    }
   }
   applyHeldGearVisual(player);
   if (typeof name === 'string' || typeof color === 'string' || appearance) {
@@ -8218,17 +8248,27 @@ socket.on('interactableUpdated', (payload) => {
   updateBeaconState(payload);
 });
 
-socket.on('chat', ({ fromId, fromName, text, sentAt }) => {
-  const resolvedName = fromId ? players.get(fromId)?.name || fromName : fromName;
-  appendChatLine({ fromName: resolvedName, text, sentAt, isSystem: fromName === 'System' });
+socket.on('chat', ({ fromId, fromTag, fromName, text, sentAt }) => {
+  const knownPlayer = fromId ? players.get(fromId) : null;
+  const resolvedName = knownPlayer?.name || fromName;
+  const resolvedTag = knownPlayer?.accountTag ?? normalizeAccountTag(fromTag);
+  appendChatLine({
+    fromName: resolvedName,
+    fromTag: resolvedTag,
+    text,
+    sentAt,
+    isSystem: fromName === 'System'
+  });
   if (fromId) {
     showChatBubble(fromId, text);
   }
 });
 
-socket.on('private:message', ({ fromId, fromName, text, sentAt }) => {
-  const resolvedName = fromId ? players.get(fromId)?.name || fromName : fromName;
-  appendChatLine({ fromName: resolvedName, text, sentAt, isPrivate: true });
+socket.on('private:message', ({ fromId, fromTag, fromName, text, sentAt }) => {
+  const knownPlayer = fromId ? players.get(fromId) : null;
+  const resolvedName = knownPlayer?.name || fromName;
+  const resolvedTag = knownPlayer?.accountTag ?? normalizeAccountTag(fromTag);
+  appendChatLine({ fromName: resolvedName, fromTag: resolvedTag, text, sentAt, isPrivate: true });
   if (fromId) {
     showChatBubble(fromId, `(private) ${text}`);
   }
@@ -8460,6 +8500,7 @@ chatFormEl.addEventListener('submit', (event) => {
       }
       appendChatLine({
         fromName: resp.toName || resolved.recipient.name,
+        fromTag: resp.toTag || players.get(resolved.recipient.id)?.accountTag || null,
         text: resp.text || privateCommand.message,
         sentAt: resp.sentAt,
         isPrivate: true,
