@@ -6522,7 +6522,9 @@ async function ensureVoiceConfigLoaded() {
     } catch {
       voiceIceServers = [...DEFAULT_VOICE_ICE_SERVERS];
     }
-  })();
+  })().finally(() => {
+    voiceConfigLoadPromise = null;
+  });
   return voiceConfigLoadPromise;
 }
 
