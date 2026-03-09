@@ -178,10 +178,10 @@ const ORE_SELL_PRICE = {
 };
 const HOME_ROOM_PAINT_PRICE = 90;
 const HOME_ROOM_FURNITURE_SHOP = {
-  bed: { label: 'Bed', price: 520, stock: 1, occasional: false },
-  table: { label: 'Table', price: 320, stock: 1, occasional: false },
-  lamp: { label: 'Lamp', price: 220, stock: 1, occasional: true, availabilityChance: 0.62 },
-  plant: { label: 'Plant', price: 180, stock: 1, occasional: true, availabilityChance: 0.48 }
+  bed: { label: 'Bed', price: 520, stock: 1, occasionallyAvailable: false },
+  table: { label: 'Table', price: 320, stock: 1, occasionallyAvailable: false },
+  lamp: { label: 'Lamp', price: 220, stock: 1, occasionallyAvailable: true, availabilityChance: 0.62 },
+  plant: { label: 'Plant', price: 180, stock: 1, occasionallyAvailable: true, availabilityChance: 0.48 }
 };
 const HOME_ROOM_FURNITURE_PRICE = Object.fromEntries(
   Object.entries(HOME_ROOM_FURNITURE_SHOP).map(([itemId, item]) => [itemId, item.price])
@@ -377,6 +377,7 @@ function clampToPlayableGround(x, z, allowMine = false) {
   const MINE_ENTRY_RADIUS = MINE_ENTRY_ISLAND_RADIUS;
   const FISHING_RADIUS = FISHING_ISLAND_RADIUS;
   const MARKET_RADIUS = MARKET_ISLAND_RADIUS;
+  const FURNITURE_RADIUS = FURNITURE_ISLAND_RADIUS;
   const LEADERBOARD_RADIUS = LEADERBOARD_ISLAND_RADIUS;
   const HOUSE_ROOM_PLAY_RADIUS = HOUSE_ROOM_RADIUS;
   const mineDist = Math.hypot(x - MINE_POS.x, z - MINE_POS.z);
@@ -386,13 +387,14 @@ function clampToPlayableGround(x, z, allowMine = false) {
   const onMineEntryIsland = Math.hypot(x - MINE_ENTRY_ISLAND_POS.x, z - MINE_ENTRY_ISLAND_POS.z) <= MINE_ENTRY_RADIUS;
   const onFishingIsland = Math.hypot(x - FISHING_ISLAND_POS.x, z - FISHING_ISLAND_POS.z) <= FISHING_RADIUS;
   const onMarketIsland = Math.hypot(x - MARKET_ISLAND_POS.x, z - MARKET_ISLAND_POS.z) <= MARKET_RADIUS;
+  const onFurnitureIsland = Math.hypot(x - FURNITURE_ISLAND_POS.x, z - FURNITURE_ISLAND_POS.z) <= FURNITURE_RADIUS;
   const onLeaderboardIsland = Math.hypot(x - LEADERBOARD_ISLAND_POS.x, z - LEADERBOARD_ISLAND_POS.z) <= LEADERBOARD_RADIUS;
   const onInterior = Math.hypot(x - INTERIOR_POS.x, z - INTERIOR_POS.z) <= INTERIOR_RADIUS;
   const onHouseRoom = Math.hypot(x - HOUSE_ROOM_POS.x, z - HOUSE_ROOM_POS.z) <= HOUSE_ROOM_PLAY_RADIUS;
   const onMine = allowMine && mineDist <= MINE_PLAY_RADIUS;
   const radius = Math.hypot(x, z);
   const onSwimRing = radius >= SWIM_MIN_RADIUS && radius <= SWIM_MAX_RADIUS && !mineSwimBlocked;
-  if (onMain || onLighthouse || onMineEntryIsland || onFishingIsland || onMarketIsland || onLeaderboardIsland || onInterior || onHouseRoom || onMine || onSwimRing) {
+  if (onMain || onLighthouse || onMineEntryIsland || onFishingIsland || onMarketIsland || onFurnitureIsland || onLeaderboardIsland || onInterior || onHouseRoom || onMine || onSwimRing) {
     return { x, z };
   }
 
@@ -431,6 +433,14 @@ function clampToPlayableGround(x, z, allowMine = false) {
     z: MARKET_ISLAND_POS.z + (dzK / lenK) * MARKET_RADIUS
   };
   const distMarket = Math.hypot(x - toMarket.x, z - toMarket.z);
+  const dxR = x - FURNITURE_ISLAND_POS.x;
+  const dzR = z - FURNITURE_ISLAND_POS.z;
+  const lenR = Math.hypot(dxR, dzR) || 1;
+  const toFurniture = {
+    x: FURNITURE_ISLAND_POS.x + (dxR / lenR) * FURNITURE_RADIUS,
+    z: FURNITURE_ISLAND_POS.z + (dzR / lenR) * FURNITURE_RADIUS
+  };
+  const distFurniture = Math.hypot(x - toFurniture.x, z - toFurniture.z);
   const dxB = x - LEADERBOARD_ISLAND_POS.x;
   const dzB = z - LEADERBOARD_ISLAND_POS.z;
   const lenB = Math.hypot(dxB, dzB) || 1;
@@ -477,6 +487,7 @@ function clampToPlayableGround(x, z, allowMine = false) {
     && distMain <= distMineEntry
     && distMain <= distFishing
     && distMain <= distMarket
+    && distMain <= distFurniture
     && distMain <= distLeaderboard
     && distMain <= distInterior
     && distMain <= distHouseRoom
@@ -487,6 +498,7 @@ function clampToPlayableGround(x, z, allowMine = false) {
     distLighthouse <= distMineEntry
     && distLighthouse <= distFishing
     && distLighthouse <= distMarket
+    && distLighthouse <= distFurniture
     && distLighthouse <= distLeaderboard
     && distLighthouse <= distInterior
     && distLighthouse <= distHouseRoom
@@ -496,14 +508,16 @@ function clampToPlayableGround(x, z, allowMine = false) {
   if (
     distMineEntry <= distFishing
     && distMineEntry <= distMarket
+    && distMineEntry <= distFurniture
     && distMineEntry <= distLeaderboard
     && distMineEntry <= distInterior
     && distMineEntry <= distHouseRoom
     && distMineEntry <= distSwim
     && distMineEntry <= distMine
   ) return toMineEntry;
-  if (distFishing <= distMarket && distFishing <= distLeaderboard && distFishing <= distInterior && distFishing <= distHouseRoom && distFishing <= distSwim && distFishing <= distMine) return toFishing;
-  if (distMarket <= distLeaderboard && distMarket <= distInterior && distMarket <= distHouseRoom && distMarket <= distSwim && distMarket <= distMine) return toMarket;
+  if (distFishing <= distMarket && distFishing <= distFurniture && distFishing <= distLeaderboard && distFishing <= distInterior && distFishing <= distHouseRoom && distFishing <= distSwim && distFishing <= distMine) return toFishing;
+  if (distMarket <= distFurniture && distMarket <= distLeaderboard && distMarket <= distInterior && distMarket <= distHouseRoom && distMarket <= distSwim && distMarket <= distMine) return toMarket;
+  if (distFurniture <= distLeaderboard && distFurniture <= distInterior && distFurniture <= distHouseRoom && distFurniture <= distSwim && distFurniture <= distMine) return toFurniture;
   if (distLeaderboard <= distInterior && distLeaderboard <= distHouseRoom && distLeaderboard <= distSwim && distLeaderboard <= distMine) return toLeaderboard;
   if (distInterior <= distHouseRoom && distInterior <= distSwim && distInterior <= distMine) return toInterior;
   if (distHouseRoom <= distSwim && distHouseRoom <= distMine) return toHouseRoom;
@@ -698,6 +712,47 @@ function sanitizeHomeRoom(value) {
   return base;
 }
 
+function currentFurnitureTraderCycleId(now = Date.now()) {
+  return Math.max(0, Math.floor(now / FURNITURE_TRADER_CYCLE_MS));
+}
+
+function defaultFurnitureTraderState(now = Date.now()) {
+  return {
+    cycleId: currentFurnitureTraderCycleId(now),
+    purchasedThisCycle: {}
+  };
+}
+
+function sanitizeFurnitureTraderState(value, now = Date.now()) {
+  const base = defaultFurnitureTraderState(now);
+  if (!value || typeof value !== 'object') return base;
+  const cycleId = Number(value.cycleId);
+  if (Number.isFinite(cycleId) && cycleId >= 0) {
+    base.cycleId = Math.floor(cycleId);
+  }
+  const purchasedThisCycle = value.purchasedThisCycle && typeof value.purchasedThisCycle === 'object'
+    ? value.purchasedThisCycle
+    : {};
+  for (const itemId of HOME_ROOM_FURNITURE_IDS) {
+    const count = clamp(Math.floor(Number(purchasedThisCycle[itemId]) || 0), 0, 99);
+    if (count > 0) {
+      base.purchasedThisCycle[itemId] = count;
+    }
+  }
+  return base;
+}
+
+function ensureFurnitureTraderProgressShape(progress, now = Date.now()) {
+  const currentCycleId = currentFurnitureTraderCycleId(now);
+  const state = sanitizeFurnitureTraderState(progress?.furnitureTrader, now);
+  if (state.cycleId !== currentCycleId) {
+    progress.furnitureTrader = defaultFurnitureTraderState(now);
+  } else {
+    progress.furnitureTrader = state;
+  }
+  return progress.furnitureTrader;
+}
+
 function defaultProgress() {
   return {
     coins: 0,
@@ -715,7 +770,8 @@ function defaultProgress() {
     fishingQuestSeed: 1,
     fishingQuestCompletions: 0,
     fishingQuest: defaultFishingQuest(0, 1),
-    homeRoom: defaultHomeRoom()
+    homeRoom: defaultHomeRoom(),
+    furnitureTrader: defaultFurnitureTraderState()
   };
 }
 
@@ -856,6 +912,7 @@ function sanitizeProgress(value) {
   const fishingQuest = sanitizeFishingQuest(value.fishingQuest, fishingQuestCompletions, fishingQuestSeed);
   const maxStaminaBonusPct = clamp(Math.floor(Number(value.maxStaminaBonusPct) || 0), 0, MAX_STAMINA_BONUS_PCT);
   const homeRoom = sanitizeHomeRoom(value.homeRoom);
+  const furnitureTrader = sanitizeFurnitureTraderState(value.furnitureTrader);
   const xp = clamp(Math.floor(Number(value.xp) || 0), 0, 2_000_000_000);
   const levelState = levelProgressFromXp(xp);
   return {
@@ -874,13 +931,77 @@ function sanitizeProgress(value) {
     fishingQuestSeed,
     fishingQuestCompletions,
     fishingQuest,
-    homeRoom
+    homeRoom,
+    furnitureTrader
   };
 }
 
 function nextQuest(progress) {
   progress.questSeed = clamp((progress.questSeed || 1) + 1, 1, 1_000_000);
   progress.quest = defaultQuest(progress.questSeed);
+}
+
+function deterministicHash(value) {
+  const text = String(value || '');
+  let hash = 2166136261;
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function furnitureStockForCycle(itemId, cycleId) {
+  const item = HOME_ROOM_FURNITURE_SHOP[itemId];
+  if (!item) return 0;
+  if (item.occasionallyAvailable === true) {
+    const roll = deterministicHash(`furniture-stock:${cycleId}:${itemId}`) / 0x100000000;
+    if (roll >= Number(item.availabilityChance || 0)) {
+      return 0;
+    }
+  }
+  return clamp(Math.floor(Number(item.stock) || 0), 0, 99);
+}
+
+function furnitureTraderPurchasesUsed(state) {
+  if (!state || typeof state !== 'object') return 0;
+  return HOME_ROOM_FURNITURE_IDS.reduce((sum, itemId) => {
+    const count = clamp(Math.floor(Number(state.purchasedThisCycle?.[itemId]) || 0), 0, 99);
+    return sum + count;
+  }, 0);
+}
+
+function furnitureTraderSnapshot(progress, now = Date.now()) {
+  const state = ensureFurnitureTraderProgressShape(progress, now);
+  const room = sanitizeHomeRoom(progress.homeRoom);
+  const cycleId = state.cycleId;
+  const purchasesUsed = clamp(furnitureTraderPurchasesUsed(state), 0, FURNITURE_TRADER_PURCHASE_LIMIT);
+  return {
+    cycleId,
+    cycleEndsAt: (cycleId + 1) * FURNITURE_TRADER_CYCLE_MS,
+    cycleDurationMs: FURNITURE_TRADER_CYCLE_MS,
+    purchaseLimit: FURNITURE_TRADER_PURCHASE_LIMIT,
+    purchasesUsed,
+    purchasesRemaining: Math.max(0, FURNITURE_TRADER_PURCHASE_LIMIT - purchasesUsed),
+    items: HOME_ROOM_FURNITURE_IDS.map((itemId) => {
+      const item = HOME_ROOM_FURNITURE_SHOP[itemId];
+      const stock = furnitureStockForCycle(itemId, cycleId);
+      const purchased = clamp(Math.floor(Number(state.purchasedThisCycle?.[itemId]) || 0), 0, 99);
+      const remaining = Math.max(0, stock - purchased);
+      return {
+        itemId,
+        label: item.label,
+        price: item.price,
+        occasional: item.occasionallyAvailable === true,
+        availableThisCycle: stock > 0,
+        stock,
+        purchased,
+        remaining,
+        soldOut: stock > 0 && remaining <= 0,
+        owned: room.ownedFurniture?.[itemId] === true
+      };
+    })
+  };
 }
 
 function progressSnapshot(progress) {
@@ -904,6 +1025,7 @@ function progressSnapshot(progress) {
     fishingQuestCompletions: clamp(Math.floor(Number(progress.fishingQuestCompletions) || 0), 0, 1_000_000),
     fishingQuest: progress.fishingQuest ? { ...progress.fishingQuest } : defaultFishingQuest(0, 1),
     homeRoom: sanitizeHomeRoom(progress.homeRoom),
+    furnitureTrader: furnitureTraderSnapshot(progress),
     shop: {
       order: [...PICKAXE_ORDER],
       price: { ...PICKAXE_PRICE },
@@ -1141,8 +1263,58 @@ function isNearMarketIsland(actor, extra = 4.4) {
   return distance2DPoint(actor, MARKET_ISLAND_POS) <= (MARKET_ISLAND_RADIUS + extra);
 }
 
+function isNearFurnitureIsland(actor, extra = 4.4) {
+  return distance2DPoint(actor, FURNITURE_ISLAND_POS) <= (FURNITURE_ISLAND_RADIUS + extra);
+}
+
 function isNearMineOreTrader(actor, extra = 3.8) {
   return distance2DPoint(actor, MINE_ORE_TRADER_POS) <= extra;
+}
+
+function tryPurchaseFurniture(actor, itemId, now = Date.now()) {
+  const progress = actor?.progress;
+  if (!actor || !progress) {
+    return { ok: false, error: 'Not authenticated.' };
+  }
+  if (!isNearFurnitureIsland(actor)) {
+    return { ok: false, error: 'Buy furniture at the Furniture Trader island.' };
+  }
+  progress.homeRoom = sanitizeHomeRoom(progress.homeRoom);
+  const room = progress.homeRoom;
+  ensureFurnitureTraderProgressShape(progress, now);
+  const trader = furnitureTraderSnapshot(progress, now);
+  const item = trader.items.find((entry) => entry.itemId === itemId) || null;
+  if (!item) {
+    return { ok: false, error: 'Unknown furniture item.' };
+  }
+  if (room.ownedFurniture[itemId] === true) {
+    return { ok: false, error: 'You already own this furniture.' };
+  }
+  if (trader.purchasesRemaining <= 0) {
+    return { ok: false, error: 'Furniture purchase limit reached for this stock cycle.' };
+  }
+  if (!item.availableThisCycle) {
+    return { ok: false, error: `${item.label} is not in stock this cycle.` };
+  }
+  if (item.remaining <= 0) {
+    return { ok: false, error: `${item.label} is sold out until the next stock refresh.` };
+  }
+  const price = clamp(Math.floor(Number(item.price) || 0), 0, 100_000_000);
+  if (progress.coins < price) {
+    return { ok: false, error: `Need ${price} coins.` };
+  }
+  progress.coins -= price;
+  room.ownedFurniture[itemId] = true;
+  room.placedFurniture[itemId] = true;
+  const purchased = clamp(Math.floor(Number(progress.furnitureTrader?.purchasedThisCycle?.[itemId]) || 0) + 1, 0, 99);
+  progress.furnitureTrader.purchasedThisCycle[itemId] = purchased;
+  return {
+    ok: true,
+    itemId,
+    label: item.label,
+    price,
+    furnitureTrader: furnitureTraderSnapshot(progress, now)
+  };
 }
 
 function fishMatchesQuestTarget(quest, fishId) {
@@ -2032,6 +2204,53 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('shop:getFurnitureTrader', (payload, ack) => {
+    const actor = players.get(socket.id);
+    const progress = actor?.progress;
+    if (!actor || !progress) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Not authenticated.' });
+      return;
+    }
+    ensureFurnitureTraderProgressShape(progress);
+    if (typeof ack === 'function') {
+      ack({
+        ok: true,
+        furnitureTrader: furnitureTraderSnapshot(progress),
+        progress: progressSnapshot(progress)
+      });
+    }
+  });
+
+  socket.on('shop:buyFurniture', (payload, ack) => {
+    const actor = players.get(socket.id);
+    const progress = actor?.progress;
+    if (!actor || !progress) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Not authenticated.' });
+      return;
+    }
+    const itemId = typeof payload?.itemId === 'string' ? payload.itemId.trim().toLowerCase() : '';
+    if (!HOME_ROOM_FURNITURE_IDS.includes(itemId)) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Unknown furniture item.' });
+      return;
+    }
+    const result = tryPurchaseFurniture(actor, itemId);
+    if (!result.ok) {
+      if (typeof ack === 'function') ack(result);
+      return;
+    }
+    persistPlayerProgress(actor, { immediate: true });
+    emitProgress(socket, actor);
+    if (typeof ack === 'function') {
+      ack({
+        ok: true,
+        itemId: result.itemId,
+        price: result.price,
+        furnitureTrader: result.furnitureTrader,
+        progress: progressSnapshot(progress)
+      });
+    }
+  });
+
   socket.on('home:buyFurniture', (payload, ack) => {
     const actor = players.get(socket.id);
     const progress = actor?.progress;
@@ -2039,32 +2258,24 @@ io.on('connection', (socket) => {
       if (typeof ack === 'function') ack({ ok: false, error: 'Not authenticated.' });
       return;
     }
-    progress.homeRoom = sanitizeHomeRoom(progress.homeRoom);
-    const room = progress.homeRoom;
     const itemId = typeof payload?.itemId === 'string' ? payload.itemId.trim().toLowerCase() : '';
     if (!HOME_ROOM_FURNITURE_IDS.includes(itemId)) {
       if (typeof ack === 'function') ack({ ok: false, error: 'Unknown furniture item.' });
       return;
     }
-    if (room.ownedFurniture[itemId] === true) {
-      if (typeof ack === 'function') ack({ ok: false, error: 'You already own this furniture.' });
+    const result = tryPurchaseFurniture(actor, itemId);
+    if (!result.ok) {
+      if (typeof ack === 'function') ack(result);
       return;
     }
-    const price = clamp(Math.floor(Number(HOME_ROOM_FURNITURE_PRICE[itemId]) || 0), 0, 100_000_000);
-    if (progress.coins < price) {
-      if (typeof ack === 'function') ack({ ok: false, error: `Need ${price} coins.` });
-      return;
-    }
-    progress.coins -= price;
-    room.ownedFurniture[itemId] = true;
-    room.placedFurniture[itemId] = true;
     persistPlayerProgress(actor, { immediate: true });
     emitProgress(socket, actor);
     if (typeof ack === 'function') {
       ack({
         ok: true,
-        itemId,
-        price,
+        itemId: result.itemId,
+        price: result.price,
+        furnitureTrader: result.furnitureTrader,
         progress: progressSnapshot(progress)
       });
     }

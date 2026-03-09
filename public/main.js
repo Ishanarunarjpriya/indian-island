@@ -63,12 +63,82 @@ const HOME_ROOM_FLOOR_OPTIONS = {
   pine: { label: 'Pine', color: '#a67c52' }
 };
 const HOME_ROOM_FURNITURE_SHOP = {
-  bed: { label: 'Bed', price: 520 },
-  table: { label: 'Table', price: 320 },
-  lamp: { label: 'Lamp', price: 220 },
-  plant: { label: 'Plant', price: 180 }
+  bed: { label: 'Bed', price: 520, occasionallyAvailable: false },
+  table: { label: 'Table', price: 320, occasionallyAvailable: false },
+  lamp: { label: 'Lamp', price: 220, occasionallyAvailable: true },
+  plant: { label: 'Plant', price: 180, occasionallyAvailable: true }
 };
 const HOME_ROOM_FURNITURE_ORDER = Object.keys(HOME_ROOM_FURNITURE_SHOP);
+
+function defaultFurnitureTraderItemState(itemId) {
+  const item = HOME_ROOM_FURNITURE_SHOP[itemId];
+  return {
+    itemId,
+    label: item?.label || capitalizeWord(itemId),
+    price: Math.max(0, Math.floor(Number(item?.price) || 0)),
+    occasional: item?.occasionallyAvailable === true,
+    availableThisCycle: item?.occasionallyAvailable !== true,
+    stock: item?.occasionallyAvailable === true ? 0 : 1,
+    purchased: 0,
+    remaining: item?.occasionallyAvailable === true ? 0 : 1,
+    soldOut: false,
+    owned: false
+  };
+}
+
+function defaultFurnitureTraderViewState() {
+  return {
+    cycleId: 0,
+    cycleEndsAt: 0,
+    cycleDurationMs: 0,
+    purchaseLimit: 0,
+    purchasesUsed: 0,
+    purchasesRemaining: 0,
+    items: HOME_ROOM_FURNITURE_ORDER.map((itemId) => defaultFurnitureTraderItemState(itemId))
+  };
+}
+
+function normalizeFurnitureTraderState(value) {
+  const base = defaultFurnitureTraderViewState();
+  if (!value || typeof value !== 'object') return base;
+  base.cycleId = Math.max(0, Math.floor(Number(value.cycleId) || 0));
+  base.cycleEndsAt = Math.max(0, Math.floor(Number(value.cycleEndsAt) || 0));
+  base.cycleDurationMs = Math.max(0, Math.floor(Number(value.cycleDurationMs) || 0));
+  base.purchaseLimit = Math.max(0, Math.floor(Number(value.purchaseLimit) || 0));
+  base.purchasesUsed = Math.max(0, Math.floor(Number(value.purchasesUsed) || 0));
+  base.purchasesRemaining = Math.max(0, Math.floor(Number(value.purchasesRemaining) || 0));
+  const byId = new Map(
+    Array.isArray(value.items)
+      ? value.items
+        .map((entry) => {
+          const itemId = typeof entry?.itemId === 'string' ? entry.itemId.trim().toLowerCase() : '';
+          return HOME_ROOM_FURNITURE_ORDER.includes(itemId) ? [itemId, entry] : null;
+        })
+        .filter(Boolean)
+      : []
+  );
+  base.items = HOME_ROOM_FURNITURE_ORDER.map((itemId) => {
+    const fallback = defaultFurnitureTraderItemState(itemId);
+    const entry = byId.get(itemId);
+    if (!entry || typeof entry !== 'object') return fallback;
+    const stock = Math.max(0, Math.floor(Number(entry.stock) || 0));
+    const purchased = Math.max(0, Math.floor(Number(entry.purchased) || 0));
+    const remaining = Math.max(0, Math.floor(Number(entry.remaining) || 0));
+    return {
+      itemId,
+      label: typeof entry.label === 'string' && entry.label.trim() ? entry.label.trim() : fallback.label,
+      price: Math.max(0, Math.floor(Number(entry.price) || fallback.price)),
+      occasional: entry.occasional === true || fallback.occasional,
+      availableThisCycle: entry.availableThisCycle === true,
+      stock,
+      purchased,
+      remaining,
+      soldOut: entry.soldOut === true,
+      owned: entry.owned === true
+    };
+  });
+  return base;
+}
 
 function defaultHomeRoomState() {
   return {
@@ -131,6 +201,7 @@ const questState = {
   fishingQuestCompletions: 0,
   maxStaminaBonusPct: 0,
   homeRoom: defaultHomeRoomState(),
+  furnitureTrader: defaultFurnitureTraderViewState(),
   quest: null,
   shop: {
     order: ['wood', 'stone', 'iron', 'diamond'],
@@ -185,6 +256,8 @@ const FISHING_ISLAND_POS = new THREE.Vector3(worldLimit * 2.2, 0, worldLimit * 1
 const FISHING_ISLAND_RADIUS = 11.9;
 const MARKET_ISLAND_POS = new THREE.Vector3(-worldLimit * 2.35, 0, worldLimit * 1.2);
 const MARKET_ISLAND_RADIUS = 11.5;
+const FURNITURE_ISLAND_POS = new THREE.Vector3(worldLimit * 0.35, 0, worldLimit * 3.0);
+const FURNITURE_ISLAND_RADIUS = 11.4;
 const LEADERBOARD_ISLAND_POS = new THREE.Vector3(worldLimit * 2.8, 0, -worldLimit * 0.95);
 const LEADERBOARD_ISLAND_RADIUS = 11.2;
 const toMainFromMineEntryX = -MINE_ENTRY_ISLAND_POS.x;
@@ -214,6 +287,15 @@ const MARKET_DOCK_POS = new THREE.Vector3(
   MARKET_ISLAND_POS.z + (toMainFromMarketZ / toMainFromMarketLen) * 10.6
 );
 const MARKET_DOCK_YAW = Math.atan2(-(MARKET_DOCK_POS.z - MARKET_ISLAND_POS.z), MARKET_DOCK_POS.x - MARKET_ISLAND_POS.x);
+const toMainFromFurnitureX = -FURNITURE_ISLAND_POS.x;
+const toMainFromFurnitureZ = -FURNITURE_ISLAND_POS.z;
+const toMainFromFurnitureLen = Math.hypot(toMainFromFurnitureX, toMainFromFurnitureZ) || 1;
+const FURNITURE_DOCK_POS = new THREE.Vector3(
+  FURNITURE_ISLAND_POS.x + (toMainFromFurnitureX / toMainFromFurnitureLen) * 10.5,
+  1.36,
+  FURNITURE_ISLAND_POS.z + (toMainFromFurnitureZ / toMainFromFurnitureLen) * 10.5
+);
+const FURNITURE_DOCK_YAW = Math.atan2(-(FURNITURE_DOCK_POS.z - FURNITURE_ISLAND_POS.z), FURNITURE_DOCK_POS.x - FURNITURE_ISLAND_POS.x);
 const toMainFromLeaderboardX = -LEADERBOARD_ISLAND_POS.x;
 const toMainFromLeaderboardZ = -LEADERBOARD_ISLAND_POS.z;
 const toMainFromLeaderboardLen = Math.hypot(toMainFromLeaderboardX, toMainFromLeaderboardZ) || 1;
@@ -242,6 +324,7 @@ const MINE_ORE_TRADER_POS = new THREE.Vector3(MINE_POS.x + 30.5, 1.35, MINE_POS.
 const VENDOR_STAND_Y = 1.35;
 const FISHING_VENDOR_POS = new THREE.Vector3(FISHING_ISLAND_POS.x - 1.3, 1.35, FISHING_ISLAND_POS.z + 1.2);
 const MARKET_VENDOR_POS = new THREE.Vector3(MARKET_ISLAND_POS.x + 1.5, 1.35, MARKET_ISLAND_POS.z - 1.2);
+const FURNITURE_VENDOR_POS = new THREE.Vector3(FURNITURE_ISLAND_POS.x - 1.1, 1.35, FURNITURE_ISLAND_POS.z - 1.0);
 const FISHING_SPOT_RADIUS = 3.2;
 const FISHING_ROD_PRICE = 780;
 const ORE_SELL_PRICE = { stone: 2, iron: 8, gold: 22, diamond: 120 };
@@ -503,6 +586,11 @@ const oreSellAmountEl = document.getElementById('ore-sell-amount');
 const oreSellPricePreviewEl = document.getElementById('ore-sell-price-preview');
 const oreSellBtnEl = document.getElementById('ore-sell-btn');
 const oreStatusEl = document.getElementById('ore-status');
+const furnitureTraderModalEl = document.getElementById('furniture-trader-modal');
+const furnitureTraderCloseEl = document.getElementById('furniture-trader-close');
+const furnitureTraderSummaryEl = document.getElementById('furniture-trader-summary');
+const furnitureTraderListEl = document.getElementById('furniture-trader-list');
+const furnitureTraderStatusEl = document.getElementById('furniture-trader-status');
 const homeModalEl = document.getElementById('home-modal');
 const homeCloseEl = document.getElementById('home-close');
 const homeWallSelectEl = document.getElementById('home-wall-select');
@@ -514,7 +602,7 @@ const homeStatusEl = document.getElementById('home-status');
 const gameplayPanels = [
   'hud', 'mini-panel', 'chat-panel', 'world-state', 'top-left-toolbar',
   'inventory-bar', 'mining-meter', 'fishing-meter', 'fish-catch-card',
-  'fish-index-modal', 'inventory-modal', 'market-modal', 'rod-shop-modal', 'ore-modal', 'home-modal'
+  'fish-index-modal', 'inventory-modal', 'market-modal', 'rod-shop-modal', 'ore-modal', 'furniture-trader-modal', 'home-modal'
 ]
   .map((id) => document.getElementById(id))
   .filter(Boolean);
@@ -643,6 +731,7 @@ let inventoryModalOpen = false;
 let marketModalOpen = false;
 let rodShopModalOpen = false;
 let oreModalOpen = false;
+let furnitureTraderModalOpen = false;
 let homeModalOpen = false;
 let inventoryViewTab = 'ores';
 let rodShopSnapshot = null;
@@ -725,16 +814,18 @@ function closeCommerceModals() {
   marketModalOpen = false;
   rodShopModalOpen = false;
   oreModalOpen = false;
+  furnitureTraderModalOpen = false;
   homeModalOpen = false;
   inventoryModalEl?.classList.add('hidden');
   marketModalEl?.classList.add('hidden');
   rodShopModalEl?.classList.add('hidden');
   oreModalEl?.classList.add('hidden');
+  furnitureTraderModalEl?.classList.add('hidden');
   homeModalEl?.classList.add('hidden');
 }
 
 function isAnyGameplayOverlayOpen() {
-  return fishIndexOpen || inventoryModalOpen || marketModalOpen || rodShopModalOpen || oreModalOpen || homeModalOpen;
+  return fishIndexOpen || inventoryModalOpen || marketModalOpen || rodShopModalOpen || oreModalOpen || furnitureTraderModalOpen || homeModalOpen;
 }
 
 function setFishIndexOpen(open) {
@@ -812,6 +903,23 @@ function setOreModalOpen(open) {
   oreModalOpen = true;
   oreModalEl?.classList.remove('hidden');
   renderOreModal();
+}
+
+function setFurnitureTraderModalOpen(open) {
+  if (!isAuthenticated && open) return;
+  if (!open) {
+    furnitureTraderModalOpen = false;
+    furnitureTraderModalEl?.classList.add('hidden');
+    return;
+  }
+  setMenuOpen(false);
+  setFishIndexOpen(false);
+  closeNpcDialogue();
+  closeCommerceModals();
+  furnitureTraderModalOpen = true;
+  furnitureTraderModalEl?.classList.remove('hidden');
+  setFurnitureTraderStatus('');
+  renderFurnitureTraderModal();
 }
 
 function setHomeModalOpen(open) {
@@ -990,6 +1098,7 @@ function clearSessionWorld() {
   closeCommerceModals();
   closeMineWarningDialog();
   closeNpcDialogue();
+  setFurnitureTraderStatus('');
   setHomeStatus('');
   refreshConsumeActionVisibility(null);
 }
@@ -1668,6 +1777,7 @@ function dockSlots() {
     { dock: MINE_ENTRY_DOCK_POS, yaw: MINE_ENTRY_DOCK_YAW },
     { dock: FISHING_DOCK_POS, yaw: FISHING_DOCK_YAW },
     { dock: MARKET_DOCK_POS, yaw: MARKET_DOCK_YAW },
+    { dock: FURNITURE_DOCK_POS, yaw: FURNITURE_DOCK_YAW },
     { dock: LEADERBOARD_DOCK_POS, yaw: LEADERBOARD_DOCK_YAW }
   ];
 }
@@ -2140,6 +2250,67 @@ function addMarketIsland() {
       marker
     });
   }
+}
+
+function addFurnitureIsland() {
+  const base = new THREE.Mesh(
+    new THREE.CylinderGeometry(FURNITURE_ISLAND_RADIUS + 1.8, FURNITURE_ISLAND_RADIUS + 3.4, 3.2, 34),
+    new THREE.MeshStandardMaterial({ color: 0x8b6d52, roughness: 0.95 })
+  );
+  base.position.set(FURNITURE_ISLAND_POS.x, -0.35, FURNITURE_ISLAND_POS.z);
+  base.receiveShadow = true;
+  scene.add(base);
+
+  const top = new THREE.Mesh(
+    new THREE.CylinderGeometry(FURNITURE_ISLAND_RADIUS, FURNITURE_ISLAND_RADIUS + 1.1, 1.2, 34),
+    new THREE.MeshStandardMaterial({ color: 0x7ca069, roughness: 0.9 })
+  );
+  top.position.set(FURNITURE_ISLAND_POS.x, 1.35, FURNITURE_ISLAND_POS.z);
+  top.receiveShadow = true;
+  scene.add(top);
+
+  const accentRing = new THREE.Mesh(
+    new THREE.RingGeometry(FURNITURE_ISLAND_RADIUS - 1.1, FURNITURE_ISLAND_RADIUS + 0.24, 40),
+    new THREE.MeshStandardMaterial({ color: 0xd5b48d, roughness: 0.92 })
+  );
+  accentRing.rotation.x = -Math.PI / 2;
+  accentRing.position.set(FURNITURE_ISLAND_POS.x, 1.38, FURNITURE_ISLAND_POS.z);
+  accentRing.receiveShadow = true;
+  scene.add(accentRing);
+
+  const crateMat = new THREE.MeshStandardMaterial({ color: 0x7c4a26, roughness: 0.88 });
+  for (let i = 0; i < 5; i += 1) {
+    const crate = new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.5 + (i % 2) * 0.16, 0.82), crateMat);
+    crate.position.set(
+      FURNITURE_ISLAND_POS.x + 1.9 - (i % 3) * 0.95,
+      1.62 + (i > 2 ? 0.28 : 0),
+      FURNITURE_ISLAND_POS.z + 2.7 - Math.floor(i / 3) * 0.95
+    );
+    crate.castShadow = true;
+    crate.receiveShadow = true;
+    scene.add(crate);
+  }
+
+  const vendor = createVendorNpc({
+    shirtColor: 0xfb7185,
+    skinColor: 0xe0b18f,
+    hairColor: 0x3f2a1a,
+    hatColor: 0x7c2d12
+  });
+  const stall = createVendorStall({
+    label: 'Furniture',
+    signColor: '#46271a',
+    canopyA: 0xfb7185,
+    canopyB: 0xfffbeb,
+    vendor
+  });
+  vendor.position.set(0, VENDOR_STAND_Y, -3);
+  const furnitureHouseYaw = Math.atan2(-FURNITURE_VENDOR_POS.x, -FURNITURE_VENDOR_POS.z);
+  addWoodHouse(FURNITURE_VENDOR_POS.x, FURNITURE_VENDOR_POS.z, furnitureHouseYaw, { collisions: false });
+  stall.position.set(FURNITURE_VENDOR_POS.x, 0, FURNITURE_VENDOR_POS.z);
+  stall.rotation.y = furnitureHouseYaw;
+  scene.add(stall);
+  addWorldCollider(FURNITURE_VENDOR_POS.x, FURNITURE_VENDOR_POS.z, 1.04, 'npc');
 }
 
 function drawLeaderboardBoardTexture() {
@@ -3936,6 +4107,8 @@ function addLandmarks() {
   addDock(FISHING_DOCK_POS, FISHING_DOCK_YAW, { segments: 11, plankLength: 2.8, plankWidth: 2.2, spacing: 1.05 });
   addMarketIsland();
   addDock(MARKET_DOCK_POS, MARKET_DOCK_YAW, { segments: 11, plankLength: 2.8, plankWidth: 2.2, spacing: 1.05 });
+  addFurnitureIsland();
+  addDock(FURNITURE_DOCK_POS, FURNITURE_DOCK_YAW, { segments: 11, plankLength: 2.8, plankWidth: 2.2, spacing: 1.05 });
   addLeaderboardIsland();
   addDock(LEADERBOARD_DOCK_POS, LEADERBOARD_DOCK_YAW, { segments: 11, plankLength: 2.8, plankWidth: 2.2, spacing: 1.05 });
   addLighthouseInterior();
@@ -4442,6 +4615,7 @@ function isWaterAt(x, z) {
   if (Math.hypot(x - MINE_ENTRY_DOCK_POS.x, z - MINE_ENTRY_DOCK_POS.z) <= 14) return false;
   if (Math.hypot(x - FISHING_DOCK_POS.x, z - FISHING_DOCK_POS.z) <= 14) return false;
   if (Math.hypot(x - MARKET_DOCK_POS.x, z - MARKET_DOCK_POS.z) <= 14) return false;
+  if (Math.hypot(x - FURNITURE_DOCK_POS.x, z - FURNITURE_DOCK_POS.z) <= 14) return false;
   if (Math.hypot(x - LEADERBOARD_DOCK_POS.x, z - LEADERBOARD_DOCK_POS.z) <= 14) return false;
 
   // Hard land-safe radius for the main island footprint.
@@ -4476,6 +4650,10 @@ function isWaterAt(x, z) {
   const dzK = z - MARKET_ISLAND_POS.z;
   const onMarketIslandLand = Math.hypot(dxK, dzK) <= MARKET_ISLAND_RADIUS + 3.2;
   if (onMarketIslandLand) return false;
+  const dxR = x - FURNITURE_ISLAND_POS.x;
+  const dzR = z - FURNITURE_ISLAND_POS.z;
+  const onFurnitureIslandLand = Math.hypot(dxR, dzR) <= FURNITURE_ISLAND_RADIUS + 3.2;
+  if (onFurnitureIslandLand) return false;
   const dxB = x - LEADERBOARD_ISLAND_POS.x;
   const dzB = z - LEADERBOARD_ISLAND_POS.z;
   const onLeaderboardIslandLand = Math.hypot(dxB, dzB) <= LEADERBOARD_ISLAND_RADIUS + 3.2;
@@ -4745,6 +4923,7 @@ function canBoardBoat(local) {
     || distance2D(local, MINE_ENTRY_DOCK_POS) < 5
     || distance2D(local, FISHING_DOCK_POS) < 5
     || distance2D(local, MARKET_DOCK_POS) < 5
+    || distance2D(local, FURNITURE_DOCK_POS) < 5
     || distance2D(local, LEADERBOARD_DOCK_POS) < 5
   );
   const nearBoat = Boolean(boatState.mesh) && distance2D(local, boatState) < 5.2;
@@ -6096,10 +6275,121 @@ function setOreStatus(text, color = '#cbd5e1') {
   oreStatusEl.style.color = color;
 }
 
+function setFurnitureTraderStatus(text, color = '#cbd5e1') {
+  if (!furnitureTraderStatusEl) return;
+  furnitureTraderStatusEl.textContent = text || '';
+  furnitureTraderStatusEl.style.color = color;
+}
+
 function setHomeStatus(text, color = '#cbd5e1') {
   if (!homeStatusEl) return;
   homeStatusEl.textContent = text || '';
   homeStatusEl.style.color = color;
+}
+
+function formatRefreshCountdown(targetAt) {
+  const remainingMs = Math.max(0, Math.floor(Number(targetAt) || 0) - Date.now());
+  if (remainingMs <= 0) return 'refreshing now';
+  const totalSeconds = Math.ceil(remainingMs / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (minutes > 0) return `${minutes}m ${seconds}s`;
+  return `${seconds}s`;
+}
+
+function renderFurnitureTraderModal() {
+  const trader = normalizeFurnitureTraderState(questState.furnitureTrader);
+  questState.furnitureTrader = trader;
+  if (furnitureTraderSummaryEl) {
+    const purchasesLeft = Math.max(0, Math.floor(Number(trader.purchasesRemaining) || 0));
+    const refreshText = formatRefreshCountdown(trader.cycleEndsAt);
+    furnitureTraderSummaryEl.textContent = `Purchases left this stock cycle: ${purchasesLeft} / ${Math.max(0, Math.floor(Number(trader.purchaseLimit) || 0))} | Refresh in ${refreshText}`;
+  }
+  if (!furnitureTraderListEl) return;
+  furnitureTraderListEl.innerHTML = '';
+  for (const item of trader.items) {
+    const card = document.createElement('article');
+    card.className = 'market-section';
+    card.style.margin = '0';
+    card.style.padding = '10px';
+
+    const title = document.createElement('h3');
+    title.textContent = item.label;
+    title.style.margin = '0';
+    title.style.fontSize = '15px';
+
+    const meta = document.createElement('div');
+    meta.style.fontSize = '12px';
+    meta.style.color = '#cbd5e1';
+    if (item.owned) {
+      meta.textContent = 'Status: owned and ready for your room.';
+    } else if (!item.availableThisCycle) {
+      meta.textContent = item.occasional
+        ? 'Occasional stock item. Check the next refresh.'
+        : 'Unavailable this cycle.';
+    } else if (item.remaining <= 0) {
+      meta.textContent = 'Status: sold out for this cycle.';
+    } else {
+      const stockText = item.stock === 1 ? '1 copy this cycle' : `${item.remaining.toLocaleString()} of ${item.stock.toLocaleString()} left`;
+      meta.textContent = `Price: ${item.price.toLocaleString()} coins | ${stockText}${item.occasional ? ' | Occasional stock' : ''}`;
+    }
+
+    const action = document.createElement('button');
+    const cycleLimitReached = trader.purchasesRemaining <= 0;
+    if (item.owned) {
+      action.textContent = 'Owned';
+      action.disabled = true;
+    } else if (!item.availableThisCycle) {
+      action.textContent = 'Not In Stock';
+      action.disabled = true;
+    } else if (item.remaining <= 0) {
+      action.textContent = 'Sold Out';
+      action.disabled = true;
+    } else if (cycleLimitReached) {
+      action.textContent = 'Cycle Limit Reached';
+      action.disabled = true;
+    } else {
+      action.textContent = `Buy (${item.price.toLocaleString()} coins)`;
+      action.disabled = questState.coins < item.price;
+      action.addEventListener('click', () => {
+        socket.emit('shop:buyFurniture', { itemId: item.itemId }, (resp) => {
+          if (!resp?.ok) {
+            setFurnitureTraderStatus(resp?.error || 'Could not buy furniture.', '#fecaca');
+            return;
+          }
+          if (resp.progress) {
+            applyProgressState(resp.progress);
+          } else if (resp.furnitureTrader) {
+            questState.furnitureTrader = normalizeFurnitureTraderState(resp.furnitureTrader);
+          }
+          renderFurnitureTraderModal();
+          setFurnitureTraderStatus(`Bought ${item.label}. It is now placed in your room.`, '#86efac');
+        });
+      });
+    }
+
+    card.append(title, meta, action);
+    furnitureTraderListEl.appendChild(card);
+  }
+}
+
+function loadFurnitureTraderModal(statusText = '') {
+  setFurnitureTraderStatus(statusText || 'Checking furniture stock...', '#93c5fd');
+  socket.emit('shop:getFurnitureTrader', {}, (resp) => {
+    if (!resp?.ok) {
+      setFurnitureTraderStatus(resp?.error || 'Could not load furniture stock.', '#fecaca');
+      return;
+    }
+    if (resp.progress) {
+      applyProgressState(resp.progress);
+    } else if (resp.furnitureTrader) {
+      questState.furnitureTrader = normalizeFurnitureTraderState(resp.furnitureTrader);
+    }
+    renderFurnitureTraderModal();
+    setFurnitureTraderStatus(statusText || 'Some items rotate in and out of stock each cycle.', '#cbd5e1');
+  });
 }
 
 function applyHomeRoomVisuals() {
@@ -6180,25 +6470,9 @@ function renderHomeModal() {
       meta.style.color = '#cbd5e1';
       meta.textContent = owned
         ? (placed ? 'Status: placed in room' : 'Status: owned (stored)')
-        : `Price: ${item.price.toLocaleString()} coins`;
+        : `${item.occasionallyAvailable ? 'Occasional stock item' : 'Regular stock item'}: buy at the Furniture Trader island.`;
       const action = document.createElement('button');
-      if (!owned) {
-        action.textContent = `Buy (${item.price.toLocaleString()} coins)`;
-        action.disabled = questState.coins < item.price;
-        action.addEventListener('click', () => {
-          socket.emit('home:buyFurniture', { itemId }, (resp) => {
-            if (!resp?.ok) {
-              setHomeStatus(resp?.error || 'Could not buy furniture.', '#fecaca');
-              return;
-            }
-            if (resp.progress) {
-              applyProgressState(resp.progress);
-            }
-            setHomeStatus(`Bought ${item.label}.`, '#86efac');
-            renderHomeModal();
-          });
-        });
-      } else {
+      if (owned) {
         action.textContent = placed ? 'Store Item' : 'Place Item';
         action.addEventListener('click', () => {
           socket.emit('home:toggleFurniture', { itemId, placed: !placed }, (resp) => {
@@ -6213,6 +6487,9 @@ function renderHomeModal() {
             renderHomeModal();
           });
         });
+      } else {
+        action.textContent = 'Buy At Trader';
+        action.disabled = true;
       }
       card.append(title, meta, action);
       homeFurnitureListEl.appendChild(card);
@@ -6996,6 +7273,7 @@ function applyProgressState(progress) {
   questState.fishingQuestCompletions = Math.max(0, Math.floor(Number(progress.fishingQuestCompletions) || 0));
   questState.maxStaminaBonusPct = Math.max(0, Math.min(50, Math.floor(Number(progress.maxStaminaBonusPct) || 0)));
   questState.homeRoom = normalizeHomeRoomState(progress.homeRoom);
+  questState.furnitureTrader = normalizeFurnitureTraderState(progress.furnitureTrader);
   applyHomeRoomVisuals();
   if (questState.inventory.torch <= 0) {
     torchEquipped = false;
@@ -7024,6 +7302,9 @@ function applyProgressState(progress) {
   }
   if (oreModalOpen) {
     renderOreModal();
+  }
+  if (furnitureTraderModalOpen) {
+    renderFurnitureTraderModal();
   }
   if (homeModalOpen) {
     renderHomeModal();
@@ -7851,6 +8132,10 @@ function isNearFishMarket(local) {
   return Boolean(local) && distance2D(local, MARKET_VENDOR_POS) <= 3.3;
 }
 
+function isNearFurnitureVendor(local) {
+  return Boolean(local) && distance2D(local, FURNITURE_VENDOR_POS) <= 3.3;
+}
+
 function isNearHouseExit(local) {
   return Boolean(local) && inHouseRoom && distance2D(local, HOUSE_ROOM_EXIT_POS) <= HOUSE_ROOM_EXIT_INTERACT_RADIUS;
 }
@@ -8122,7 +8407,7 @@ function homeWorkshopInteract(local) {
   if (!isNearHouseWorkshop(local)) return false;
   setHomeModalOpen(true);
   if (!homeStatusEl?.textContent?.trim()) {
-    setHomeStatus('Use coins to buy furniture and paint your room.', '#cbd5e1');
+    setHomeStatus('Place owned furniture here and repaint your room.', '#cbd5e1');
   }
   return true;
 }
@@ -8139,6 +8424,13 @@ function fishMarketInteract(local) {
   setMarketModalOpen(true);
   renderMarketModal();
   setMarketStatus('Sell fish, or manage your fishing quest.', '#cbd5e1');
+  return true;
+}
+
+function furnitureTraderInteract(local) {
+  if (!isNearFurnitureVendor(local)) return false;
+  setFurnitureTraderModalOpen(true);
+  loadFurnitureTraderModal();
   return true;
 }
 
@@ -8442,6 +8734,7 @@ function hasManualInteractTarget(local) {
   if (distance2D(local, QUEST_NPC_POS) <= 3.2) return true;
   if (isNearFishingVendor(local)) return true;
   if (isNearFishMarket(local)) return true;
+  if (isNearFurnitureVendor(local)) return true;
   if (!inMine && nearestFishingSpot(local)) return true;
 
   const nearInteriorPortal = inLighthouseInterior && distance2D(local, INTERIOR_EXIT_PORTAL_POS) < 3.1;
@@ -8543,6 +8836,11 @@ function tryInteract() {
   }
 
   if (fishMarketInteract(local)) {
+    lastInteractAt = now;
+    return;
+  }
+
+  if (furnitureTraderInteract(local)) {
     lastInteractAt = now;
     return;
   }
@@ -8908,6 +9206,10 @@ window.addEventListener('keydown', (event) => {
     }
     if (oreModalOpen) {
       setOreModalOpen(false);
+      return;
+    }
+    if (furnitureTraderModalOpen) {
+      setFurnitureTraderModalOpen(false);
       return;
     }
     if (homeModalOpen) {
@@ -9507,6 +9809,10 @@ marketModalEl?.addEventListener('click', (event) => {
 oreCloseEl?.addEventListener('click', () => setOreModalOpen(false));
 oreModalEl?.addEventListener('click', (event) => {
   if (event.target === oreModalEl) setOreModalOpen(false);
+});
+furnitureTraderCloseEl?.addEventListener('click', () => setFurnitureTraderModalOpen(false));
+furnitureTraderModalEl?.addEventListener('click', (event) => {
+  if (event.target === furnitureTraderModalEl) setFurnitureTraderModalOpen(false);
 });
 homeCloseEl?.addEventListener('click', () => setHomeModalOpen(false));
 homeModalEl?.addEventListener('click', (event) => {
@@ -10356,7 +10662,7 @@ function updateInteractionHint() {
       interactHintEl.textContent = 'Press E to open home workshop';
       return;
     }
-    interactHintEl.textContent = 'Your Room: use Workshop marker to buy furniture and paint';
+    interactHintEl.textContent = 'Your Room: use Workshop marker to place furniture and paint';
     return;
   }
   if (inMine) {
@@ -10413,6 +10719,10 @@ function updateInteractionHint() {
     interactHintEl.textContent = 'Press E to open Market quests and selling';
     return;
   }
+  if (isNearFurnitureVendor(local)) {
+    interactHintEl.textContent = 'Press E to browse rotating furniture stock';
+    return;
+  }
   if (!inMine && nearestFishingSpot(local)) {
     interactHintEl.textContent = questState.hasFishingRod
       ? 'Press E/Space to cast line at this fishing spot'
@@ -10462,6 +10772,7 @@ function updateInteractionHint() {
     || distance2D(local, MINE_ENTRY_DOCK_POS) < 6
     || distance2D(local, FISHING_DOCK_POS) < 6
     || distance2D(local, MARKET_DOCK_POS) < 6
+    || distance2D(local, FURNITURE_DOCK_POS) < 6
     || distance2D(local, LEADERBOARD_DOCK_POS) < 6
   ) {
     interactHintEl.textContent = 'Press E to board boat';
@@ -10532,6 +10843,9 @@ function drawMinimap() {
   minimapCtx.arc(center + MARKET_DOCK_POS.x * scale, center + MARKET_DOCK_POS.z * scale, 3, 0, Math.PI * 2);
   minimapCtx.fill();
   minimapCtx.beginPath();
+  minimapCtx.arc(center + FURNITURE_DOCK_POS.x * scale, center + FURNITURE_DOCK_POS.z * scale, 3, 0, Math.PI * 2);
+  minimapCtx.fill();
+  minimapCtx.beginPath();
   minimapCtx.arc(center + LEADERBOARD_DOCK_POS.x * scale, center + LEADERBOARD_DOCK_POS.z * scale, 3, 0, Math.PI * 2);
   minimapCtx.fill();
   minimapCtx.fillStyle = '#f8fafc';
@@ -10559,6 +10873,10 @@ function drawMinimap() {
   minimapCtx.fillStyle = '#f59e0b';
   minimapCtx.beginPath();
   minimapCtx.arc(center + MARKET_ISLAND_POS.x * scale, center + MARKET_ISLAND_POS.z * scale, 3, 0, Math.PI * 2);
+  minimapCtx.fill();
+  minimapCtx.fillStyle = '#fb7185';
+  minimapCtx.beginPath();
+  minimapCtx.arc(center + FURNITURE_ISLAND_POS.x * scale, center + FURNITURE_ISLAND_POS.z * scale, 3, 0, Math.PI * 2);
   minimapCtx.fill();
   minimapCtx.fillStyle = '#a78bfa';
   minimapCtx.beginPath();

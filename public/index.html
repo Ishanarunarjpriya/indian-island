@@ -2415,6 +2415,23 @@
       </section>
     </div>
 
+    <div id="furniture-trader-modal" class="hidden modal-backdrop">
+      <section id="furniture-trader-panel" class="panel modal-panel">
+        <div class="modal-head">
+          <h2>Furniture Trader</h2>
+          <button id="furniture-trader-close" class="modal-close" type="button">✕</button>
+        </div>
+        <div class="market-grid">
+          <section class="market-section">
+            <h3>Rotating Stock</h3>
+            <div id="furniture-trader-summary">Loading furniture stock...</div>
+            <div id="furniture-trader-list"></div>
+          </section>
+          <p id="furniture-trader-status"></p>
+        </div>
+      </section>
+    </div>
+
     <div id="home-modal" class="hidden modal-backdrop">
       <section id="home-panel" class="panel modal-panel">
         <div class="modal-head">
@@ -2438,7 +2455,7 @@
             </div>
           </section>
           <section class="market-section">
-            <h3>Furniture</h3>
+            <h3>Owned Furniture</h3>
             <div id="home-furniture-list"></div>
           </section>
           <p id="home-status"></p>
