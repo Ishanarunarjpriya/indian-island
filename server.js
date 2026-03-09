@@ -95,6 +95,8 @@ const FISHING_ISLAND_POS = { x: WORLD_LIMIT * 2.2, z: WORLD_LIMIT * 1.85 };
 const FISHING_ISLAND_RADIUS = 11.9;
 const MARKET_ISLAND_POS = { x: -WORLD_LIMIT * 2.35, z: WORLD_LIMIT * 1.2 };
 const MARKET_ISLAND_RADIUS = 11.5;
+const FURNITURE_ISLAND_POS = { x: WORLD_LIMIT * 0.35, z: WORLD_LIMIT * 3.0 };
+const FURNITURE_ISLAND_RADIUS = 11.4;
 const LEADERBOARD_ISLAND_POS = { x: WORLD_LIMIT * 2.8, z: -WORLD_LIMIT * 0.95 };
 const LEADERBOARD_ISLAND_RADIUS = 11.2;
 const MAIN_HOUSE_POS = { x: -WORLD_LIMIT * 0.33, z: WORLD_LIMIT * 0.12 };
@@ -157,6 +159,8 @@ const MAX_STAMINA_BONUS_PCT = 50;
 const FISH_STAMINA_GAIN_PER_FISH = 5;
 const FISH_CATCH_COOLDOWN_MS = 1800;
 const FISH_CHALLENGE_EXPIRE_MS = 20_000;
+const FURNITURE_TRADER_CYCLE_MS = 30 * 60 * 1000;
+const FURNITURE_TRADER_PURCHASE_LIMIT = 2;
 const FISH_RARITY_ORDER = ['common', 'uncommon', 'rare', 'epic', 'legendary', 'mythic'];
 const FISH_SELL_BY_RARITY = {
   common: 18,
@@ -173,12 +177,15 @@ const ORE_SELL_PRICE = {
   diamond: 120
 };
 const HOME_ROOM_PAINT_PRICE = 90;
-const HOME_ROOM_FURNITURE_PRICE = {
-  bed: 520,
-  table: 320,
-  lamp: 220,
-  plant: 180
+const HOME_ROOM_FURNITURE_SHOP = {
+  bed: { label: 'Bed', price: 520, stock: 1, occasional: false },
+  table: { label: 'Table', price: 320, stock: 1, occasional: false },
+  lamp: { label: 'Lamp', price: 220, stock: 1, occasional: true, availabilityChance: 0.62 },
+  plant: { label: 'Plant', price: 180, stock: 1, occasional: true, availabilityChance: 0.48 }
 };
+const HOME_ROOM_FURNITURE_PRICE = Object.fromEntries(
+  Object.entries(HOME_ROOM_FURNITURE_SHOP).map(([itemId, item]) => [itemId, item.price])
+);
 const HOME_ROOM_FURNITURE_IDS = Object.keys(HOME_ROOM_FURNITURE_PRICE);
 const HOME_ROOM_WALL_PAINTS = new Set(['sand', 'sky', 'mint', 'slate', 'rose']);
 const HOME_ROOM_FLOOR_PAINTS = new Set(['oak', 'walnut', 'slate', 'pine']);
