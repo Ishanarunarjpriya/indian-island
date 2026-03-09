@@ -99,6 +99,8 @@ const LEADERBOARD_ISLAND_POS = { x: WORLD_LIMIT * 2.8, z: -WORLD_LIMIT * 0.95 };
 const LEADERBOARD_ISLAND_RADIUS = 11.2;
 const MAIN_HOUSE_POS = { x: -WORLD_LIMIT * 0.33, z: WORLD_LIMIT * 0.12 };
 const MAIN_HOUSE_NO_SPAWN_RADIUS = 8.8;
+const HOUSE_ROOM_POS = { x: -220, z: -210 };
+const HOUSE_ROOM_RADIUS = 10.8;
 const INTERACT_RANGE = 4;
 const CHAT_MAX_LEN = 220;
 const NAME_MAX_LEN = 18;
@@ -170,6 +172,16 @@ const ORE_SELL_PRICE = {
   gold: 22,
   diamond: 120
 };
+const HOME_ROOM_PAINT_PRICE = 90;
+const HOME_ROOM_FURNITURE_PRICE = {
+  bed: 520,
+  table: 320,
+  lamp: 220,
+  plant: 180
+};
+const HOME_ROOM_FURNITURE_IDS = Object.keys(HOME_ROOM_FURNITURE_PRICE);
+const HOME_ROOM_WALL_PAINTS = new Set(['sand', 'sky', 'mint', 'slate', 'rose']);
+const HOME_ROOM_FLOOR_PAINTS = new Set(['oak', 'walnut', 'slate', 'pine']);
 const FISH_ROD_TIERS = ['basic', 'reinforced', 'expert', 'master', 'mythic'];
 const FISH_ROD_DATA = {
   basic: {
@@ -359,6 +371,7 @@ function clampToPlayableGround(x, z, allowMine = false) {
   const FISHING_RADIUS = FISHING_ISLAND_RADIUS;
   const MARKET_RADIUS = MARKET_ISLAND_RADIUS;
   const LEADERBOARD_RADIUS = LEADERBOARD_ISLAND_RADIUS;
+  const HOUSE_ROOM_PLAY_RADIUS = HOUSE_ROOM_RADIUS;
   const mineDist = Math.hypot(x - MINE_POS.x, z - MINE_POS.z);
   const mineSwimBlocked = allowMine && mineDist <= MINE_SWIM_BLOCK_RADIUS;
   const onMain = Math.hypot(x, z) <= MAIN_RADIUS;
@@ -368,10 +381,11 @@ function clampToPlayableGround(x, z, allowMine = false) {
   const onMarketIsland = Math.hypot(x - MARKET_ISLAND_POS.x, z - MARKET_ISLAND_POS.z) <= MARKET_RADIUS;
   const onLeaderboardIsland = Math.hypot(x - LEADERBOARD_ISLAND_POS.x, z - LEADERBOARD_ISLAND_POS.z) <= LEADERBOARD_RADIUS;
   const onInterior = Math.hypot(x - INTERIOR_POS.x, z - INTERIOR_POS.z) <= INTERIOR_RADIUS;
+  const onHouseRoom = Math.hypot(x - HOUSE_ROOM_POS.x, z - HOUSE_ROOM_POS.z) <= HOUSE_ROOM_PLAY_RADIUS;
   const onMine = allowMine && mineDist <= MINE_PLAY_RADIUS;
   const radius = Math.hypot(x, z);
   const onSwimRing = radius >= SWIM_MIN_RADIUS && radius <= SWIM_MAX_RADIUS && !mineSwimBlocked;
-  if (onMain || onLighthouse || onMineEntryIsland || onFishingIsland || onMarketIsland || onLeaderboardIsland || onInterior || onMine || onSwimRing) {
+  if (onMain || onLighthouse || onMineEntryIsland || onFishingIsland || onMarketIsland || onLeaderboardIsland || onInterior || onHouseRoom || onMine || onSwimRing) {
     return { x, z };
   }
 
@@ -427,6 +441,14 @@ function clampToPlayableGround(x, z, allowMine = false) {
     z: INTERIOR_POS.z + (dzI / lenI) * INTERIOR_RADIUS
   };
   const distInterior = Math.hypot(x - toInterior.x, z - toInterior.z);
+  const dxH = x - HOUSE_ROOM_POS.x;
+  const dzH = z - HOUSE_ROOM_POS.z;
+  const lenH = Math.hypot(dxH, dzH) || 1;
+  const toHouseRoom = {
+    x: HOUSE_ROOM_POS.x + (dxH / lenH) * HOUSE_ROOM_PLAY_RADIUS,
+    z: HOUSE_ROOM_POS.z + (dzH / lenH) * HOUSE_ROOM_PLAY_RADIUS
+  };
+  const distHouseRoom = Math.hypot(x - toHouseRoom.x, z - toHouseRoom.z);
   const dxM = x - MINE_POS.x;
   const dzM = z - MINE_POS.z;
   const lenM = Math.hypot(dxM, dzM) || 1;
@@ -450,6 +472,7 @@ function clampToPlayableGround(x, z, allowMine = false) {
     && distMain <= distMarket
     && distMain <= distLeaderboard
     && distMain <= distInterior
+    && distMain <= distHouseRoom
     && distMain <= distSwim
     && distMain <= distMine
   ) return toMain;
@@ -459,6 +482,7 @@ function clampToPlayableGround(x, z, allowMine = false) {
     && distLighthouse <= distMarket
     && distLighthouse <= distLeaderboard
     && distLighthouse <= distInterior
+    && distLighthouse <= distHouseRoom
     && distLighthouse <= distSwim
     && distLighthouse <= distMine
   ) return toLighthouse;
@@ -467,13 +491,15 @@ function clampToPlayableGround(x, z, allowMine = false) {
     && distMineEntry <= distMarket
     && distMineEntry <= distLeaderboard
     && distMineEntry <= distInterior
+    && distMineEntry <= distHouseRoom
     && distMineEntry <= distSwim
     && distMineEntry <= distMine
   ) return toMineEntry;
-  if (distFishing <= distMarket && distFishing <= distLeaderboard && distFishing <= distInterior && distFishing <= distSwim && distFishing <= distMine) return toFishing;
-  if (distMarket <= distLeaderboard && distMarket <= distInterior && distMarket <= distSwim && distMarket <= distMine) return toMarket;
-  if (distLeaderboard <= distInterior && distLeaderboard <= distSwim && distLeaderboard <= distMine) return toLeaderboard;
-  if (distInterior <= distSwim && distInterior <= distMine) return toInterior;
+  if (distFishing <= distMarket && distFishing <= distLeaderboard && distFishing <= distInterior && distFishing <= distHouseRoom && distFishing <= distSwim && distFishing <= distMine) return toFishing;
+  if (distMarket <= distLeaderboard && distMarket <= distInterior && distMarket <= distHouseRoom && distMarket <= distSwim && distMarket <= distMine) return toMarket;
+  if (distLeaderboard <= distInterior && distLeaderboard <= distHouseRoom && distLeaderboard <= distSwim && distLeaderboard <= distMine) return toLeaderboard;
+  if (distInterior <= distHouseRoom && distInterior <= distSwim && distInterior <= distMine) return toInterior;
+  if (distHouseRoom <= distSwim && distHouseRoom <= distMine) return toHouseRoom;
   if (distMine <= distSwim) return toMine;
   return toSwim;
 }
@@ -624,6 +650,47 @@ function defaultQuest(seed = 1) {
   };
 }
 
+function defaultHomeRoom() {
+  return {
+    wallPaint: 'sand',
+    floorPaint: 'oak',
+    ownedFurniture: {
+      bed: false,
+      table: false,
+      lamp: false,
+      plant: false
+    },
+    placedFurniture: {
+      bed: false,
+      table: false,
+      lamp: false,
+      plant: false
+    }
+  };
+}
+
+function sanitizeHomeRoom(value) {
+  const base = defaultHomeRoom();
+  if (!value || typeof value !== 'object') return base;
+  const wallPaintRaw = typeof value.wallPaint === 'string' ? value.wallPaint.trim().toLowerCase() : '';
+  const floorPaintRaw = typeof value.floorPaint === 'string' ? value.floorPaint.trim().toLowerCase() : '';
+  if (HOME_ROOM_WALL_PAINTS.has(wallPaintRaw)) base.wallPaint = wallPaintRaw;
+  if (HOME_ROOM_FLOOR_PAINTS.has(floorPaintRaw)) base.floorPaint = floorPaintRaw;
+
+  const owned = value.ownedFurniture && typeof value.ownedFurniture === 'object'
+    ? value.ownedFurniture
+    : {};
+  const placed = value.placedFurniture && typeof value.placedFurniture === 'object'
+    ? value.placedFurniture
+    : {};
+  for (const furnitureId of HOME_ROOM_FURNITURE_IDS) {
+    const isOwned = owned[furnitureId] === true;
+    base.ownedFurniture[furnitureId] = isOwned;
+    base.placedFurniture[furnitureId] = isOwned && placed[furnitureId] === true;
+  }
+  return base;
+}
+
 function defaultProgress() {
   return {
     coins: 0,
@@ -640,7 +707,8 @@ function defaultProgress() {
     quest: defaultQuest(1),
     fishingQuestSeed: 1,
     fishingQuestCompletions: 0,
-    fishingQuest: defaultFishingQuest(0, 1)
+    fishingQuest: defaultFishingQuest(0, 1),
+    homeRoom: defaultHomeRoom()
   };
 }
 
@@ -780,6 +848,7 @@ function sanitizeProgress(value) {
   const fishingQuestSeed = clamp(Math.floor(Number(value.fishingQuestSeed) || 1), 1, 1_000_000);
   const fishingQuest = sanitizeFishingQuest(value.fishingQuest, fishingQuestCompletions, fishingQuestSeed);
   const maxStaminaBonusPct = clamp(Math.floor(Number(value.maxStaminaBonusPct) || 0), 0, MAX_STAMINA_BONUS_PCT);
+  const homeRoom = sanitizeHomeRoom(value.homeRoom);
   const xp = clamp(Math.floor(Number(value.xp) || 0), 0, 2_000_000_000);
   const levelState = levelProgressFromXp(xp);
   return {
@@ -797,7 +866,8 @@ function sanitizeProgress(value) {
     quest,
     fishingQuestSeed,
     fishingQuestCompletions,
-    fishingQuest
+    fishingQuest,
+    homeRoom
   };
 }
 
@@ -826,6 +896,7 @@ function progressSnapshot(progress) {
     fishingQuestSeed: clamp(Math.floor(Number(progress.fishingQuestSeed) || 1), 1, 1_000_000),
     fishingQuestCompletions: clamp(Math.floor(Number(progress.fishingQuestCompletions) || 0), 0, 1_000_000),
     fishingQuest: progress.fishingQuest ? { ...progress.fishingQuest } : defaultFishingQuest(0, 1),
+    homeRoom: sanitizeHomeRoom(progress.homeRoom),
     shop: {
       order: [...PICKAXE_ORDER],
       price: { ...PICKAXE_PRICE },
@@ -1949,6 +2020,125 @@ io.on('connection', (socket) => {
       ack({
         ok: true,
         rodShop: rodUpgradeSnapshot(progress),
+        progress: progressSnapshot(progress)
+      });
+    }
+  });
+
+  socket.on('home:buyFurniture', (payload, ack) => {
+    const actor = players.get(socket.id);
+    const progress = actor?.progress;
+    if (!actor || !progress) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Not authenticated.' });
+      return;
+    }
+    progress.homeRoom = sanitizeHomeRoom(progress.homeRoom);
+    const room = progress.homeRoom;
+    const itemId = typeof payload?.itemId === 'string' ? payload.itemId.trim().toLowerCase() : '';
+    if (!HOME_ROOM_FURNITURE_IDS.includes(itemId)) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Unknown furniture item.' });
+      return;
+    }
+    if (room.ownedFurniture[itemId] === true) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'You already own this furniture.' });
+      return;
+    }
+    const price = clamp(Math.floor(Number(HOME_ROOM_FURNITURE_PRICE[itemId]) || 0), 0, 100_000_000);
+    if (progress.coins < price) {
+      if (typeof ack === 'function') ack({ ok: false, error: `Need ${price} coins.` });
+      return;
+    }
+    progress.coins -= price;
+    room.ownedFurniture[itemId] = true;
+    room.placedFurniture[itemId] = true;
+    persistPlayerProgress(actor, { immediate: true });
+    emitProgress(socket, actor);
+    if (typeof ack === 'function') {
+      ack({
+        ok: true,
+        itemId,
+        price,
+        progress: progressSnapshot(progress)
+      });
+    }
+  });
+
+  socket.on('home:toggleFurniture', (payload, ack) => {
+    const actor = players.get(socket.id);
+    const progress = actor?.progress;
+    if (!actor || !progress) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Not authenticated.' });
+      return;
+    }
+    progress.homeRoom = sanitizeHomeRoom(progress.homeRoom);
+    const room = progress.homeRoom;
+    const itemId = typeof payload?.itemId === 'string' ? payload.itemId.trim().toLowerCase() : '';
+    if (!HOME_ROOM_FURNITURE_IDS.includes(itemId)) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Unknown furniture item.' });
+      return;
+    }
+    if (room.ownedFurniture[itemId] !== true) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Buy this furniture first.' });
+      return;
+    }
+    const desiredPlaced = payload?.placed === true || payload?.placed === false
+      ? payload.placed === true
+      : !(room.placedFurniture[itemId] === true);
+    room.placedFurniture[itemId] = desiredPlaced;
+    persistPlayerProgress(actor, { immediate: true });
+    emitProgress(socket, actor);
+    if (typeof ack === 'function') {
+      ack({
+        ok: true,
+        itemId,
+        placed: desiredPlaced,
+        progress: progressSnapshot(progress)
+      });
+    }
+  });
+
+  socket.on('home:setPaint', (payload, ack) => {
+    const actor = players.get(socket.id);
+    const progress = actor?.progress;
+    if (!actor || !progress) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Not authenticated.' });
+      return;
+    }
+    progress.homeRoom = sanitizeHomeRoom(progress.homeRoom);
+    const room = progress.homeRoom;
+    const surface = payload?.surface === 'floor' ? 'floor' : (payload?.surface === 'wall' ? 'wall' : '');
+    const paintId = typeof payload?.paintId === 'string' ? payload.paintId.trim().toLowerCase() : '';
+    if (!surface) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Invalid paint surface.' });
+      return;
+    }
+    const validSet = surface === 'wall' ? HOME_ROOM_WALL_PAINTS : HOME_ROOM_FLOOR_PAINTS;
+    if (!validSet.has(paintId)) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Unknown paint option.' });
+      return;
+    }
+    if ((surface === 'wall' ? room.wallPaint : room.floorPaint) === paintId) {
+      if (typeof ack === 'function') ack({ ok: true, unchanged: true, progress: progressSnapshot(progress) });
+      return;
+    }
+    if (progress.coins < HOME_ROOM_PAINT_PRICE) {
+      if (typeof ack === 'function') ack({ ok: false, error: `Need ${HOME_ROOM_PAINT_PRICE} coins.` });
+      return;
+    }
+    progress.coins -= HOME_ROOM_PAINT_PRICE;
+    if (surface === 'wall') {
+      room.wallPaint = paintId;
+    } else {
+      room.floorPaint = paintId;
+    }
+    persistPlayerProgress(actor, { immediate: true });
+    emitProgress(socket, actor);
+    if (typeof ack === 'function') {
+      ack({
+        ok: true,
+        surface,
+        paintId,
+        price: HOME_ROOM_PAINT_PRICE,
         progress: progressSnapshot(progress)
       });
     }

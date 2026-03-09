@@ -879,7 +879,8 @@
 
       #market-status,
       #rod-shop-status,
-      #ore-status {
+      #ore-status,
+      #home-status {
         margin: 0;
         min-height: 16px;
         font-size: 12px;
@@ -909,7 +910,8 @@
       #inventory-panel,
       #rod-shop-panel,
       #market-panel,
-      #ore-panel {
+      #ore-panel,
+      #home-panel {
         gap: 12px;
         padding: 16px;
         border-color: rgba(56, 189, 248, 0.3);
@@ -938,10 +940,16 @@
         width: min(760px, calc(100vw - 24px));
       }
 
+      #home-panel {
+        width: min(760px, calc(100vw - 24px));
+        max-height: min(88vh, 820px);
+      }
+
       #market-panel .modal-head,
       #inventory-panel .modal-head,
       #rod-shop-panel .modal-head,
       #ore-panel .modal-head,
+      #home-panel .modal-head,
       #fish-index-header {
         padding-bottom: 8px;
         border-bottom: 1px solid rgba(148, 163, 184, 0.24);
@@ -951,6 +959,7 @@
       #inventory-panel .modal-head h2,
       #rod-shop-panel .modal-head h2,
       #ore-panel .modal-head h2,
+      #home-panel .modal-head h2,
       #fish-index-header h2 {
         font-size: 22px;
         letter-spacing: 0.4px;
@@ -960,6 +969,7 @@
       #inventory-panel .modal-close,
       #rod-shop-panel .modal-close,
       #ore-panel .modal-close,
+      #home-panel .modal-close,
       #fish-index-close {
         width: 34px;
         height: 34px;
@@ -1164,11 +1174,79 @@
 
       #market-status,
       #ore-status,
-      #rod-shop-status {
+      #rod-shop-status,
+      #home-status {
         padding: 8px 10px;
         border-radius: 10px;
         border: 1px solid rgba(148, 163, 184, 0.22);
         background: rgba(2, 8, 20, 0.45);
+      }
+
+      #home-grid {
+        display: grid;
+        gap: 12px;
+      }
+
+      #home-paint-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      #home-panel .market-field {
+        display: grid;
+        gap: 6px;
+        font-size: 12px;
+        color: #b9c8dc;
+        letter-spacing: 0.2px;
+        font-weight: 700;
+      }
+
+      #home-panel select {
+        width: 100%;
+        min-height: 40px;
+        border-radius: 10px;
+        border: 1px solid rgba(148, 163, 184, 0.34);
+        background: rgba(3, 10, 22, 0.88);
+        color: #f8fafc;
+        padding: 0 12px;
+        font: inherit;
+        font-size: 16px;
+        outline: none;
+      }
+
+      #home-panel select:focus {
+        border-color: rgba(34, 211, 238, 0.72);
+        box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.18);
+      }
+
+      #home-panel button {
+        min-height: 38px;
+        border-radius: 11px;
+        transition: transform 120ms ease, filter 120ms ease, box-shadow 120ms ease;
+      }
+
+      #home-panel button:not(:disabled):hover {
+        transform: translateY(-1px);
+      }
+
+      #home-wall-apply,
+      #home-floor-apply {
+        width: 100%;
+        background: linear-gradient(180deg, #fbd66b, #e7b341);
+        color: #142036;
+      }
+
+      #home-furniture-list {
+        display: grid;
+        gap: 10px;
+        max-height: 42vh;
+        overflow: auto;
+        padding-right: 2px;
+      }
+
+      #home-furniture-list button {
+        width: 100%;
       }
 
       body.mining-focus #hud,
@@ -2023,6 +2101,10 @@
         grid-template-columns: 1fr;
       }
 
+      body.mobile-ui #home-paint-grid {
+        grid-template-columns: 1fr;
+      }
+
       body.mobile-ui #market-panel .market-inline.market-actions {
         grid-template-columns: 1fr;
       }
@@ -2329,6 +2411,37 @@
             <button id="ore-sell-btn" type="button">Sell Ores</button>
           </section>
           <p id="ore-status"></p>
+        </div>
+      </section>
+    </div>
+
+    <div id="home-modal" class="hidden modal-backdrop">
+      <section id="home-panel" class="panel modal-panel">
+        <div class="modal-head">
+          <h2>Home Workshop</h2>
+          <button id="home-close" class="modal-close" type="button">✕</button>
+        </div>
+        <div id="home-grid">
+          <section class="market-section">
+            <h3>Paint Shop</h3>
+            <div id="home-paint-grid">
+              <div class="market-field">
+                <label for="home-wall-select">Wall Color</label>
+                <select id="home-wall-select"></select>
+                <button id="home-wall-apply" type="button">Apply Wall Paint (90 coins)</button>
+              </div>
+              <div class="market-field">
+                <label for="home-floor-select">Floor Color</label>
+                <select id="home-floor-select"></select>
+                <button id="home-floor-apply" type="button">Apply Floor Paint (90 coins)</button>
+              </div>
+            </div>
+          </section>
+          <section class="market-section">
+            <h3>Furniture</h3>
+            <div id="home-furniture-list"></div>
+          </section>
+          <p id="home-status"></p>
         </div>
       </section>
     </div>
