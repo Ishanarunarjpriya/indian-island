@@ -233,6 +233,7 @@ const ORE_RESOURCE_COLORS = {
   diamond: 0x22d3ee
 };
 
+const GROUND_Y = 1.35;
 const MINE_POS = new THREE.Vector3(140, 1.35, 140);
 const MINE_RADIUS = 52;
 const MINE_PLAY_RADIUS = MINE_RADIUS - 3;
@@ -10161,7 +10162,6 @@ mobileConsumeEl?.addEventListener('click', () => consumeFish(1));
 let lastSentAt = 0;
 const WALK_SPEED = 12;
 const SPRINT_MULTIPLIER = 1.58;
-const GROUND_Y = 1.35;
 const GRAVITY = 30;
 const JUMP_VELOCITY = 11;
 const SEND_EVERY_MS = 45;

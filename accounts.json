@@ -18,5 +18,15 @@
     "salt": "3c54597ac0121e6da1245d58dc51cb81",
     "hash": "06472dc1702f780174b976a1f87dfd8d8c3681fbc9d7bab409aac0667f5b3aab85468304fbf7b79c5d7df0607fc3b18b5040d11d3ad005f97643720399fa95fb",
     "profileId": "acct-guest_l483w1m4"
+  },
+  "ishy": {
+    "salt": "76bb6eb39f54b594486a92242a58f2c3",
+    "hash": "b1a52c18301a6ca8aef9e0d0ba6ac455cecc35b1bcd8acce2a1705f278455db50e8de259b1a29548f2af552edfb11c79111aa1fff35e41c65127f91b9f8f9228",
+    "profileId": "acct-ishy"
+  },
+  "codexdebug23404845": {
+    "salt": "d6865dd9dc1ec8cb388aafe651385cc7",
+    "hash": "8465d9bd69ce6ed2be45feb0ac608999caf512b87038b1146f8c75c349e6a1402777c8e41f600343b90fe4754df8dc79e3575973a1846d20964cda4879165dd3",
+    "profileId": "acct-codexdebug23404845"
   }
 }

@@ -17,14 +17,22 @@
     "z": 0,
     "progress": {
       "coins": 0,
+      "xp": 0,
+      "level": 1,
       "pickaxe": "wood",
       "inventory": {
         "stone": 0,
         "iron": 0,
         "gold": 0,
         "diamond": 0,
-        "torch": 1
+        "torch": 1,
+        "fish": 0
       },
+      "fishBag": {},
+      "fishIndex": {},
+      "hasFishingRod": false,
+      "fishingRodTier": "basic",
+      "maxStaminaBonusPct": 0,
       "questSeed": 1,
       "quest": {
         "id": "q-1771817366646-1",
@@ -32,11 +40,45 @@
         "resource": "iron",
         "targetCount": 15,
         "progress": 0,
-        "rewardCoins": 132,
+        "rewardXp": 132,
         "rewardDiamonds": 0,
         "title": "Mine 15 ore",
         "description": "Collect 15 ore chunks in the mine.",
         "status": "available"
+      },
+      "fishingQuestSeed": 1,
+      "fishingQuestCompletions": 0,
+      "fishingQuest": {
+        "id": "fq-1773021749316-1",
+        "type": "fishing",
+        "status": "available",
+        "targetRarity": "common",
+        "targetFishId": null,
+        "targetCount": 5,
+        "progress": 0,
+        "rewardXp": 107,
+        "title": "Turn in 5 common fish",
+        "description": "Bring 5 common fish to the Market Trader."
+      },
+      "homeRoom": {
+        "wallPaint": "sand",
+        "floorPaint": "oak",
+        "ownedFurniture": {
+          "bed": false,
+          "table": false,
+          "lamp": false,
+          "plant": false
+        },
+        "placedFurniture": {
+          "bed": false,
+          "table": false,
+          "lamp": false,
+          "plant": false
+        }
+      },
+      "furnitureTrader": {
+        "cycleId": 985012,
+        "purchasedThisCycle": {}
       }
     }
   },
@@ -58,14 +100,22 @@
     "z": 10.389226567992853,
     "progress": {
       "coins": 0,
+      "xp": 0,
+      "level": 1,
       "pickaxe": "wood",
       "inventory": {
         "stone": 0,
         "iron": 0,
         "gold": 0,
         "diamond": 0,
-        "torch": 1
+        "torch": 1,
+        "fish": 0
       },
+      "fishBag": {},
+      "fishIndex": {},
+      "hasFishingRod": false,
+      "fishingRodTier": "basic",
+      "maxStaminaBonusPct": 0,
       "questSeed": 1,
       "quest": {
         "id": "q-1771817366646-1",
@@ -73,39 +123,212 @@
         "resource": "iron",
         "targetCount": 15,
         "progress": 0,
-        "rewardCoins": 132,
+        "rewardXp": 132,
         "rewardDiamonds": 0,
         "title": "Mine 15 ore",
         "description": "Collect 15 ore chunks in the mine.",
         "status": "available"
+      },
+      "fishingQuestSeed": 1,
+      "fishingQuestCompletions": 0,
+      "fishingQuest": {
+        "id": "fq-1773021749316-1",
+        "type": "fishing",
+        "status": "available",
+        "targetRarity": "common",
+        "targetFishId": null,
+        "targetCount": 5,
+        "progress": 0,
+        "rewardXp": 107,
+        "title": "Turn in 5 common fish",
+        "description": "Bring 5 common fish to the Market Trader."
+      },
+      "homeRoom": {
+        "wallPaint": "sand",
+        "floorPaint": "oak",
+        "ownedFurniture": {
+          "bed": false,
+          "table": false,
+          "lamp": false,
+          "plant": false
+        },
+        "placedFurniture": {
+          "bed": false,
+          "table": false,
+          "lamp": false,
+          "plant": false
+        }
+      },
+      "furnitureTrader": {
+        "cycleId": 985012,
+        "purchasedThisCycle": {}
       }
     }
   },
-  "acct-devansh_testing": {
-    "name": "devansh_testing",
-    "color": "#38bdf8",
-    "appearance": {},
-    "x": null,
-    "y": null,
-    "z": null,
-    "progress": {}
+  "acct-ishy": {
+    "name": "ishy",
+    "color": "#be3be5",
+    "appearance": {
+      "skin": "#f3cfb3",
+      "shirt": "#be3be5",
+      "pants": "#334155",
+      "shoes": "#111827",
+      "hairStyle": "short",
+      "hairColor": "#2b211c",
+      "faceStyle": "smile",
+      "accessories": []
+    },
+    "x": -1.8514449509953539,
+    "y": 1.35,
+    "z": 15.782278194939998,
+    "progress": {
+      "coins": 0,
+      "xp": 0,
+      "level": 1,
+      "pickaxe": "wood",
+      "inventory": {
+        "stone": 0,
+        "iron": 0,
+        "gold": 0,
+        "diamond": 0,
+        "torch": 1,
+        "fish": 0
+      },
+      "fishBag": {},
+      "fishIndex": {},
+      "hasFishingRod": false,
+      "fishingRodTier": "basic",
+      "maxStaminaBonusPct": 0,
+      "questSeed": 1,
+      "quest": {
+        "id": "q-1773023377703-1",
+        "type": "mine",
+        "resource": "iron",
+        "targetCount": 15,
+        "progress": 0,
+        "rewardXp": 177,
+        "rewardDiamonds": 0,
+        "title": "Mine 15 ore",
+        "description": "Collect 15 ore chunks in the mine.",
+        "status": "available"
+      },
+      "fishingQuestSeed": 1,
+      "fishingQuestCompletions": 0,
+      "fishingQuest": {
+        "id": "fq-1773023377703-1",
+        "type": "fishing",
+        "status": "available",
+        "targetRarity": "common",
+        "targetFishId": null,
+        "targetCount": 5,
+        "progress": 0,
+        "rewardXp": 107,
+        "title": "Turn in 5 common fish",
+        "description": "Bring 5 common fish to the Market Trader."
+      },
+      "homeRoom": {
+        "wallPaint": "sand",
+        "floorPaint": "oak",
+        "ownedFurniture": {
+          "bed": false,
+          "table": false,
+          "lamp": false,
+          "plant": false
+        },
+        "placedFurniture": {
+          "bed": false,
+          "table": false,
+          "lamp": false,
+          "plant": false
+        }
+      },
+      "furnitureTrader": {
+        "cycleId": 985012,
+        "purchasedThisCycle": {}
+      }
+    }
   },
-  "acct-guest_62532r69": {
-    "name": "guest_62532r69",
-    "color": "#38bdf8",
-    "appearance": {},
+  "acct-codexdebug23404845": {
+    "name": "codexdebug23404845",
+    "color": "#244ccb",
+    "appearance": {
+      "skin": "#f3cfb3",
+      "shirt": "#244ccb",
+      "pants": "#334155",
+      "shoes": "#111827",
+      "hairStyle": "short",
+      "hairColor": "#2b211c",
+      "faceStyle": "smile",
+      "accessories": []
+    },
     "x": null,
     "y": null,
     "z": null,
-    "progress": {}
-  },
-  "acct-guest_l483w1m4": {
-    "name": "guest_l483w1m4",
-    "color": "#38bdf8",
-    "appearance": {},
-    "x": null,
-    "y": null,
-    "z": null,
-    "progress": {}
+    "progress": {
+      "coins": 0,
+      "xp": 0,
+      "level": 1,
+      "pickaxe": "wood",
+      "inventory": {
+        "stone": 0,
+        "iron": 0,
+        "gold": 0,
+        "diamond": 0,
+        "torch": 1,
+        "fish": 0
+      },
+      "fishBag": {},
+      "fishIndex": {},
+      "hasFishingRod": false,
+      "fishingRodTier": "basic",
+      "maxStaminaBonusPct": 0,
+      "questSeed": 1,
+      "quest": {
+        "id": "q-1773023407423-1",
+        "type": "mine",
+        "resource": "iron",
+        "targetCount": 15,
+        "progress": 0,
+        "rewardXp": 177,
+        "rewardDiamonds": 0,
+        "title": "Mine 15 ore",
+        "description": "Collect 15 ore chunks in the mine.",
+        "status": "available"
+      },
+      "fishingQuestSeed": 1,
+      "fishingQuestCompletions": 0,
+      "fishingQuest": {
+        "id": "fq-1773023407423-1",
+        "type": "fishing",
+        "status": "available",
+        "targetRarity": "common",
+        "targetFishId": null,
+        "targetCount": 5,
+        "progress": 0,
+        "rewardXp": 107,
+        "title": "Turn in 5 common fish",
+        "description": "Bring 5 common fish to the Market Trader."
+      },
+      "homeRoom": {
+        "wallPaint": "sand",
+        "floorPaint": "oak",
+        "ownedFurniture": {
+          "bed": false,
+          "table": false,
+          "lamp": false,
+          "plant": false
+        },
+        "placedFurniture": {
+          "bed": false,
+          "table": false,
+          "lamp": false,
+          "plant": false
+        }
+      },
+      "furnitureTrader": {
+        "cycleId": 985013,
+        "purchasedThisCycle": {}
+      }
+    }
   }
 }
