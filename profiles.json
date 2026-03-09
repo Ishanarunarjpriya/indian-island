@@ -14,7 +14,31 @@
     },
     "x": 0,
     "y": 0,
-    "z": 0
+    "z": 0,
+    "progress": {
+      "coins": 0,
+      "pickaxe": "wood",
+      "inventory": {
+        "stone": 0,
+        "iron": 0,
+        "gold": 0,
+        "diamond": 0,
+        "torch": 1
+      },
+      "questSeed": 1,
+      "quest": {
+        "id": "q-1771817366646-1",
+        "type": "mine",
+        "resource": "iron",
+        "targetCount": 15,
+        "progress": 0,
+        "rewardCoins": 132,
+        "rewardDiamonds": 0,
+        "title": "Mine 15 ore",
+        "description": "Collect 15 ore chunks in the mine.",
+        "status": "available"
+      }
+    }
   },
   "acct-devansh": {
     "name": "devansh",
@@ -31,23 +55,57 @@
     },
     "x": 45.101611865889545,
     "y": 1.35,
-    "z": 10.389226567992853
+    "z": 10.389226567992853,
+    "progress": {
+      "coins": 0,
+      "pickaxe": "wood",
+      "inventory": {
+        "stone": 0,
+        "iron": 0,
+        "gold": 0,
+        "diamond": 0,
+        "torch": 1
+      },
+      "questSeed": 1,
+      "quest": {
+        "id": "q-1771817366646-1",
+        "type": "mine",
+        "resource": "iron",
+        "targetCount": 15,
+        "progress": 0,
+        "rewardCoins": 132,
+        "rewardDiamonds": 0,
+        "title": "Mine 15 ore",
+        "description": "Collect 15 ore chunks in the mine.",
+        "status": "available"
+      }
+    }
   },
   "acct-devansh_testing": {
     "name": "devansh_testing",
-    "color": "#6e83b4",
-    "appearance": {
-      "skin": "#f3cfb3",
-      "shirt": "#6e83b4",
-      "pants": "#334155",
-      "shoes": "#111827",
-      "hairStyle": "short",
-      "hairColor": "#2b211c",
-      "faceStyle": "smile",
-      "accessories": []
-    },
-    "x": -33.363749463490485,
-    "y": 1.35,
-    "z": 10.161036241118477
+    "color": "#38bdf8",
+    "appearance": {},
+    "x": null,
+    "y": null,
+    "z": null,
+    "progress": {}
+  },
+  "acct-guest_62532r69": {
+    "name": "guest_62532r69",
+    "color": "#38bdf8",
+    "appearance": {},
+    "x": null,
+    "y": null,
+    "z": null,
+    "progress": {}
+  },
+  "acct-guest_l483w1m4": {
+    "name": "guest_l483w1m4",
+    "color": "#38bdf8",
+    "appearance": {},
+    "x": null,
+    "y": null,
+    "z": null,
+    "progress": {}
   }
 }

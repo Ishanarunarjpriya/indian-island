@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Indian Island</title>
+    <title>Indian Island: The Game</title>
     <style>
       :root {
         --bg-top: #d7e7f3;
@@ -81,6 +81,16 @@
         min-width: 240px;
       }
 
+      #quest-tracker {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: calc(100% + 8px);
+        padding: 8px 10px;
+        display: none;
+        gap: 4px;
+      }
+
       #hud .title {
         margin: 0 0 8px;
         font-size: 15px;
@@ -119,6 +129,220 @@
         margin-top: 8px;
         width: 100%;
         height: 34px;
+      }
+
+      #inventory-bar {
+        position: fixed;
+        left: 50% !important;
+        right: auto !important;
+        bottom: 16px;
+        transform: translateX(-50%);
+        z-index: 16;
+        width: max-content;
+        max-width: calc(100vw - 24px);
+        display: grid;
+        grid-auto-flow: column;
+        gap: 10px;
+        padding: 8px 10px;
+      }
+
+      .inventory-slot {
+        min-width: 108px;
+        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        background: rgba(0, 0, 0, 0.18);
+        padding: 6px 9px;
+        display: grid;
+        gap: 2px;
+      }
+
+      .inventory-slot.active {
+        border-color: rgba(253, 224, 71, 0.75);
+        box-shadow: 0 0 14px rgba(250, 204, 21, 0.35);
+      }
+
+      .inventory-slot .label {
+        font-size: 11px;
+        color: #a5b4c9;
+        text-transform: uppercase;
+        letter-spacing: 0.45px;
+      }
+
+      .inventory-slot .value {
+        font-size: 13px;
+        font-weight: 700;
+        color: #f8fafc;
+      }
+
+      #mining-meter {
+        position: fixed;
+        left: 50%;
+        bottom: 92px;
+        transform: translateX(-50%);
+        z-index: 34;
+        width: min(540px, calc(100vw - 24px));
+        padding: 10px 12px 12px;
+        display: grid;
+        gap: 8px;
+      }
+
+      #mining-meter-title {
+        text-align: center;
+        font-size: 24px;
+        font-weight: 900;
+        letter-spacing: 1.8px;
+        color: #f8fafc;
+        text-shadow: 0 2px 10px rgba(0, 0, 0, 0.55);
+      }
+
+      #mining-ore-preview-wrap {
+        position: relative;
+        width: 100%;
+        height: 86px;
+        display: grid;
+        place-items: center;
+      }
+
+      #mining-ore-preview {
+        --ore-color: #9ca3af;
+        position: relative;
+        width: min(188px, 40vw);
+        height: 74px;
+        background:
+          radial-gradient(circle at 28% 24%, rgba(255, 255, 255, 0.33), rgba(255, 255, 255, 0) 46%),
+          linear-gradient(160deg, rgba(2, 6, 23, 0.06), rgba(2, 6, 23, 0.25)),
+          var(--ore-color);
+        border-radius: 34% 46% 39% 45% / 48% 42% 44% 41%;
+        border: 2px solid rgba(255, 255, 255, 0.22);
+        box-shadow: 0 10px 18px rgba(0, 0, 0, 0.35);
+      }
+
+      #mining-ore-crack {
+        position: absolute;
+        left: 52%;
+        top: 6px;
+        width: 4px;
+        height: 62px;
+        border-radius: 999px;
+        background: repeating-linear-gradient(
+          to bottom,
+          rgba(15, 23, 42, 0.95),
+          rgba(15, 23, 42, 0.95) 6px,
+          rgba(15, 23, 42, 0.35) 6px,
+          rgba(15, 23, 42, 0.35) 10px
+        );
+        transform: rotate(14deg) scaleY(0);
+        transform-origin: top;
+        opacity: 0;
+        transition: transform 120ms ease, opacity 120ms ease;
+      }
+
+      #mining-ore-preview.cracked #mining-ore-crack {
+        transform: rotate(14deg) scaleY(1);
+        opacity: 1;
+      }
+
+      #mining-pickaxe-preview {
+        position: absolute;
+        left: 50%;
+        bottom: -12px;
+        width: 46px;
+        height: 38px;
+        transform: translateX(-44%) rotate(-18deg);
+        transition: transform 95ms ease;
+      }
+
+      #mining-pickaxe-handle {
+        position: absolute;
+        left: 19px;
+        top: 5px;
+        width: 7px;
+        height: 32px;
+        border-radius: 4px;
+        background: linear-gradient(to bottom, #8b5a2b, #5a3412);
+      }
+
+      #mining-pickaxe-head {
+        position: absolute;
+        left: 5px;
+        top: 2px;
+        width: 34px;
+        height: 13px;
+        border-radius: 7px;
+        background: #94a3b8;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+      }
+
+      #mining-ore-preview.cracked #mining-pickaxe-preview {
+        transform: translateX(-44%) rotate(-34deg) translateY(-4px);
+      }
+
+      #mining-meter-track-wrap {
+        padding: 4px;
+        border-radius: 13px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background: rgba(6, 14, 24, 0.66);
+      }
+
+      #mining-meter-track {
+        position: relative;
+        width: 100%;
+        height: 28px;
+        border-radius: 9px;
+        overflow: hidden;
+        background: linear-gradient(
+          90deg,
+          #ef4444 0%,
+          #fb923c 18%,
+          #fde047 35%,
+          #22c55e 50%,
+          #fde047 65%,
+          #fb923c 82%,
+          #ef4444 100%
+        );
+      }
+
+      #mining-meter-green-zone {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 42%;
+        width: 16%;
+        background: linear-gradient(90deg, rgba(34, 197, 94, 0.45), rgba(22, 163, 74, 0.72), rgba(34, 197, 94, 0.45));
+        box-shadow: inset 0 0 0 2px rgba(6, 95, 70, 0.7), 0 0 10px rgba(74, 222, 128, 0.45);
+      }
+
+      #mining-meter-pointer {
+        position: absolute;
+        top: -2px;
+        left: 50%;
+        width: 4px;
+        height: 32px;
+        border-radius: 3px;
+        background: #f8fafc;
+        box-shadow: 0 0 8px rgba(248, 250, 252, 0.85);
+        transform: translateX(-50%);
+      }
+
+      #mining-meter-pointer::before {
+        content: '';
+        position: absolute;
+        top: -8px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 0;
+        height: 0;
+        border-left: 7px solid transparent;
+        border-right: 7px solid transparent;
+        border-bottom: 10px solid #f8fafc;
+      }
+
+      #mining-meter-status {
+        text-align: center;
+        min-height: 16px;
+        font-size: 12px;
+        color: #fef3c7;
+        letter-spacing: 0.2px;
       }
 
       .hidden {
@@ -349,6 +573,22 @@
       #chat-log .meta {
         color: #a5b4c9;
         margin-right: 6px;
+      }
+
+      #chat-log li.private {
+        color: #d1fae5;
+      }
+
+      #chat-log li.private .meta {
+        color: #6ee7b7;
+      }
+
+      #chat-log li.private.outgoing {
+        color: #cffafe;
+      }
+
+      #chat-log li.private.outgoing .meta {
+        color: #67e8f9;
       }
 
       #chat-form {
@@ -618,7 +858,7 @@
       #mobile-controls {
         position: fixed;
         inset: 0;
-        z-index: 12;
+        z-index: 24;
         pointer-events: none;
         display: none;
       }
@@ -666,10 +906,10 @@
 
       #joystick {
         position: absolute;
-        left: 14px;
-        bottom: 18px;
-        width: 120px;
-        height: 120px;
+        left: max(10px, env(safe-area-inset-left));
+        bottom: calc(10px + env(safe-area-inset-bottom));
+        width: 128px;
+        height: 128px;
         border-radius: 999px;
         background: rgba(15, 23, 42, 0.45);
         border: 1px solid rgba(255, 255, 255, 0.25);
@@ -679,8 +919,8 @@
 
       #joystick-stick {
         position: absolute;
-        left: 40px;
-        top: 40px;
+        left: 44px;
+        top: 44px;
         width: 40px;
         height: 40px;
         border-radius: 999px;
@@ -689,20 +929,21 @@
 
       #mobile-actions {
         position: absolute;
-        right: 14px;
-        bottom: 18px;
+        right: max(10px, env(safe-area-inset-right));
+        bottom: calc(10px + env(safe-area-inset-bottom));
         display: grid;
-        grid-template-columns: repeat(2, 64px);
+        grid-template-columns: repeat(2, 68px);
         gap: 10px;
         pointer-events: auto;
       }
 
       .mobile-btn {
-        width: 64px;
-        height: 64px;
+        width: 68px;
+        height: 68px;
         border-radius: 999px;
         padding: 0;
-        font-size: 11px;
+        font-size: 12px;
+        touch-action: manipulation;
       }
 
       @media (pointer: coarse) {
@@ -712,8 +953,8 @@
       }
 
       body.mobile-ui #top-left-toolbar {
-        left: 8px;
-        top: 8px;
+        left: max(8px, env(safe-area-inset-left));
+        top: calc(8px + env(safe-area-inset-top));
         gap: 6px;
         padding: 6px;
       }
@@ -725,18 +966,18 @@
       }
 
       body.mobile-ui #world-state {
-        top: 8px;
+        top: calc(8px + env(safe-area-inset-top));
         padding: 6px 10px;
         font-size: 11px;
       }
 
       body.mobile-ui #chat-panel {
         top: auto;
-        left: 8px;
-        right: 8px;
-        bottom: 8px;
+        left: max(8px, env(safe-area-inset-left));
+        right: max(8px, env(safe-area-inset-right));
+        bottom: calc(188px + env(safe-area-inset-bottom));
         width: auto;
-        max-height: 42vh;
+        max-height: 36vh;
         z-index: 22;
       }
 
@@ -745,12 +986,18 @@
       }
 
       body.mobile-ui #hud {
-        right: 8px;
-        bottom: 8px;
+        right: max(8px, env(safe-area-inset-right));
+        top: calc(8px + env(safe-area-inset-top));
+        bottom: auto;
         min-width: 0;
-        width: min(56vw, 240px);
+        width: min(52vw, 220px);
         padding: 8px 10px;
         z-index: 12;
+      }
+
+      body.mobile-ui #quest-tracker {
+        top: calc(100% + 8px);
+        bottom: auto;
       }
 
       body.mobile-ui #hud .title {
@@ -768,25 +1015,27 @@
       }
 
       body.mobile-ui #mini-panel {
-        left: 8px;
-        bottom: 8px;
-        width: 138px;
+        left: auto;
+        right: max(8px, env(safe-area-inset-right));
+        top: calc(188px + env(safe-area-inset-top));
+        bottom: auto;
+        width: 130px;
         padding: 8px;
         z-index: 12;
       }
 
       body.mobile-ui #mini-map {
-        width: 122px;
-        height: 122px;
+        width: 114px;
+        height: 114px;
       }
 
       body.mobile-ui #mini-panel.expanded {
-        width: min(82vw, 300px);
+        width: min(72vw, 270px);
       }
 
       body.mobile-ui #mini-panel.expanded #mini-map {
-        width: min(76vw, 276px);
-        height: min(76vw, 276px);
+        width: min(66vw, 248px);
+        height: min(66vw, 248px);
       }
 
       body.mobile-ui #compass {
@@ -796,6 +1045,66 @@
       body.mobile-ui #menu-panel {
         width: calc(100vw - 16px);
         max-height: calc(100vh - 16px);
+      }
+
+      body.mobile-ui #inventory-bar {
+        left: 50% !important;
+        right: auto !important;
+        transform: translateX(-50%);
+        bottom: calc(88px + env(safe-area-inset-bottom));
+        gap: 8px;
+        padding: 6px 8px;
+        z-index: 20;
+        max-width: calc(100vw - 16px);
+      }
+
+      body.mobile-ui .inventory-slot {
+        min-width: 76px;
+        padding: 5px 8px;
+      }
+
+      body.mobile-ui .inventory-slot .label {
+        font-size: 10px;
+      }
+
+      body.mobile-ui .inventory-slot .value {
+        font-size: 12px;
+      }
+
+      body.mobile-ui #mining-meter {
+        bottom: calc(168px + env(safe-area-inset-bottom));
+        width: calc(100vw - 16px);
+        padding: 8px 8px 10px;
+        gap: 6px;
+      }
+
+      body.mobile-ui #mining-meter-title {
+        font-size: 18px;
+      }
+
+      body.mobile-ui #mining-ore-preview-wrap {
+        height: 70px;
+      }
+
+      body.mobile-ui #mining-ore-preview {
+        width: min(156px, 45vw);
+        height: 58px;
+      }
+
+      body.mobile-ui #mining-ore-crack {
+        height: 48px;
+      }
+
+      body.mobile-ui #mining-meter-track {
+        height: 24px;
+      }
+
+      body.mobile-ui #mining-meter-pointer {
+        height: 28px;
+      }
+
+      body.mobile-ui #mining-meter-status {
+        font-size: 11px;
       }
     </style>
   </head>
@@ -810,6 +1119,7 @@
       <button id="menu-toggle" class="toolbar-btn" type="button" aria-label="Open menu">
         <span class="line-stack"><span></span><span></span><span></span></span>
       </button>
+      <button id="minimap-quick-toggle" class="toolbar-btn" type="button" aria-label="Toggle minimap">🗺️</button>
       <button id="chat-toggle" class="toolbar-btn" type="button" aria-label="Open chat">💬</button>
       <button id="voice-quick-toggle" class="toolbar-btn" type="button" aria-label="Voice chat / mute">🎙️</button>
       <button id="fullscreen-toggle" class="toolbar-btn" type="button" aria-label="Enter fullscreen">⛶</button>
@@ -827,6 +1137,8 @@
             <li>`Space` jump / swim up</li>
             <li>Drag mouse to orbit camera, scroll to zoom</li>
             <li>`E` interact / get off boat</li>
+            <li>`T` toggle torch</li>
+            <li>`R` consume fish</li>
             <li>`1`,`2`,`3` emotes or hold `Q`</li>
           </ul>
         </section>
@@ -841,6 +1153,7 @@
           <h3>Settings</h3>
           <div class="menu-actions">
             <button id="minimap-toggle" type="button">Minimap: On</button>
+            <button id="performance-toggle" type="button">Graphics: Quality</button>
           </div>
           <div id="menu-emote-buttons" style="margin-top:8px;">
             <button type="button" data-emote="wave">Wave</button>
@@ -894,15 +1207,54 @@
     <section id="chat-panel" class="panel">
       <ul id="chat-log" aria-live="polite"></ul>
       <form id="chat-form">
-        <input id="chat-input" autocomplete="off" maxlength="220" placeholder="Type message and press Enter" />
+        <input id="chat-input" autocomplete="off" maxlength="220" placeholder="Type message or type /msg (player) to privately message players" />
         <button id="chat-send" type="submit">Send</button>
       </form>
+    </section>
+
+    <section id="inventory-bar" class="panel">
+      <div class="inventory-slot">
+        <span class="label">Coins</span>
+        <span class="value" id="inventory-coins">0</span>
+      </div>
+      <div class="inventory-slot">
+        <span class="label">Pickaxe</span>
+        <span class="value" id="inventory-pickaxe">Wood</span>
+      </div>
+      <div class="inventory-slot">
+        <span class="label">Torch</span>
+        <span class="value" id="inventory-torch">1</span>
+      </div>
+      <div class="inventory-slot">
+        <span class="label">Fish</span>
+        <span class="value" id="inventory-fish">0</span>
+      </div>
+    </section>
+
+    <section id="mining-meter" class="panel hidden" aria-live="polite">
+      <div id="mining-meter-title">ACCURACY</div>
+      <div id="mining-ore-preview-wrap">
+        <div id="mining-ore-preview">
+          <div id="mining-ore-crack"></div>
+          <div id="mining-pickaxe-preview">
+            <div id="mining-pickaxe-handle"></div>
+            <div id="mining-pickaxe-head"></div>
+          </div>
+        </div>
+      </div>
+      <div id="mining-meter-track-wrap">
+        <div id="mining-meter-track">
+          <div id="mining-meter-green-zone"></div>
+          <div id="mining-meter-pointer"></div>
+        </div>
+      </div>
+      <div id="mining-meter-status">Hit click or press E while marker is in green.</div>
     </section>
 
     <div id="customize-modal" class="hidden">
       <section id="customize-panel" class="panel">
         <div id="customize-header">
-          <h2>Customize Human</h2>
+          <h2>Customize Avatar</h2>
           <button id="customize-close" type="button">X</button>
         </div>
         <div id="customize-layout">
@@ -1000,6 +1352,7 @@
       <div id="mobile-actions">
         <button id="btn-jump" class="mobile-btn" type="button">Jump</button>
         <button id="btn-use" class="mobile-btn" type="button">Use</button>
+        <button id="btn-consume" class="mobile-btn hidden" type="button">Consume</button>
         <button id="btn-emote" class="mobile-btn" type="button">Emote</button>
       </div>
     </section>
