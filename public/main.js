@@ -7531,6 +7531,8 @@ function setFishingHoldState(holding) {
 
 function tryFishingSpotInteract(local) {
   if (!local || inMine || inLighthouseInterior || local.onBoat) return false;
+  const spot = nearestFishingSpot(local);
+  if (!spot) return false;
   if (!questState.hasFishingRod) {
     appendChatLine({ text: 'You need a fishing rod first.', isSystem: true });
     updateQuestPanel('Buy a fishing rod at the Fishing island vendor.');
@@ -7542,8 +7544,6 @@ function tryFishingSpotInteract(local) {
   if (fishingMiniGame.starting) {
     return true;
   }
-  const spot = nearestFishingSpot(local);
-  if (!spot) return false;
   return startFishingMinigame(spot);
 }
 
