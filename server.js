@@ -108,8 +108,8 @@ const CHAT_MAX_LEN = 220;
 const NAME_MAX_LEN = 18;
 const ACCOUNT_ROLE_TAG_BY_PROFILE_ID = new Map([
   ['acct-devansh', 'Creator'],
-  ['acct-ishyfishyinthedishy', 'Co-Creator'],
-  ['acct-eye_wonder_who', 'Co-Creator']
+  ['acct-ishyfishyinthedishy', 'Creator'],
+  ['acct-eye_wonder_who', 'Creator']
 ]);
 const CHAT_FILTER_WORDS = [
   'fuck',
