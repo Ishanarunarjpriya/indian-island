@@ -402,6 +402,19 @@ let inHouseRoom = false;
 let houseRoomWallMaterial = null;
 let houseRoomFloorMaterial = null;
 const houseRoomFurnitureMeshes = new Map();
+const STATIC_WORLD_CELL_SIZE = 30;
+const STATIC_WORLD_PERFORMANCE_DISTANCE = 120;
+const STATIC_WORLD_BALANCED_DISTANCE = 170;
+const STATIC_WORLD_CULL_INTERVAL_MS = 50;
+const staticWorldCells = [];
+let staticWorldBuilt = false;
+const _staticCullBox = new THREE.Box3();
+const _staticCullSize = new THREE.Vector3();
+const _staticCullCenter = new THREE.Vector3();
+const _staticCullCameraPos = new THREE.Vector3();
+const _staticCullMatrix = new THREE.Matrix4();
+const _staticCullFrustum = new THREE.Frustum();
+const _staticCullSphere = new THREE.Sphere();
 let leaderboardBoardCanvas = null;
 let leaderboardBoardCtx = null;
 let leaderboardBoardTexture = null;
@@ -4345,6 +4358,137 @@ rain.visible = false;
 scene.add(rain);
 let rainParticleUpdateCount = rainCount;
 
+function staticWorldRenderDistance() {
+  if (graphicsPreset === 'performance') return STATIC_WORLD_PERFORMANCE_DISTANCE;
+  if (graphicsPreset === 'balanced') return STATIC_WORLD_BALANCED_DISTANCE;
+  return Number.POSITIVE_INFINITY;
+}
+
+function staticWorldCellKey(x, z) {
+  return `${Math.floor(x / STATIC_WORLD_CELL_SIZE)},${Math.floor(z / STATIC_WORLD_CELL_SIZE)}`;
+}
+
+function measureStaticWorldRoot(root) {
+  _staticCullBox.makeEmpty().setFromObject(root);
+  if (_staticCullBox.isEmpty()) {
+    root.getWorldPosition(_staticCullCenter);
+    return {
+      center: _staticCullCenter.clone(),
+      radius: 4
+    };
+  }
+  _staticCullBox.getCenter(_staticCullCenter);
+  const radius = Math.max(4, _staticCullBox.getSize(_staticCullSize).length() * 0.5);
+  return {
+    center: _staticCullCenter.clone(),
+    radius
+  };
+}
+
+function freezeStaticWorldRoot(root) {
+  root.updateMatrix();
+  root.matrixAutoUpdate = false;
+}
+
+function buildStaticWorldCells() {
+  if (staticWorldBuilt) return;
+  staticWorldBuilt = true;
+
+  const excludedRoots = new Set([
+    hemi,
+    sun,
+    torchLight,
+    water,
+    beaconGroup,
+    rain,
+    mineGroup,
+    lighthouseInteriorGroup,
+    houseRoomGroup
+  ].filter(Boolean));
+  const cellsByKey = new Map();
+  const roots = scene.children.slice();
+
+  for (const root of roots) {
+    if (!root || root.parent !== scene) continue;
+    if (excludedRoots.has(root)) continue;
+    if (root.userData?.skipStaticCulling === true) continue;
+
+    const bounds = measureStaticWorldRoot(root);
+    const key = staticWorldCellKey(bounds.center.x, bounds.center.z);
+    let cell = cellsByKey.get(key);
+    if (!cell) {
+      const group = new THREE.Group();
+      group.name = `static-cell:${key}`;
+      group.userData.skipStaticCulling = true;
+      scene.add(group);
+      cell = {
+        group,
+        center: new THREE.Vector3(),
+        radius: 0,
+        count: 0,
+        bounds: []
+      };
+      cellsByKey.set(key, cell);
+      staticWorldCells.push(cell);
+    }
+
+    scene.remove(root);
+    cell.group.add(root);
+    freezeStaticWorldRoot(root);
+
+    cell.center.add(bounds.center);
+    cell.count += 1;
+    cell.bounds.push(bounds);
+  }
+
+  for (const cell of staticWorldCells) {
+    if (cell.count > 0) {
+      cell.center.multiplyScalar(1 / cell.count);
+    }
+    cell.radius = cell.bounds.reduce((maxRadius, bounds) => {
+      const distance = cell.center.distanceTo(bounds.center);
+      return Math.max(maxRadius, distance + bounds.radius);
+    }, 4);
+    cell.bounds.length = 0;
+  }
+}
+
+function updateStaticWorldCulling() {
+  if (!staticWorldCells.length) return;
+
+  const useCulling = graphicsPreset !== 'quality';
+  if (!useCulling) {
+    for (const cell of staticWorldCells) {
+      cell.group.visible = true;
+    }
+    return;
+  }
+
+  if (inMine || inLighthouseInterior || inHouseRoom) {
+    for (const cell of staticWorldCells) {
+      cell.group.visible = false;
+    }
+    return;
+  }
+
+  camera.getWorldPosition(_staticCullCameraPos);
+  camera.updateMatrixWorld();
+  _staticCullMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+  _staticCullFrustum.setFromProjectionMatrix(_staticCullMatrix);
+
+  const maxDistance = staticWorldRenderDistance();
+  for (const cell of staticWorldCells) {
+    const distance = _staticCullCameraPos.distanceTo(cell.center);
+    if (distance > maxDistance + cell.radius) {
+      cell.group.visible = false;
+      continue;
+    }
+    _staticCullSphere.center.copy(cell.center);
+    _staticCullSphere.radius = cell.radius + 10;
+    cell.group.visible = _staticCullFrustum.intersectsSphere(_staticCullSphere);
+  }
+}
+
 function applyPerformanceMode({ persist = true } = {}) {
   lowPerformanceMode = graphicsPreset === 'performance';
   if (graphicsPreset === 'performance') {
@@ -4396,6 +4540,7 @@ function applyPerformanceMode({ persist = true } = {}) {
   updatePerformanceToggleLabel();
 }
 
+buildStaticWorldCells();
 applyPerformanceMode({ persist: false });
 
 function defaultAppearance() {
@@ -10964,6 +11109,7 @@ let _lastNameTagUpdate = 0;
 let _lastVoiceVolumeUpdate = 0;
 let _lastWaterfallUpdate = 0;
 let _waterfallAccumDelta = 0;
+let _lastStaticCullUpdate = 0;
 function animate(nowMs) {
   const delta = clock.getDelta();
   const nowSeconds = nowMs / 1000;
@@ -11115,6 +11261,10 @@ function animate(nowMs) {
   if (nowMs - _lastMinimapDraw >= minimapDrawIntervalMs) {
     drawMinimap();
     _lastMinimapDraw = nowMs;
+  }
+  if (nowMs - _lastStaticCullUpdate >= STATIC_WORLD_CULL_INTERVAL_MS) {
+    updateStaticWorldCulling();
+    _lastStaticCullUpdate = nowMs;
   }
   renderer.render(scene, camera);
   renderPreview();
