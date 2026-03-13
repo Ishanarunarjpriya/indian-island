@@ -377,9 +377,7 @@ function clampToPlayableGround(x, z, allowMine = false) {
   const MINE_ENTRY_RADIUS = MINE_ENTRY_ISLAND_RADIUS;
   const FISHING_RADIUS = FISHING_ISLAND_RADIUS;
   const MARKET_RADIUS = MARKET_ISLAND_RADIUS;
-  const FURNITURE_RADIUS = FURNITURE_ISLAND_RADIUS;
   const LEADERBOARD_RADIUS = LEADERBOARD_ISLAND_RADIUS;
-  const HOUSE_ROOM_PLAY_RADIUS = HOUSE_ROOM_RADIUS;
   const mineDist = Math.hypot(x - MINE_POS.x, z - MINE_POS.z);
   const mineSwimBlocked = allowMine && mineDist <= MINE_SWIM_BLOCK_RADIUS;
   const onMain = Math.hypot(x, z) <= MAIN_RADIUS;
@@ -387,14 +385,12 @@ function clampToPlayableGround(x, z, allowMine = false) {
   const onMineEntryIsland = Math.hypot(x - MINE_ENTRY_ISLAND_POS.x, z - MINE_ENTRY_ISLAND_POS.z) <= MINE_ENTRY_RADIUS;
   const onFishingIsland = Math.hypot(x - FISHING_ISLAND_POS.x, z - FISHING_ISLAND_POS.z) <= FISHING_RADIUS;
   const onMarketIsland = Math.hypot(x - MARKET_ISLAND_POS.x, z - MARKET_ISLAND_POS.z) <= MARKET_RADIUS;
-  const onFurnitureIsland = Math.hypot(x - FURNITURE_ISLAND_POS.x, z - FURNITURE_ISLAND_POS.z) <= FURNITURE_RADIUS;
   const onLeaderboardIsland = Math.hypot(x - LEADERBOARD_ISLAND_POS.x, z - LEADERBOARD_ISLAND_POS.z) <= LEADERBOARD_RADIUS;
   const onInterior = Math.hypot(x - INTERIOR_POS.x, z - INTERIOR_POS.z) <= INTERIOR_RADIUS;
-  const onHouseRoom = Math.hypot(x - HOUSE_ROOM_POS.x, z - HOUSE_ROOM_POS.z) <= HOUSE_ROOM_PLAY_RADIUS;
   const onMine = allowMine && mineDist <= MINE_PLAY_RADIUS;
   const radius = Math.hypot(x, z);
   const onSwimRing = radius >= SWIM_MIN_RADIUS && radius <= SWIM_MAX_RADIUS && !mineSwimBlocked;
-  if (onMain || onLighthouse || onMineEntryIsland || onFishingIsland || onMarketIsland || onFurnitureIsland || onLeaderboardIsland || onInterior || onHouseRoom || onMine || onSwimRing) {
+  if (onMain || onLighthouse || onMineEntryIsland || onFishingIsland || onMarketIsland || onLeaderboardIsland || onInterior || onMine || onSwimRing) {
     return { x, z };
   }
 
@@ -433,14 +429,6 @@ function clampToPlayableGround(x, z, allowMine = false) {
     z: MARKET_ISLAND_POS.z + (dzK / lenK) * MARKET_RADIUS
   };
   const distMarket = Math.hypot(x - toMarket.x, z - toMarket.z);
-  const dxR = x - FURNITURE_ISLAND_POS.x;
-  const dzR = z - FURNITURE_ISLAND_POS.z;
-  const lenR = Math.hypot(dxR, dzR) || 1;
-  const toFurniture = {
-    x: FURNITURE_ISLAND_POS.x + (dxR / lenR) * FURNITURE_RADIUS,
-    z: FURNITURE_ISLAND_POS.z + (dzR / lenR) * FURNITURE_RADIUS
-  };
-  const distFurniture = Math.hypot(x - toFurniture.x, z - toFurniture.z);
   const dxB = x - LEADERBOARD_ISLAND_POS.x;
   const dzB = z - LEADERBOARD_ISLAND_POS.z;
   const lenB = Math.hypot(dxB, dzB) || 1;
@@ -458,14 +446,6 @@ function clampToPlayableGround(x, z, allowMine = false) {
     z: INTERIOR_POS.z + (dzI / lenI) * INTERIOR_RADIUS
   };
   const distInterior = Math.hypot(x - toInterior.x, z - toInterior.z);
-  const dxH = x - HOUSE_ROOM_POS.x;
-  const dzH = z - HOUSE_ROOM_POS.z;
-  const lenH = Math.hypot(dxH, dzH) || 1;
-  const toHouseRoom = {
-    x: HOUSE_ROOM_POS.x + (dxH / lenH) * HOUSE_ROOM_PLAY_RADIUS,
-    z: HOUSE_ROOM_POS.z + (dzH / lenH) * HOUSE_ROOM_PLAY_RADIUS
-  };
-  const distHouseRoom = Math.hypot(x - toHouseRoom.x, z - toHouseRoom.z);
   const dxM = x - MINE_POS.x;
   const dzM = z - MINE_POS.z;
   const lenM = Math.hypot(dxM, dzM) || 1;
@@ -487,10 +467,8 @@ function clampToPlayableGround(x, z, allowMine = false) {
     && distMain <= distMineEntry
     && distMain <= distFishing
     && distMain <= distMarket
-    && distMain <= distFurniture
     && distMain <= distLeaderboard
     && distMain <= distInterior
-    && distMain <= distHouseRoom
     && distMain <= distSwim
     && distMain <= distMine
   ) return toMain;
@@ -498,29 +476,23 @@ function clampToPlayableGround(x, z, allowMine = false) {
     distLighthouse <= distMineEntry
     && distLighthouse <= distFishing
     && distLighthouse <= distMarket
-    && distLighthouse <= distFurniture
     && distLighthouse <= distLeaderboard
     && distLighthouse <= distInterior
-    && distLighthouse <= distHouseRoom
     && distLighthouse <= distSwim
     && distLighthouse <= distMine
   ) return toLighthouse;
   if (
     distMineEntry <= distFishing
     && distMineEntry <= distMarket
-    && distMineEntry <= distFurniture
     && distMineEntry <= distLeaderboard
     && distMineEntry <= distInterior
-    && distMineEntry <= distHouseRoom
     && distMineEntry <= distSwim
     && distMineEntry <= distMine
   ) return toMineEntry;
-  if (distFishing <= distMarket && distFishing <= distFurniture && distFishing <= distLeaderboard && distFishing <= distInterior && distFishing <= distHouseRoom && distFishing <= distSwim && distFishing <= distMine) return toFishing;
-  if (distMarket <= distFurniture && distMarket <= distLeaderboard && distMarket <= distInterior && distMarket <= distHouseRoom && distMarket <= distSwim && distMarket <= distMine) return toMarket;
-  if (distFurniture <= distLeaderboard && distFurniture <= distInterior && distFurniture <= distHouseRoom && distFurniture <= distSwim && distFurniture <= distMine) return toFurniture;
-  if (distLeaderboard <= distInterior && distLeaderboard <= distHouseRoom && distLeaderboard <= distSwim && distLeaderboard <= distMine) return toLeaderboard;
-  if (distInterior <= distHouseRoom && distInterior <= distSwim && distInterior <= distMine) return toInterior;
-  if (distHouseRoom <= distSwim && distHouseRoom <= distMine) return toHouseRoom;
+  if (distFishing <= distMarket && distFishing <= distLeaderboard && distFishing <= distInterior && distFishing <= distSwim && distFishing <= distMine) return toFishing;
+  if (distMarket <= distLeaderboard && distMarket <= distInterior && distMarket <= distSwim && distMarket <= distMine) return toMarket;
+  if (distLeaderboard <= distInterior && distLeaderboard <= distSwim && distLeaderboard <= distMine) return toLeaderboard;
+  if (distInterior <= distSwim && distInterior <= distMine) return toInterior;
   if (distMine <= distSwim) return toMine;
   return toSwim;
 }

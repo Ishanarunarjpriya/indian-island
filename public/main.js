@@ -1778,7 +1778,6 @@ function dockSlots() {
     { dock: MINE_ENTRY_DOCK_POS, yaw: MINE_ENTRY_DOCK_YAW },
     { dock: FISHING_DOCK_POS, yaw: FISHING_DOCK_YAW },
     { dock: MARKET_DOCK_POS, yaw: MARKET_DOCK_YAW },
-    { dock: FURNITURE_DOCK_POS, yaw: FURNITURE_DOCK_YAW },
     { dock: LEADERBOARD_DOCK_POS, yaw: LEADERBOARD_DOCK_YAW }
   ];
 }
@@ -4108,15 +4107,11 @@ function addLandmarks() {
   addDock(FISHING_DOCK_POS, FISHING_DOCK_YAW, { segments: 11, plankLength: 2.8, plankWidth: 2.2, spacing: 1.05 });
   addMarketIsland();
   addDock(MARKET_DOCK_POS, MARKET_DOCK_YAW, { segments: 11, plankLength: 2.8, plankWidth: 2.2, spacing: 1.05 });
-  addFurnitureIsland();
-  addDock(FURNITURE_DOCK_POS, FURNITURE_DOCK_YAW, { segments: 11, plankLength: 2.8, plankWidth: 2.2, spacing: 1.05 });
   addLeaderboardIsland();
   addDock(LEADERBOARD_DOCK_POS, LEADERBOARD_DOCK_YAW, { segments: 11, plankLength: 2.8, plankWidth: 2.2, spacing: 1.05 });
   addLighthouseInterior();
   populateMainIslandNature();
   addBeaconIslandLights();
-  addWoodHouse(HOUSE_POS.x, HOUSE_POS.z, 0, { collisions: false });
-  addMainHouseRoomInterior();
   const cliffAngle = Math.atan2(-ISLAND_DOCK_POS.z, -ISLAND_DOCK_POS.x);
   addCliffAndWaterfall(Math.cos(cliffAngle) * worldLimit * 0.7, Math.sin(cliffAngle) * worldLimit * 0.7);
   const decorPos = findWaterSideSlot(ISLAND_DOCK_POS, ISLAND_DOCK_YAW, -1, 6.0, 3.2);
@@ -4508,7 +4503,6 @@ function clampToPlayableGround(x, z, allowMine = false) {
   const MARKET_RADIUS = MARKET_ISLAND_RADIUS;
   const LEADERBOARD_RADIUS = LEADERBOARD_ISLAND_RADIUS;
   const INTERIOR_RADIUS = INTERIOR_PLAY_RADIUS;
-  const HOUSE_ROOM_RADIUS = HOUSE_ROOM_PLAY_RADIUS;
   const mineSwimBlocked = allowMine && blocksMineEscapeSwim(x, z);
   const inSwim = isSwimZone(x, z) && !mineSwimBlocked;
 
@@ -4531,13 +4525,10 @@ function clampToPlayableGround(x, z, allowMine = false) {
   const dxI = x - LIGHTHOUSE_INTERIOR_BASE.x;
   const dzI = z - LIGHTHOUSE_INTERIOR_BASE.z;
   const inInterior = Math.hypot(dxI, dzI) <= INTERIOR_RADIUS;
-  const dxH = x - HOUSE_ROOM_BASE.x;
-  const dzH = z - HOUSE_ROOM_BASE.z;
-  const inHouseRoomZone = Math.hypot(dxH, dzH) <= HOUSE_ROOM_RADIUS;
   const dxM = x - MINE_POS.x;
   const dzM = z - MINE_POS.z;
   const inMine = allowMine && mineDistance(x, z) <= MINE_PLAY_RADIUS;
-  if (inMain || inLighthouse || inMineEntryIsland || inFishingIsland || inMarketIsland || inLeaderboardIsland || inInterior || inHouseRoomZone || inMine || inSwim) {
+  if (inMain || inLighthouse || inMineEntryIsland || inFishingIsland || inMarketIsland || inLeaderboardIsland || inInterior || inMine || inSwim) {
     return { x, z };
   }
 
@@ -4579,12 +4570,6 @@ function clampToPlayableGround(x, z, allowMine = false) {
     z: LIGHTHOUSE_INTERIOR_BASE.z + (dzI / lenI) * INTERIOR_RADIUS
   };
   const distInterior = Math.hypot(x - toInterior.x, z - toInterior.z);
-  const lenH = Math.hypot(dxH, dzH) || 1;
-  const toHouseRoom = {
-    x: HOUSE_ROOM_BASE.x + (dxH / lenH) * HOUSE_ROOM_RADIUS,
-    z: HOUSE_ROOM_BASE.z + (dzH / lenH) * HOUSE_ROOM_RADIUS
-  };
-  const distHouseRoom = Math.hypot(x - toHouseRoom.x, z - toHouseRoom.z);
   const lenM = Math.hypot(dxM, dzM) || 1;
   const toMine = {
     x: MINE_POS.x + (dxM / lenM) * MINE_PLAY_RADIUS,
@@ -4593,14 +4578,13 @@ function clampToPlayableGround(x, z, allowMine = false) {
   const distMine = allowMine ? Math.hypot(x - toMine.x, z - toMine.z) : Number.POSITIVE_INFINITY;
   const toSwim = clampToRing(x, z, SWIM_MIN_RADIUS, SWIM_MAX_RADIUS);
   const distSwim = mineSwimBlocked ? Number.POSITIVE_INFINITY : Math.hypot(x - toSwim.x, z - toSwim.z);
-  if (distMain <= distLight && distMain <= distMineEntry && distMain <= distFishing && distMain <= distMarket && distMain <= distLeaderboard && distMain <= distInterior && distMain <= distHouseRoom && distMain <= distMine && distMain <= distSwim) return toMain;
-  if (distLight <= distMineEntry && distLight <= distFishing && distLight <= distMarket && distLight <= distLeaderboard && distLight <= distInterior && distLight <= distHouseRoom && distLight <= distMine && distLight <= distSwim) return toLight;
-  if (distMineEntry <= distFishing && distMineEntry <= distMarket && distMineEntry <= distLeaderboard && distMineEntry <= distInterior && distMineEntry <= distHouseRoom && distMineEntry <= distMine && distMineEntry <= distSwim) return toMineEntry;
-  if (distFishing <= distMarket && distFishing <= distLeaderboard && distFishing <= distInterior && distFishing <= distHouseRoom && distFishing <= distMine && distFishing <= distSwim) return toFishing;
-  if (distMarket <= distLeaderboard && distMarket <= distInterior && distMarket <= distHouseRoom && distMarket <= distMine && distMarket <= distSwim) return toMarket;
-  if (distLeaderboard <= distInterior && distLeaderboard <= distHouseRoom && distLeaderboard <= distMine && distLeaderboard <= distSwim) return toLeaderboard;
-  if (distInterior <= distHouseRoom && distInterior <= distMine && distInterior <= distSwim) return toInterior;
-  if (distHouseRoom <= distMine && distHouseRoom <= distSwim) return toHouseRoom;
+  if (distMain <= distLight && distMain <= distMineEntry && distMain <= distFishing && distMain <= distMarket && distMain <= distLeaderboard && distMain <= distInterior && distMain <= distMine && distMain <= distSwim) return toMain;
+  if (distLight <= distMineEntry && distLight <= distFishing && distLight <= distMarket && distLight <= distLeaderboard && distLight <= distInterior && distLight <= distMine && distLight <= distSwim) return toLight;
+  if (distMineEntry <= distFishing && distMineEntry <= distMarket && distMineEntry <= distLeaderboard && distMineEntry <= distInterior && distMineEntry <= distMine && distMineEntry <= distSwim) return toMineEntry;
+  if (distFishing <= distMarket && distFishing <= distLeaderboard && distFishing <= distInterior && distFishing <= distMine && distFishing <= distSwim) return toFishing;
+  if (distMarket <= distLeaderboard && distMarket <= distInterior && distMarket <= distMine && distMarket <= distSwim) return toMarket;
+  if (distLeaderboard <= distInterior && distLeaderboard <= distMine && distLeaderboard <= distSwim) return toLeaderboard;
+  if (distInterior <= distMine && distInterior <= distSwim) return toInterior;
   if (distMine <= distSwim) return toMine;
   return toSwim;
 }
@@ -4616,7 +4600,6 @@ function isWaterAt(x, z) {
   if (Math.hypot(x - MINE_ENTRY_DOCK_POS.x, z - MINE_ENTRY_DOCK_POS.z) <= 14) return false;
   if (Math.hypot(x - FISHING_DOCK_POS.x, z - FISHING_DOCK_POS.z) <= 14) return false;
   if (Math.hypot(x - MARKET_DOCK_POS.x, z - MARKET_DOCK_POS.z) <= 14) return false;
-  if (Math.hypot(x - FURNITURE_DOCK_POS.x, z - FURNITURE_DOCK_POS.z) <= 14) return false;
   if (Math.hypot(x - LEADERBOARD_DOCK_POS.x, z - LEADERBOARD_DOCK_POS.z) <= 14) return false;
 
   // Hard land-safe radius for the main island footprint.
@@ -4651,18 +4634,10 @@ function isWaterAt(x, z) {
   const dzK = z - MARKET_ISLAND_POS.z;
   const onMarketIslandLand = Math.hypot(dxK, dzK) <= MARKET_ISLAND_RADIUS + 3.2;
   if (onMarketIslandLand) return false;
-  const dxR = x - FURNITURE_ISLAND_POS.x;
-  const dzR = z - FURNITURE_ISLAND_POS.z;
-  const onFurnitureIslandLand = Math.hypot(dxR, dzR) <= FURNITURE_ISLAND_RADIUS + 3.2;
-  if (onFurnitureIslandLand) return false;
   const dxB = x - LEADERBOARD_ISLAND_POS.x;
   const dzB = z - LEADERBOARD_ISLAND_POS.z;
   const onLeaderboardIslandLand = Math.hypot(dxB, dzB) <= LEADERBOARD_ISLAND_RADIUS + 3.2;
   if (onLeaderboardIslandLand) return false;
-  const dxH = x - HOUSE_ROOM_BASE.x;
-  const dzH = z - HOUSE_ROOM_BASE.z;
-  const onHouseRoomLand = Math.hypot(dxH, dzH) <= HOUSE_ROOM_PLAY_RADIUS + 1.4;
-  if (onHouseRoomLand) return false;
 
   if (isInDockWalkZone(x, z, 3.0, 2.5)) return false;
 
@@ -4917,14 +4892,12 @@ function swimHintText() {
 }
 
 function canBoardBoat(local) {
-  if (inHouseRoom) return false;
   const nearDock = (
     distance2D(local, ISLAND_DOCK_POS) < 5
     || distance2D(local, LIGHTHOUSE_DOCK_POS) < 5
     || distance2D(local, MINE_ENTRY_DOCK_POS) < 5
     || distance2D(local, FISHING_DOCK_POS) < 5
     || distance2D(local, MARKET_DOCK_POS) < 5
-    || distance2D(local, FURNITURE_DOCK_POS) < 5
     || distance2D(local, LEADERBOARD_DOCK_POS) < 5
   );
   const nearBoat = Boolean(boatState.mesh) && distance2D(local, boatState) < 5.2;
@@ -5096,7 +5069,6 @@ function isWithinPlayableWorld(x, z, allowMine = false) {
   const MARKET_RADIUS = MARKET_ISLAND_RADIUS;
   const LEADERBOARD_RADIUS = LEADERBOARD_ISLAND_RADIUS;
   const INTERIOR_RADIUS = INTERIOR_PLAY_RADIUS;
-  const HOUSE_ROOM_RADIUS = HOUSE_ROOM_PLAY_RADIUS;
   const mineSwimBlocked = allowMine && blocksMineEscapeSwim(x, z);
   const onMain = Math.hypot(x, z) <= MAIN_RADIUS;
   const onLighthouse = Math.hypot(x - LIGHTHOUSE_POS.x, z - LIGHTHOUSE_POS.z) <= LIGHTHOUSE_RADIUS;
@@ -5105,10 +5077,9 @@ function isWithinPlayableWorld(x, z, allowMine = false) {
   const onMarketIsland = Math.hypot(x - MARKET_ISLAND_POS.x, z - MARKET_ISLAND_POS.z) <= MARKET_RADIUS;
   const onLeaderboardIsland = Math.hypot(x - LEADERBOARD_ISLAND_POS.x, z - LEADERBOARD_ISLAND_POS.z) <= LEADERBOARD_RADIUS;
   const inInterior = Math.hypot(x - LIGHTHOUSE_INTERIOR_BASE.x, z - LIGHTHOUSE_INTERIOR_BASE.z) <= INTERIOR_RADIUS;
-  const inHouseRoomZone = Math.hypot(x - HOUSE_ROOM_BASE.x, z - HOUSE_ROOM_BASE.z) <= HOUSE_ROOM_RADIUS;
   const inMine = allowMine && mineDistance(x, z) <= MINE_PLAY_RADIUS;
   const inSwim = isSwimZone(x, z) && !mineSwimBlocked;
-  return onMain || onLighthouse || onMineEntryIsland || onFishingIsland || onMarketIsland || onLeaderboardIsland || inInterior || inHouseRoomZone || inMine || inSwim;
+  return onMain || onLighthouse || onMineEntryIsland || onFishingIsland || onMarketIsland || onLeaderboardIsland || inInterior || inMine || inSwim;
 }
 
 function setBeaconVisual(active) {
@@ -8656,19 +8627,15 @@ function tryMineNode(local) {
 function tryAutoTeleport(local, now = performance.now()) {
   if (!local || isTeleporting || mineWarningOpen || now < teleportTriggerLockUntil) return false;
 
-  const nearMineEntrance = !inMine && !inLighthouseInterior && !inHouseRoom && !local.onBoat && distance2D(local, MINE_ENTRY_POS) < 2.2;
-  const nearLighthouseEntry = !inMine && !inLighthouseInterior && !inHouseRoom && !local.onBoat && (
+  const nearMineEntrance = !inMine && !inLighthouseInterior && !local.onBoat && distance2D(local, MINE_ENTRY_POS) < 2.2;
+  const nearLighthouseEntry = !inMine && !inLighthouseInterior && !local.onBoat && (
     distance2D(local, LIGHTHOUSE_DOOR_POS) < 2.35
   );
-  const nearHouseEntry = !inMine && !inLighthouseInterior && !inHouseRoom && !local.onBoat
-    && distance2D(local, HOUSE_DOOR_POS) < HOUSE_DOOR_INTERACT_RADIUS;
 
   if (nearMineEntrance) {
     const enterMine = () => {
       runTeleportTransition('enter-mine', () => {
         inMine = true;
-        inHouseRoom = false;
-        if (houseRoomGroup) houseRoomGroup.visible = false;
         teleportLocal(local, { x: MINE_POS.x + 0.8, y: GROUND_Y, z: MINE_POS.z + 11.2 }, Math.PI);
       });
     };
@@ -8692,24 +8659,9 @@ function tryAutoTeleport(local, now = performance.now()) {
 
   if (nearLighthouseEntry) {
     runTeleportTransition('enter-lighthouse', () => {
-      inHouseRoom = false;
-      if (houseRoomGroup) houseRoomGroup.visible = false;
       inLighthouseInterior = true;
       if (lighthouseInteriorGroup) lighthouseInteriorGroup.visible = true;
       teleportLocal(local, { x: INTERIOR_ENTRY_POS.x, y: GROUND_Y, z: INTERIOR_ENTRY_POS.z }, Math.PI);
-    });
-    lastInteractAt = now;
-    return true;
-  }
-
-  if (nearHouseEntry) {
-    runTeleportTransition('enter-home', () => {
-      inMine = false;
-      inLighthouseInterior = false;
-      if (lighthouseInteriorGroup) lighthouseInteriorGroup.visible = false;
-      inHouseRoom = true;
-      if (houseRoomGroup) houseRoomGroup.visible = true;
-      teleportLocal(local, { x: HOUSE_ROOM_ENTRY_POS.x, y: GROUND_Y, z: HOUSE_ROOM_ENTRY_POS.z }, Math.PI);
     });
     lastInteractAt = now;
     return true;
@@ -8723,8 +8675,6 @@ function hasManualInteractTarget(local) {
   if (npcDialogueOpen) return true;
   if (fishingMiniGame.active) return true;
   if (isTeleporting) return false;
-  if (isNearHouseExit(local) || isNearHouseWorkshop(local)) return true;
-  if (inHouseRoom) return false;
 
   const nearMineExit = inMine && distance2D(local, MINE_EXIT_POS) < 3.1;
   if (nearMineExit) return true;
@@ -8735,7 +8685,6 @@ function hasManualInteractTarget(local) {
   if (distance2D(local, QUEST_NPC_POS) <= 3.2) return true;
   if (isNearFishingVendor(local)) return true;
   if (isNearFishMarket(local)) return true;
-  if (isNearFurnitureVendor(local)) return true;
   if (!inMine && nearestFishingSpot(local)) return true;
 
   const nearInteriorPortal = inLighthouseInterior && distance2D(local, INTERIOR_EXIT_PORTAL_POS) < 3.1;
@@ -8781,8 +8730,6 @@ function tryInteract() {
   if (tryAutoTeleport(local, now)) return;
   const nearMineExit = inMine && distance2D(local, MINE_EXIT_POS) < 3.1;
   const nearMineCrystal = inMine && isNearMineCrystal(local);
-  const nearHouseExit = isNearHouseExit(local);
-  const nearHouseWorkshop = isNearHouseWorkshop(local);
   const nearInteriorPortal = inLighthouseInterior && distance2D(local, INTERIOR_EXIT_PORTAL_POS) < 3.1;
   const nearTopPortal = !inLighthouseInterior && !local.onBoat && distance2D(local, LIGHTHOUSE_TOP_POS) < 1.25 && local.y > 11.6;
 
@@ -8802,25 +8749,6 @@ function tryInteract() {
     return;
   }
 
-  if (nearHouseExit) {
-    runTeleportTransition('exit-home', () => {
-      exitHouseToMain(local);
-    });
-    lastInteractAt = now;
-    return;
-  }
-
-  if (nearHouseWorkshop) {
-    if (homeWorkshopInteract(local)) {
-      lastInteractAt = now;
-      return;
-    }
-  }
-
-  if (inHouseRoom) {
-    return;
-  }
-
   if (fishingMiniGame.active && tryFishingSpotInteract(local)) {
     lastInteractAt = now;
     return;
@@ -8837,11 +8765,6 @@ function tryInteract() {
   }
 
   if (fishMarketInteract(local)) {
-    lastInteractAt = now;
-    return;
-  }
-
-  if (furnitureTraderInteract(local)) {
     lastInteractAt = now;
     return;
   }
@@ -8946,13 +8869,9 @@ socket.on('init', (payload) => {
   if (local) {
     inMine = local.inMine === true || mineDistance(local.x, local.z) <= MINE_PLAY_RADIUS;
     inLighthouseInterior = Math.hypot(local.x - LIGHTHOUSE_INTERIOR_BASE.x, local.z - LIGHTHOUSE_INTERIOR_BASE.z) <= INTERIOR_PLAY_RADIUS;
-    inHouseRoom = Math.hypot(local.x - HOUSE_ROOM_BASE.x, local.z - HOUSE_ROOM_BASE.z) <= HOUSE_ROOM_PLAY_RADIUS;
-    if (inHouseRoom) {
-      inMine = false;
-      inLighthouseInterior = false;
-    }
+    inHouseRoom = false;
     if (lighthouseInteriorGroup) lighthouseInteriorGroup.visible = inLighthouseInterior;
-    if (houseRoomGroup) houseRoomGroup.visible = inHouseRoom;
+    if (houseRoomGroup) houseRoomGroup.visible = false;
     applyPlayerCustomization(local.id, local.name, local.color, local.appearance);
     customizeStatusEl.textContent = `Loaded account avatar for ${local.name || 'Player'}.`;
   } else {
@@ -10653,18 +10572,6 @@ function updateInteractionHint() {
     interactHintEl.textContent = 'Boat controls: W/S move, A/D steer, E to get off anywhere';
     return;
   }
-  if (inHouseRoom) {
-    if (isNearHouseExit(local)) {
-      interactHintEl.textContent = 'Press E at the marker to exit your room';
-      return;
-    }
-    if (isNearHouseWorkshop(local)) {
-      interactHintEl.textContent = 'Press E to open home workshop';
-      return;
-    }
-    interactHintEl.textContent = 'Your Room: use Workshop marker to place furniture and paint';
-    return;
-  }
   if (inMine) {
     if (miningAccuracyGame.active) {
       interactHintEl.textContent = 'Mining minigame: click/tap or press E/Space in green';
@@ -10719,10 +10626,6 @@ function updateInteractionHint() {
     interactHintEl.textContent = 'Press E to open Market quests and selling';
     return;
   }
-  if (isNearFurnitureVendor(local)) {
-    interactHintEl.textContent = 'Press E to browse rotating furniture stock';
-    return;
-  }
   if (!inMine && nearestFishingSpot(local)) {
     interactHintEl.textContent = questState.hasFishingRod
       ? 'Press E/Space to cast line at this fishing spot'
@@ -10731,10 +10634,6 @@ function updateInteractionHint() {
   }
   if (distance2D(local, MINE_ENTRY_POS) < 2.45) {
     interactHintEl.textContent = 'Walk into the mine entrance to enter';
-    return;
-  }
-  if (distance2D(local, HOUSE_DOOR_POS) < 2.6) {
-    interactHintEl.textContent = 'Walk through the house door to enter your room';
     return;
   }
   if (distance2D(local, QUEST_NPC_POS) < 3.4) {
@@ -10772,7 +10671,6 @@ function updateInteractionHint() {
     || distance2D(local, MINE_ENTRY_DOCK_POS) < 6
     || distance2D(local, FISHING_DOCK_POS) < 6
     || distance2D(local, MARKET_DOCK_POS) < 6
-    || distance2D(local, FURNITURE_DOCK_POS) < 6
     || distance2D(local, LEADERBOARD_DOCK_POS) < 6
   ) {
     interactHintEl.textContent = 'Press E to board boat';
@@ -10843,9 +10741,6 @@ function drawMinimap() {
   minimapCtx.arc(center + MARKET_DOCK_POS.x * scale, center + MARKET_DOCK_POS.z * scale, 3, 0, Math.PI * 2);
   minimapCtx.fill();
   minimapCtx.beginPath();
-  minimapCtx.arc(center + FURNITURE_DOCK_POS.x * scale, center + FURNITURE_DOCK_POS.z * scale, 3, 0, Math.PI * 2);
-  minimapCtx.fill();
-  minimapCtx.beginPath();
   minimapCtx.arc(center + LEADERBOARD_DOCK_POS.x * scale, center + LEADERBOARD_DOCK_POS.z * scale, 3, 0, Math.PI * 2);
   minimapCtx.fill();
   minimapCtx.fillStyle = '#f8fafc';
@@ -10873,10 +10768,6 @@ function drawMinimap() {
   minimapCtx.fillStyle = '#f59e0b';
   minimapCtx.beginPath();
   minimapCtx.arc(center + MARKET_ISLAND_POS.x * scale, center + MARKET_ISLAND_POS.z * scale, 3, 0, Math.PI * 2);
-  minimapCtx.fill();
-  minimapCtx.fillStyle = '#fb7185';
-  minimapCtx.beginPath();
-  minimapCtx.arc(center + FURNITURE_ISLAND_POS.x * scale, center + FURNITURE_ISLAND_POS.z * scale, 3, 0, Math.PI * 2);
   minimapCtx.fill();
   minimapCtx.fillStyle = '#a78bfa';
   minimapCtx.beginPath();
