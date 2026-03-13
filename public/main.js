@@ -758,10 +758,19 @@ const BALANCED_WATERFALL_UPDATE_INTERVAL_MS = 33;
 const PERFORMANCE_WATERFALL_UPDATE_INTERVAL_MS = 80;
 const QUALITY_MINIMAP_DRAW_INTERVAL_MS = 100;
 const BALANCED_MINIMAP_DRAW_INTERVAL_MS = 120;
-const PERFORMANCE_MINIMAP_DRAW_INTERVAL_MS = 220;
+const PERFORMANCE_MINIMAP_DRAW_INTERVAL_MS = 320;
 const QUALITY_SHADOW_MAP_SIZE = 1024;
 const BALANCED_SHADOW_MAP_SIZE = 512;
 const PERFORMANCE_SHADOW_MAP_SIZE = 256;
+const QUALITY_NAME_TAG_UPDATE_INTERVAL_MS = 50;
+const BALANCED_NAME_TAG_UPDATE_INTERVAL_MS = 80;
+const PERFORMANCE_NAME_TAG_UPDATE_INTERVAL_MS = 140;
+const QUALITY_REMOTE_PLAYER_UPDATE_INTERVAL_MS = 0;
+const BALANCED_REMOTE_PLAYER_UPDATE_INTERVAL_MS = 24;
+const PERFORMANCE_REMOTE_PLAYER_UPDATE_INTERVAL_MS = 45;
+const QUALITY_CAMERA_FAR = 300;
+const BALANCED_CAMERA_FAR = 240;
+const PERFORMANCE_CAMERA_FAR = 180;
 
 let renderPixelRatioCap = QUALITY_RENDER_PIXEL_RATIO_CAP;
 let previewPixelRatioCap = QUALITY_PREVIEW_PIXEL_RATIO_CAP;
@@ -769,6 +778,9 @@ let voiceUpdateIntervalMs = QUALITY_VOICE_UPDATE_INTERVAL_MS;
 let waterfallUpdateIntervalMs = QUALITY_WATERFALL_UPDATE_INTERVAL_MS;
 let minimapDrawIntervalMs = QUALITY_MINIMAP_DRAW_INTERVAL_MS;
 let shadowMapSize = QUALITY_SHADOW_MAP_SIZE;
+let nameTagUpdateIntervalMs = QUALITY_NAME_TAG_UPDATE_INTERVAL_MS;
+let remotePlayerUpdateIntervalMs = QUALITY_REMOTE_PLAYER_UPDATE_INTERVAL_MS;
+let cameraFarDistance = QUALITY_CAMERA_FAR;
 
 let previewScene = null;
 let previewCamera = null;
@@ -787,7 +799,9 @@ let previewRenderWidth = 0;
 let previewRenderHeight = 0;
 
 function setMinimapCanvasSize(expanded) {
-  const size = expanded ? 296 : 176;
+  const size = lowPerformanceMode
+    ? (expanded ? 236 : 144)
+    : (expanded ? 296 : 176);
   if (minimapEl.width === size && minimapEl.height === size) return;
   minimapEl.width = size;
   minimapEl.height = size;
@@ -4355,6 +4369,9 @@ function applyPerformanceMode({ persist = true } = {}) {
     minimapDrawIntervalMs = PERFORMANCE_MINIMAP_DRAW_INTERVAL_MS;
     shadowMapSize = PERFORMANCE_SHADOW_MAP_SIZE;
     rainParticleUpdateCount = 220;
+    nameTagUpdateIntervalMs = PERFORMANCE_NAME_TAG_UPDATE_INTERVAL_MS;
+    remotePlayerUpdateIntervalMs = PERFORMANCE_REMOTE_PLAYER_UPDATE_INTERVAL_MS;
+    cameraFarDistance = PERFORMANCE_CAMERA_FAR;
   } else if (graphicsPreset === 'balanced') {
     renderPixelRatioCap = BALANCED_RENDER_PIXEL_RATIO_CAP;
     previewPixelRatioCap = BALANCED_PREVIEW_PIXEL_RATIO_CAP;
@@ -4363,6 +4380,9 @@ function applyPerformanceMode({ persist = true } = {}) {
     minimapDrawIntervalMs = BALANCED_MINIMAP_DRAW_INTERVAL_MS;
     shadowMapSize = BALANCED_SHADOW_MAP_SIZE;
     rainParticleUpdateCount = 520;
+    nameTagUpdateIntervalMs = BALANCED_NAME_TAG_UPDATE_INTERVAL_MS;
+    remotePlayerUpdateIntervalMs = BALANCED_REMOTE_PLAYER_UPDATE_INTERVAL_MS;
+    cameraFarDistance = BALANCED_CAMERA_FAR;
   } else {
     renderPixelRatioCap = QUALITY_RENDER_PIXEL_RATIO_CAP;
     previewPixelRatioCap = QUALITY_PREVIEW_PIXEL_RATIO_CAP;
@@ -4371,6 +4391,9 @@ function applyPerformanceMode({ persist = true } = {}) {
     minimapDrawIntervalMs = QUALITY_MINIMAP_DRAW_INTERVAL_MS;
     shadowMapSize = QUALITY_SHADOW_MAP_SIZE;
     rainParticleUpdateCount = rainCount;
+    nameTagUpdateIntervalMs = QUALITY_NAME_TAG_UPDATE_INTERVAL_MS;
+    remotePlayerUpdateIntervalMs = QUALITY_REMOTE_PLAYER_UPDATE_INTERVAL_MS;
+    cameraFarDistance = QUALITY_CAMERA_FAR;
   }
 
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, renderPixelRatioCap));
@@ -4378,6 +4401,9 @@ function applyPerformanceMode({ persist = true } = {}) {
   sun.castShadow = graphicsPreset !== 'performance';
   sun.shadow.mapSize.set(shadowMapSize, shadowMapSize);
   sun.shadow.needsUpdate = true;
+  camera.far = cameraFarDistance;
+  camera.updateProjectionMatrix();
+  rainGeometry.setDrawRange(0, rainParticleUpdateCount);
 
   if (previewRenderer) {
     previewRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, previewPixelRatioCap));
@@ -4388,6 +4414,8 @@ function applyPerformanceMode({ persist = true } = {}) {
   if (cliffWaterfallRoot) {
     cliffWaterfallRoot.visible = graphicsPreset !== 'performance';
   }
+
+  setMinimapCanvasSize(minimapEnabled && minimapExpanded);
 
   if (persist) {
     localStorage.setItem('island_graphics_preset', graphicsPreset);
@@ -10314,8 +10342,13 @@ function updateDayAndWeather(delta, nowSeconds) {
     _skyColor.setHSL(0.58, 0.5, 0.035 + dayFactor * 0.52);
     _fogColor.setHSL(0.58, 0.36, 0.02 + dayFactor * 0.35);
     scene.fog.color.copy(_fogColor);
-    scene.fog.near = 34 + dayFactor * 14;
-    scene.fog.far = 88 + dayFactor * 84;
+    if (lowPerformanceMode) {
+      scene.fog.near = 28 + dayFactor * 10;
+      scene.fog.far = 64 + dayFactor * 52;
+    } else {
+      scene.fog.near = 34 + dayFactor * 14;
+      scene.fog.far = 88 + dayFactor * 84;
+    }
   }
   renderer.setClearColor(_skyColor);
 
@@ -10324,7 +10357,7 @@ function updateDayAndWeather(delta, nowSeconds) {
     nextWeatherToggleAt = nowSeconds + 22 + Math.random() * 16;
   }
 
-  const renderRain = rainActive && !lowPerformanceMode && !insideMine;
+  const renderRain = rainActive && !insideMine;
   rain.visible = renderRain;
   weatherLabelEl.textContent = insideMine ? 'Cave' : (rainActive ? (lowPerformanceMode ? 'Rain (lite)' : 'Rain') : 'Clear');
 
@@ -10798,6 +10831,7 @@ function drawMinimap() {
   const size = minimapEl.width;
   const center = size / 2;
   const radius = center - 8;
+  const simplifiedMinimap = lowPerformanceMode;
 
   minimapCtx.clearRect(0, 0, size, size);
   minimapCtx.fillStyle = '#1f4564';
@@ -10826,41 +10860,45 @@ function drawMinimap() {
     minimapCtx.fill();
   }
 
-  minimapCtx.fillStyle = '#f97316';
-  minimapCtx.beginPath();
-  minimapCtx.arc(center + ISLAND_DOCK_POS.x * scale, center + ISLAND_DOCK_POS.z * scale, 3, 0, Math.PI * 2);
-  minimapCtx.fill();
-  minimapCtx.beginPath();
-  minimapCtx.arc(center + LIGHTHOUSE_DOCK_POS.x * scale, center + LIGHTHOUSE_DOCK_POS.z * scale, 3, 0, Math.PI * 2);
-  minimapCtx.fill();
-  minimapCtx.beginPath();
-  minimapCtx.arc(center + MINE_ENTRY_DOCK_POS.x * scale, center + MINE_ENTRY_DOCK_POS.z * scale, 3, 0, Math.PI * 2);
-  minimapCtx.fill();
-  minimapCtx.beginPath();
-  minimapCtx.arc(center + FISHING_DOCK_POS.x * scale, center + FISHING_DOCK_POS.z * scale, 3, 0, Math.PI * 2);
-  minimapCtx.fill();
-  minimapCtx.beginPath();
-  minimapCtx.arc(center + MARKET_DOCK_POS.x * scale, center + MARKET_DOCK_POS.z * scale, 3, 0, Math.PI * 2);
-  minimapCtx.fill();
-  minimapCtx.beginPath();
-  minimapCtx.arc(center + FURNITURE_DOCK_POS.x * scale, center + FURNITURE_DOCK_POS.z * scale, 3, 0, Math.PI * 2);
-  minimapCtx.fill();
-  minimapCtx.beginPath();
-  minimapCtx.arc(center + LEADERBOARD_DOCK_POS.x * scale, center + LEADERBOARD_DOCK_POS.z * scale, 3, 0, Math.PI * 2);
-  minimapCtx.fill();
+  if (!simplifiedMinimap) {
+    minimapCtx.fillStyle = '#f97316';
+    minimapCtx.beginPath();
+    minimapCtx.arc(center + ISLAND_DOCK_POS.x * scale, center + ISLAND_DOCK_POS.z * scale, 3, 0, Math.PI * 2);
+    minimapCtx.fill();
+    minimapCtx.beginPath();
+    minimapCtx.arc(center + LIGHTHOUSE_DOCK_POS.x * scale, center + LIGHTHOUSE_DOCK_POS.z * scale, 3, 0, Math.PI * 2);
+    minimapCtx.fill();
+    minimapCtx.beginPath();
+    minimapCtx.arc(center + MINE_ENTRY_DOCK_POS.x * scale, center + MINE_ENTRY_DOCK_POS.z * scale, 3, 0, Math.PI * 2);
+    minimapCtx.fill();
+    minimapCtx.beginPath();
+    minimapCtx.arc(center + FISHING_DOCK_POS.x * scale, center + FISHING_DOCK_POS.z * scale, 3, 0, Math.PI * 2);
+    minimapCtx.fill();
+    minimapCtx.beginPath();
+    minimapCtx.arc(center + MARKET_DOCK_POS.x * scale, center + MARKET_DOCK_POS.z * scale, 3, 0, Math.PI * 2);
+    minimapCtx.fill();
+    minimapCtx.beginPath();
+    minimapCtx.arc(center + FURNITURE_DOCK_POS.x * scale, center + FURNITURE_DOCK_POS.z * scale, 3, 0, Math.PI * 2);
+    minimapCtx.fill();
+    minimapCtx.beginPath();
+    minimapCtx.arc(center + LEADERBOARD_DOCK_POS.x * scale, center + LEADERBOARD_DOCK_POS.z * scale, 3, 0, Math.PI * 2);
+    minimapCtx.fill();
+  }
   minimapCtx.fillStyle = '#f8fafc';
   minimapCtx.beginPath();
   minimapCtx.arc(center + LIGHTHOUSE_POS.x * scale, center + LIGHTHOUSE_POS.z * scale, 4, 0, Math.PI * 2);
   minimapCtx.fill();
 
-  minimapCtx.fillStyle = '#a855f7';
-  minimapCtx.beginPath();
-  minimapCtx.arc(center + QUEST_NPC_POS.x * scale, center + QUEST_NPC_POS.z * scale, 3, 0, Math.PI * 2);
-  minimapCtx.fill();
-  minimapCtx.fillStyle = '#f59e0b';
-  minimapCtx.beginPath();
-  minimapCtx.arc(center + MINE_ORE_TRADER_POS.x * scale, center + MINE_ORE_TRADER_POS.z * scale, 3, 0, Math.PI * 2);
-  minimapCtx.fill();
+  if (!simplifiedMinimap) {
+    minimapCtx.fillStyle = '#a855f7';
+    minimapCtx.beginPath();
+    minimapCtx.arc(center + QUEST_NPC_POS.x * scale, center + QUEST_NPC_POS.z * scale, 3, 0, Math.PI * 2);
+    minimapCtx.fill();
+    minimapCtx.fillStyle = '#f59e0b';
+    minimapCtx.beginPath();
+    minimapCtx.arc(center + MINE_ORE_TRADER_POS.x * scale, center + MINE_ORE_TRADER_POS.z * scale, 3, 0, Math.PI * 2);
+    minimapCtx.fill();
+  }
 
   minimapCtx.fillStyle = '#60a5fa';
   minimapCtx.beginPath();
@@ -10891,6 +10929,7 @@ function drawMinimap() {
   }
 
   players.forEach((player, id) => {
+    if (simplifiedMinimap && id !== localPlayerId) return;
     minimapCtx.fillStyle = id === localPlayerId ? '#ffd166' : '#f8fafc';
     minimapCtx.beginPath();
     minimapCtx.arc(center + player.x * scale, center + player.z * scale, id === localPlayerId ? 4 : 3, 0, Math.PI * 2);
@@ -10964,6 +11003,8 @@ let _lastNameTagUpdate = 0;
 let _lastVoiceVolumeUpdate = 0;
 let _lastWaterfallUpdate = 0;
 let _waterfallAccumDelta = 0;
+let _lastRemotePlayerUpdate = 0;
+let _remotePlayerAccumDelta = 0;
 function animate(nowMs) {
   const delta = clock.getDelta();
   const nowSeconds = nowMs / 1000;
@@ -10988,7 +11029,12 @@ function animate(nowMs) {
   }
 
   updateLocalPlayer(delta, nowMs);
-  updateRemotePlayers(delta);
+  _remotePlayerAccumDelta += delta;
+  if (remotePlayerUpdateIntervalMs <= 0 || nowMs - _lastRemotePlayerUpdate >= remotePlayerUpdateIntervalMs) {
+    updateRemotePlayers(_remotePlayerAccumDelta);
+    _remotePlayerAccumDelta = 0;
+    _lastRemotePlayerUpdate = nowMs;
+  }
   const localForMinigames = players.get(localPlayerId);
   updateFishingMinigame(localForMinigames, nowMs, delta);
   updateMiningAccuracyGame(localForMinigames, nowMs, delta);
@@ -11106,8 +11152,8 @@ function animate(nowMs) {
     }
   }
 
-  // Name tags: update at most every 50 ms
-  if (nowMs - _lastNameTagUpdate >= 50) {
+  // Name tags: update interval scales with the active performance profile.
+  if (nowMs - _lastNameTagUpdate >= nameTagUpdateIntervalMs) {
     updateNameTags();
     _lastNameTagUpdate = nowMs;
   }
