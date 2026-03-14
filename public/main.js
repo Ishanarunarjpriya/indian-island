@@ -2819,6 +2819,50 @@ function addDecorBoat(x, z, yaw = 0, scale = 1.9, y = 1.06) {
   scene.add(boat);
 }
 
+function createHouseWindow(w, h) {
+  const group = new THREE.Group();
+  const frameMat = new THREE.MeshStandardMaterial({ color: 0x3d2b1f, roughness: 0.85 });
+  const glassMat = new THREE.MeshStandardMaterial({
+    color: 0x8ecae6,
+    roughness: 0.1,
+    metalness: 0.1,
+    transparent: true,
+    opacity: 0.45
+  });
+  const sillMat = new THREE.MeshStandardMaterial({ color: 0x5b3a24, roughness: 0.88 });
+  const frameT = 0.09;
+  const glassInset = 0.03;
+  // Frame pieces
+  const topFrame = new THREE.Mesh(new THREE.BoxGeometry(w + frameT * 2, frameT, frameT * 1.6), frameMat);
+  topFrame.position.y = h * 0.5;
+  const bottomFrame = topFrame.clone();
+  bottomFrame.position.y = -h * 0.5;
+  const leftFrame = new THREE.Mesh(new THREE.BoxGeometry(frameT, h, frameT * 1.6), frameMat);
+  leftFrame.position.x = -w * 0.5;
+  const rightFrame = leftFrame.clone();
+  rightFrame.position.x = w * 0.5;
+  // Cross bars
+  const hBar = new THREE.Mesh(new THREE.BoxGeometry(w, frameT * 0.7, frameT * 1.2), frameMat);
+  const vBar = new THREE.Mesh(new THREE.BoxGeometry(frameT * 0.7, h, frameT * 1.2), frameMat);
+  // Glass pane
+  const glass = new THREE.Mesh(new THREE.BoxGeometry(w - frameT, h - frameT, glassInset), glassMat);
+  glass.position.z = glassInset * 0.5;
+  // Window sill
+  const sill = new THREE.Mesh(new THREE.BoxGeometry(w + frameT * 4, 0.08, 0.22), sillMat);
+  sill.position.set(0, -h * 0.5 - 0.06, 0.12);
+  // Shutters
+  const shutterMat = new THREE.MeshStandardMaterial({ color: 0x2d5016, roughness: 0.82 });
+  const shutterW = w * 0.52;
+  const shutterH = h + 0.1;
+  const shutterT = 0.06;
+  const leftShutter = new THREE.Mesh(new THREE.BoxGeometry(shutterW, shutterH, shutterT), shutterMat);
+  leftShutter.position.set(-w * 0.5 - shutterW * 0.5 - 0.02, 0, -0.02);
+  const rightShutter = new THREE.Mesh(new THREE.BoxGeometry(shutterW, shutterH, shutterT), shutterMat);
+  rightShutter.position.set(w * 0.5 + shutterW * 0.5 + 0.02, 0, -0.02);
+  group.add(topFrame, bottomFrame, leftFrame, rightFrame, hBar, vBar, glass, sill, leftShutter, rightShutter);
+  return group;
+}
+
 function addWoodHouse(x, z, yaw = 0, options = {}) {
   const collisions = options?.collisions !== false;
   const house = new THREE.Group();
@@ -2827,6 +2871,9 @@ function addWoodHouse(x, z, yaw = 0, options = {}) {
   const wallMat = new THREE.MeshStandardMaterial({ color: 0x7b4f2d, roughness: 0.88 });
   const trimMat = new THREE.MeshStandardMaterial({ color: 0x5b3a24, roughness: 0.9 });
   const roofMat = new THREE.MeshStandardMaterial({ color: 0x4e3423, roughness: 0.9 });
+  const stoneMat = new THREE.MeshStandardMaterial({ color: 0x6b7280, roughness: 0.92 });
+  const brickMat = new THREE.MeshStandardMaterial({ color: 0x92400e, roughness: 0.85 });
+  const doorMat = new THREE.MeshStandardMaterial({ color: 0x3f2510, roughness: 0.82 });
 
   const houseScale = 1.18;
   const houseW = 9.4 * houseScale;
@@ -2857,6 +2904,16 @@ function addWoodHouse(x, z, yaw = 0, options = {}) {
 
   house.add(back, left, right, frontLeft, frontRight, frontTop);
 
+  // Door panel
+  const doorPanel = new THREE.Mesh(new THREE.BoxGeometry(doorW - 0.14, doorH - 0.08, 0.08), doorMat);
+  doorPanel.position.set(0, doorH * 0.5 + 0.04, houseD * 0.5 + 0.04);
+  house.add(doorPanel);
+  // Door handle
+  const handleMat = new THREE.MeshStandardMaterial({ color: 0xfbbf24, roughness: 0.3, metalness: 0.8 });
+  const handle = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 8), handleMat);
+  handle.position.set(doorW * 0.28, doorH * 0.48, houseD * 0.5 + 0.12);
+  house.add(handle);
+
   const frameTop = new THREE.Mesh(new THREE.BoxGeometry(doorW + 0.24, 0.12, 0.12), trimMat);
   frameTop.position.set(0, doorH + 0.16, houseD * 0.5 + 0.02);
   const frameLeft = new THREE.Mesh(new THREE.BoxGeometry(0.1, doorH, 0.12), trimMat);
@@ -2864,6 +2921,67 @@ function addWoodHouse(x, z, yaw = 0, options = {}) {
   const frameRight = frameLeft.clone();
   frameRight.position.x = doorW * 0.5 + 0.06;
   house.add(frameTop, frameLeft, frameRight);
+
+  // Windows - left wall (2 windows)
+  const winW = 1.4;
+  const winH = 1.5;
+  const winY = wallH * 0.5 + 0.35;
+  const leftWin1 = createHouseWindow(winW, winH);
+  leftWin1.position.set(-houseW * 0.5 - 0.02, winY, -houseD * 0.22);
+  leftWin1.rotation.y = -Math.PI * 0.5;
+  const leftWin2 = createHouseWindow(winW, winH);
+  leftWin2.position.set(-houseW * 0.5 - 0.02, winY, houseD * 0.22);
+  leftWin2.rotation.y = -Math.PI * 0.5;
+  house.add(leftWin1, leftWin2);
+
+  // Windows - right wall (2 windows)
+  const rightWin1 = createHouseWindow(winW, winH);
+  rightWin1.position.set(houseW * 0.5 + 0.02, winY, -houseD * 0.22);
+  rightWin1.rotation.y = Math.PI * 0.5;
+  const rightWin2 = createHouseWindow(winW, winH);
+  rightWin2.position.set(houseW * 0.5 + 0.02, winY, houseD * 0.22);
+  rightWin2.rotation.y = Math.PI * 0.5;
+  house.add(rightWin1, rightWin2);
+
+  // Window - back wall (1 large window)
+  const backWin = createHouseWindow(2.0, winH);
+  backWin.position.set(0, winY, -houseD * 0.5 - 0.02);
+  backWin.rotation.y = Math.PI;
+  house.add(backWin);
+
+  // Window - front wall left side (above door area)
+  const frontWin1 = createHouseWindow(1.1, 1.2);
+  frontWin1.position.set(-(doorW * 0.5 + frontSideW * 0.5), winY, houseD * 0.5 + 0.02);
+  house.add(frontWin1);
+  const frontWin2 = createHouseWindow(1.1, 1.2);
+  frontWin2.position.set((doorW * 0.5 + frontSideW * 0.5), winY, houseD * 0.5 + 0.02);
+  house.add(frontWin2);
+
+  // Corner posts
+  const postSize = 0.18;
+  const postH = wallH + 0.16;
+  const corners = [
+    [-houseW * 0.5, -houseD * 0.5],
+    [houseW * 0.5, -houseD * 0.5],
+    [-houseW * 0.5, houseD * 0.5],
+    [houseW * 0.5, houseD * 0.5]
+  ];
+  for (const [cx, cz] of corners) {
+    const post = new THREE.Mesh(new THREE.BoxGeometry(postSize, postH, postSize), trimMat);
+    post.position.set(cx, postH * 0.5 + 0.1, cz);
+    post.castShadow = true;
+    house.add(post);
+  }
+
+  // Foundation/base trim
+  const foundationH = 0.28;
+  const foundation = new THREE.Mesh(
+    new THREE.BoxGeometry(houseW + 0.3, foundationH, houseD + 0.3),
+    stoneMat
+  );
+  foundation.position.y = 0.14 - foundationH * 0.5 + 0.12;
+  foundation.receiveShadow = true;
+  house.add(foundation);
 
   const eave = new THREE.Mesh(
     new THREE.BoxGeometry(houseW + 0.12, 0.12, houseD + 0.12),
@@ -2892,13 +3010,150 @@ function addWoodHouse(x, z, yaw = 0, options = {}) {
 
   house.add(eave, roof, roofPeak);
 
+  // Chimney
+  const chimneyW = 0.7;
+  const chimneyD = 0.7;
+  const chimneyH = 2.8;
+  const chimneyBase = new THREE.Group();
+  const chimneyBody = new THREE.Mesh(new THREE.BoxGeometry(chimneyW, chimneyH, chimneyD), brickMat);
+  chimneyBody.castShadow = true;
+  chimneyBase.add(chimneyBody);
+  // Chimney cap
+  const chimneyCap = new THREE.Mesh(
+    new THREE.BoxGeometry(chimneyW + 0.2, 0.12, chimneyD + 0.2),
+    stoneMat
+  );
+  chimneyCap.position.y = chimneyH * 0.5 + 0.06;
+  chimneyCap.castShadow = true;
+  chimneyBase.add(chimneyCap);
+  // Brick detail bands
+  for (let i = 0; i < 4; i++) {
+    const band = new THREE.Mesh(
+      new THREE.BoxGeometry(chimneyW + 0.04, 0.06, chimneyD + 0.04),
+      stoneMat
+    );
+    band.position.y = -chimneyH * 0.5 + 0.5 + i * 0.7;
+    chimneyBase.add(band);
+  }
+  chimneyBase.position.set(houseW * 0.22, wallH + 1.6, -houseD * 0.15);
+  house.add(chimneyBase);
+
+  // Porch
+  const porchDepth = 2.2;
+  const porchW = doorW + 2.4;
+  // Porch floor
+  const porchFloor = new THREE.Mesh(
+    new THREE.BoxGeometry(porchW, 0.14, porchDepth),
+    new THREE.MeshStandardMaterial({ color: 0x6b5340, roughness: 0.88 })
+  );
+  porchFloor.position.set(0, 0.02, houseD * 0.5 + porchDepth * 0.5 - 0.05);
+  porchFloor.receiveShadow = true;
+  house.add(porchFloor);
+  // Porch roof
+  const porchRoof = new THREE.Mesh(
+    new THREE.BoxGeometry(porchW + 0.3, 0.1, porchDepth + 0.2),
+    roofMat
+  );
+  porchRoof.position.set(0, doorH + 0.5, houseD * 0.5 + porchDepth * 0.5 - 0.05);
+  porchRoof.castShadow = true;
+  house.add(porchRoof);
+  // Porch support posts
+  const porchPostH = doorH + 0.35;
+  const porchPostPositions = [
+    [-porchW * 0.5 + 0.12, 0, houseD * 0.5 + porchDepth - 0.15],
+    [porchW * 0.5 - 0.12, 0, houseD * 0.5 + porchDepth - 0.15]
+  ];
+  for (const [px, py, pz] of porchPostPositions) {
+    const post = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.09, 0.11, porchPostH, 8),
+      trimMat
+    );
+    post.position.set(px, porchPostH * 0.5 + 0.1, pz);
+    post.castShadow = true;
+    house.add(post);
+    // Post base
+    const postBase = new THREE.Mesh(
+      new THREE.BoxGeometry(0.28, 0.18, 0.28),
+      stoneMat
+    );
+    postBase.position.set(px, 0.12, pz);
+    house.add(postBase);
+  }
+  // Porch steps
+  const stepW = porchW * 0.6;
+  for (let i = 0; i < 3; i++) {
+    const step = new THREE.Mesh(
+      new THREE.BoxGeometry(stepW, 0.12, 0.35),
+      stoneMat
+    );
+    step.position.set(0, -0.06 - i * 0.12, houseD * 0.5 + porchDepth + 0.15 + i * 0.35);
+    step.receiveShadow = true;
+    house.add(step);
+  }
+  // Porch railing
+  const railH = 0.7;
+  const railMat = trimMat;
+  // Side rails
+  for (const side of [-1, 1]) {
+    const rail = new THREE.Mesh(
+      new THREE.BoxGeometry(0.06, railH, porchDepth - 0.3),
+      railMat
+    );
+    rail.position.set(side * (porchW * 0.5 - 0.12), railH * 0.5 + 0.14, houseD * 0.5 + porchDepth * 0.5 - 0.05);
+    house.add(rail);
+    // Top rail bar
+    const topBar = new THREE.Mesh(
+      new THREE.BoxGeometry(0.08, 0.06, porchDepth - 0.3),
+      railMat
+    );
+    topBar.position.set(side * (porchW * 0.5 - 0.12), railH + 0.18, houseD * 0.5 + porchDepth * 0.5 - 0.05);
+    house.add(topBar);
+  }
+
+  // Flower boxes under front windows
+  const flowerBoxMat = new THREE.MeshStandardMaterial({ color: 0x5b3a24, roughness: 0.85 });
+  const flowerMat = new THREE.MeshStandardMaterial({ color: 0xf472b6, roughness: 0.7 });
+  const leafMat = new THREE.MeshStandardMaterial({ color: 0x22c55e, roughness: 0.7 });
+  const boxPositions = [
+    [-(doorW * 0.5 + frontSideW * 0.5), winY - winH * 0.5 - 0.28, houseD * 0.5 + 0.22],
+    [(doorW * 0.5 + frontSideW * 0.5), winY - winH * 0.5 - 0.28, houseD * 0.5 + 0.22]
+  ];
+  for (const [bx, by, bz] of boxPositions) {
+    const box = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.18, 0.22), flowerBoxMat);
+    box.position.set(bx, by, bz);
+    house.add(box);
+    // Flowers
+    for (let fi = 0; fi < 4; fi++) {
+      const flower = new THREE.Mesh(new THREE.SphereGeometry(0.09, 6, 6), flowerMat);
+      flower.position.set(bx - 0.4 + fi * 0.26, by + 0.16, bz);
+      house.add(flower);
+      const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.14, 4), leafMat);
+      stem.position.set(bx - 0.4 + fi * 0.26, by + 0.07, bz);
+      house.add(stem);
+    }
+  }
+
+  // Roof shingle detail - ridge lines
+  const ridgeMat = new THREE.MeshStandardMaterial({ color: 0x3d2b1f, roughness: 0.9 });
+  for (let i = 0; i < 3; i++) {
+    const ridge = new THREE.Mesh(
+      new THREE.BoxGeometry(houseW * 0.6 - i * 1.2, 0.04, 0.04),
+      ridgeMat
+    );
+    const ridgeY = wallH + 0.6 + i * 0.9;
+    ridge.position.set(0, ridgeY, houseD * 0.25 - i * 0.15);
+    house.add(ridge);
+    const ridge2 = ridge.clone();
+    ridge2.position.z = -(houseD * 0.25 - i * 0.15);
+    house.add(ridge2);
+  }
+
   house.children.forEach((m) => {
     m.castShadow = true;
     m.receiveShadow = true;
   });
   scene.add(house);
   if (collisions) {
-    // Use the actual wall meshes for collision so blocking matches visible walls.
     addWallCollisionFromMesh(back, 'house');
     addWallCollisionFromMesh(left, 'house');
     addWallCollisionFromMesh(right, 'house');
