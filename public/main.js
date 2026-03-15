@@ -4325,7 +4325,7 @@ function addMainHouseRoomInterior() {
   const doorFillLight = new THREE.PointLight(0xfef3c7, 0.35, 8, 2);
   doorFillLight.position.set(HOUSE_ROOM_BASE.x, floorY + 3.0, HOUSE_ROOM_BASE.z + halfDepth - 1.5);
   const ceilingLampLight = new THREE.PointLight(0xfff4e0, 0.5, 14, 2);
-  ceilingLampLight.position.set(HOUSE_ROOM_BASE.x + 0.6, floorY + wallHeight - 0.8, HOUSE_ROOM_BASE.z + 0.2);
+  ceilingLampLight.position.set(HOUSE_ROOM_BASE.x + 0.6, floorY + wallHeight - 0.2, HOUSE_ROOM_BASE.z + 0.2);
   room.add(new THREE.AmbientLight(0xe2e8f0, 0.46), wallLightL, wallLightR, doorFillLight, ceilingLampLight);
 
   const sconceY = floorY + 3.45;
@@ -4335,19 +4335,19 @@ function addMainHouseRoomInterior() {
   sconceShadeL.position.y = 0.22;
   sconceShadeL.rotation.x = Math.PI;
   sconceL.add(sconceShadeL);
-  sconceL.position.set(HOUSE_ROOM_BASE.x - 5.2, sconceY, HOUSE_ROOM_BASE.z - 2.1 - 0.22);
+  sconceL.position.set(HOUSE_ROOM_BASE.x - 5.2, sconceY, HOUSE_ROOM_BASE.z - 2.1 + 0.09);
   const sconceR = sconceL.clone();
-  sconceR.position.set(HOUSE_ROOM_BASE.x + 5.2, sconceY, HOUSE_ROOM_BASE.z - 2.1 - 0.22);
+  sconceR.position.set(HOUSE_ROOM_BASE.x + 5.2, sconceY, HOUSE_ROOM_BASE.z - 2.1 + 0.09);
   room.add(sconceL, sconceR);
 
   const ceilingLampShade = new THREE.Mesh(
     new THREE.ConeGeometry(0.55, 0.4, 12),
     sconceShadeMat
   );
-  ceilingLampShade.position.set(HOUSE_ROOM_BASE.x + 0.6, floorY + wallHeight - 0.35, HOUSE_ROOM_BASE.z + 0.2);
+  ceilingLampShade.position.set(HOUSE_ROOM_BASE.x + 0.6, floorY + wallHeight - 0.045, HOUSE_ROOM_BASE.z + 0.2);
   ceilingLampShade.rotation.x = Math.PI;
   const ceilingLampChain = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.018, 0.018, 0.45, 6),
+    new THREE.CylinderGeometry(0.018, 0.018, 0.35, 6),
     chainMat
   );
   ceilingLampChain.position.set(HOUSE_ROOM_BASE.x + 0.6, floorY + wallHeight - 0.02, HOUSE_ROOM_BASE.z + 0.2);
@@ -4572,7 +4572,7 @@ function addMainHouseRoomInterior() {
   );
   centerpiece.position.y = 1.22;
   table.add(centerpiece);
-  table.position.set(HOUSE_ROOM_BASE.x - 0.85, floorY, HOUSE_ROOM_BASE.z + 0.85);
+  table.position.set(HOUSE_ROOM_WORKSHOP_POS.x, floorY, HOUSE_ROOM_WORKSHOP_POS.z + 1.8);
   table.castShadow = true;
   addFurniture('table', table);
 
