@@ -261,9 +261,9 @@
       "faceStyle": "smile",
       "accessories": []
     },
-    "x": null,
-    "y": null,
-    "z": null,
+    "x": 0,
+    "y": 0,
+    "z": 0,
     "progress": {
       "coins": 0,
       "xp": 0,
