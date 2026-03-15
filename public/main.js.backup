@@ -2863,132 +2863,115 @@ function createHouseWindow(w, h) {
   return group;
 }
 
-// Shop building functions
-function createVendorShop(x, z, yaw = 0, options = {}) {
-  const shop = new THREE.Group();
-  shop.position.set(x, 1.35, z);
-  shop.rotation.y = yaw;
-  
-  const wallMat = new THREE.MeshStandardMaterial({ color: 0x8b7355, roughness: 0.88 });
-  const trimMat = new THREE.MeshStandardMaterial({ color: 0x6b5a44, roughness: 0.9 });
+function addWoodHouse(x, z, yaw = 0, options = {}) {
+  const collisions = options?.collisions !== false;
+  const house = new THREE.Group();
+  house.position.set(x, 1.35, z);
+  house.rotation.y = yaw;
+  const wallMat = new THREE.MeshStandardMaterial({ color: 0x7b4f2d, roughness: 0.88 });
+  const trimMat = new THREE.MeshStandardMaterial({ color: 0x5b3a24, roughness: 0.9 });
   const roofMat = new THREE.MeshStandardMaterial({ color: 0x4e3423, roughness: 0.9 });
   const stoneMat = new THREE.MeshStandardMaterial({ color: 0x6b7280, roughness: 0.92 });
   const brickMat = new THREE.MeshStandardMaterial({ color: 0x92400e, roughness: 0.85 });
   const doorMat = new THREE.MeshStandardMaterial({ color: 0x3f2510, roughness: 0.82 });
-  const counterMat = new THREE.MeshStandardMaterial({ color: 0x8b6914, roughness: 0.85 });
-  const shelfMat = new THREE.MeshStandardMaterial({ color: 0x6b4a2e, roughness: 0.84 });
-  const canopyMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.92 });
-  const signMat = new THREE.MeshStandardMaterial({ color: 0xfbbf24, roughness: 0.3, metalness: 0.8 });
-  
-  const shopScale = 1.0;
-  const shopW = 7.0 * shopScale;
-  const shopD = 5.0 * shopScale;
-  const wallH = 3.5 * shopScale;
-  const wallT = 0.18;
-  const doorW = 1.5 * shopScale;
-  const doorH = 2.2 * shopScale;
-  
-  // Shop counter
-  const counter = new THREE.Mesh(new THREE.BoxGeometry(shopW, 0.3, 0.8), counterMat);
-  counter.position.set(0, 0.15, -shopD * 0.3);
-  shop.add(counter);
-  
-  // Shop shelves
-  const shelf = new THREE.Mesh(new THREE.BoxGeometry(shopW * 0.8, 0.1, 0.05), shelfMat);
-  shelf.position.set(0, wallH * 0.3, -shopD * 0.3);
-  shop.add(shelf);
-  
-  // Shop floor
-  const floor = new THREE.Mesh(new THREE.BoxGeometry(shopW, 0.2, shopD), wallMat);
+
+  const houseScale = 1.18;
+  const houseW = 9.4 * houseScale;
+  const houseD = 8.0 * houseScale;
+  const wallH = 3.2 * houseScale;
+  const wallT = 0.22;
+  const doorW = 1.9 * houseScale;
+  const doorH = 2.45 * houseScale;
+  const floor = new THREE.Mesh(new THREE.BoxGeometry(houseW, 0.2, houseD), wallMat);
   floor.position.y = 0.08;
   floor.receiveShadow = true;
-  shop.add(floor);
-  
-  // Back wall
-  const back = new THREE.Mesh(new THREE.BoxGeometry(shopW, wallH, wallT), wallMat);
-  back.position.set(0, wallH * 0.5 + 0.1, -shopD * 0.5 + wallT * 0.5);
-  shop.add(back);
-  
-  // Side walls
-  const left = new THREE.Mesh(new THREE.BoxGeometry(wallT, wallH, shopD), wallMat);
-  left.position.set(-shopW * 0.5 + wallT * 0.5, wallH * 0.5 + 0.1, 0);
-  shop.add(left);
+  house.add(floor);
+
+  const back = new THREE.Mesh(new THREE.BoxGeometry(houseW, wallH, wallT), wallMat);
+  back.position.set(0, wallH * 0.5 + 0.1, -houseD * 0.5 + wallT * 0.5);
+  const left = new THREE.Mesh(new THREE.BoxGeometry(wallT, wallH, houseD), wallMat);
+  left.position.set(-houseW * 0.5 + wallT * 0.5, wallH * 0.5 + 0.1, 0);
   const right = left.clone();
-  right.position.x = shopW * 0.5 - wallT * 0.5;
-  shop.add(right);
-  
-  // Front wall with door
-  const frontSideW = (shopW - doorW) * 0.5;
+  right.position.x = houseW * 0.5 - wallT * 0.5;
+
+  const frontSideW = (houseW - doorW) * 0.5;
   const frontLeft = new THREE.Mesh(new THREE.BoxGeometry(frontSideW, wallH, wallT), wallMat);
-  frontLeft.position.set(-(doorW * 0.5 + frontSideW * 0.5), wallH * 0.5 + 0.1, shopD * 0.5 - wallT * 0.5);
-  shop.add(frontLeft);
+  frontLeft.position.set(-(doorW * 0.5 + frontSideW * 0.5), wallH * 0.5 + 0.1, houseD * 0.5 - wallT * 0.5);
   const frontRight = frontLeft.clone();
   frontRight.position.x = -frontLeft.position.x;
-  shop.add(frontRight);
   const frontTop = new THREE.Mesh(new THREE.BoxGeometry(doorW, wallH - doorH, wallT), wallMat);
-  frontTop.position.set(0, doorH + (wallH - doorH) * 0.5 + 0.1, shopD * 0.5 - wallT * 0.5);
-  shop.add(frontTop);
-  
-  // Door panel
-  const doorPanel = new THREE.Mesh(new THREE.BoxGeometry(doorW - 0.12, doorH - 0.08, 0.08), doorMat);
-  doorPanel.position.set(0, doorH * 0.5 + 0.04, shopD * 0.5 + 0.04);
-  shop.add(doorPanel);
-  
-  // Shop sign
-  const sign = new THREE.Mesh(new THREE.BoxGeometry(shopW * 0.8, 0.2, 0.05), signMat);
-  sign.position.set(0, wallH * 0.9, shopD * 0.5 + 0.1);
-  shop.add(sign);
-  
-  // Canopy
-  const canopy = new THREE.Mesh(new THREE.BoxGeometry(shopW * 1.2, 0.2, shopD * 0.6), canopyMat);
-  canopy.position.set(0, wallH + 0.1, -shopD * 0.3);
-  shop.add(canopy);
-  
-  return shop;
-}
+  frontTop.position.set(0, doorH + (wallH - doorH) * 0.5 + 0.1, houseD * 0.5 - wallT * 0.5);
 
-function createMarketStall(x, z, yaw = 0, options = {}) {
-  const stall = new THREE.Group();
-  stall.position.set(x, 1.35, z);
-  stall.rotation.y = yaw;
-  
-  const stallMat = new THREE.MeshStandardMaterial({ color: 0x8b7355, roughness: 0.88 });
-  const canopyMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.92 });
-  const counterMat = new THREE.MeshStandardMaterial({ color: 0x8b6914, roughness: 0.85 });
-  const shelfMat = new THREE.MeshStandardMaterial({ color: 0x6b4a2e, roughness: 0.84 });
-  
-  const stallScale = 1.0;
-  const stallW = 6.0 * stallScale;
-  const stallD = 4.0 * stallScale;
-  const wallH = 2.5 * stallScale;
-  const wallT = 0.15;
-  
-  // Stall counter
-  const counter = new THREE.Mesh(new THREE.BoxGeometry(stallW, 0.25, 0.6), counterMat);
-  counter.position.set(0, 0.125, -stallD * 0.2);
-  stall.add(counter);
-  
-  // Stall shelves
-  const shelf1 = new THREE.Mesh(new THREE.BoxGeometry(stallW * 0.7, 0.08, 0.04), shelfMat);
-  shelf1.position.set(0, wallH * 0.25, -stallD * 0.2);
-  stall.add(shelf1);
-  const shelf2 = shelf1.clone();
-  shelf2.position.y = wallH * 0.5;
-  stall.add(shelf2);
-  
-  // Stall canopy
-  const canopy = new THREE.Mesh(new THREE.BoxGeometry(stallW * 1.1, 0.15, stallD * 0.8), canopyMat);
-  canopy.position.set(0, wallH + 0.1, -stallD * 0.2);
-  stall.add(canopy);
-  
-  // Stall floor
-  const floor = new THREE.Mesh(new THREE.BoxGeometry(stallW, 0.15, stallD), stallMat);
-  floor.position.y = 0.075;
-  floor.receiveShadow = true;
-  stall.add(floor);
-  
-  return stall;
-}
+  house.add(back, left, right, frontLeft, frontRight, frontTop);
+
+  // Door panel
+  const doorPanel = new THREE.Mesh(new THREE.BoxGeometry(doorW - 0.14, doorH - 0.08, 0.08), doorMat);
+  doorPanel.position.set(0, doorH * 0.5 + 0.04, houseD * 0.5 + 0.04);
+  house.add(doorPanel);
+  // Door handle
+  const handleMat = new THREE.MeshStandardMaterial({ color: 0xfbbf24, roughness: 0.3, metalness: 0.8 });
+  const handle = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 8), handleMat);
+  handle.position.set(doorW * 0.28, doorH * 0.48, houseD * 0.5 + 0.12);
+  house.add(handle);
+
+  const frameTop = new THREE.Mesh(new THREE.BoxGeometry(doorW + 0.24, 0.12, 0.12), trimMat);
+  frameTop.position.set(0, doorH + 0.16, houseD * 0.5 + 0.02);
+  const frameLeft = new THREE.Mesh(new THREE.BoxGeometry(0.1, doorH, 0.12), trimMat);
+  frameLeft.position.set(-doorW * 0.5 - 0.06, doorH * 0.5 + 0.1, houseD * 0.5 + 0.02);
+  const frameRight = frameLeft.clone();
+  frameRight.position.x = doorW * 0.5 + 0.06;
+  house.add(frameTop, frameLeft, frameRight);
+
+  // Windows - left wall (2 windows)
+  const winW = 1.4;
+  const winH = 1.5;
+  const winY = wallH * 0.5 + 0.35;
+  const leftWin1 = createHouseWindow(winW, winH);
+  leftWin1.position.set(-houseW * 0.5 - 0.02, winY, -houseD * 0.22);
+  leftWin1.rotation.y = -Math.PI * 0.5;
+  const leftWin2 = createHouseWindow(winW, winH);
+  leftWin2.position.set(-houseW * 0.5 - 0.02, winY, houseD * 0.22);
+  leftWin2.rotation.y = -Math.PI * 0.5;
+  house.add(leftWin1, leftWin2);
+
+  // Windows - right wall (2 windows)
+  const rightWin1 = createHouseWindow(winW, winH);
+  rightWin1.position.set(houseW * 0.5 + 0.02, winY, -houseD * 0.22);
+  rightWin1.rotation.y = Math.PI * 0.5;
+  const rightWin2 = createHouseWindow(winW, winH);
+  rightWin2.position.set(houseW * 0.5 + 0.02, winY, houseD * 0.22);
+  rightWin2.rotation.y = Math.PI * 0.5;
+  house.add(rightWin1, rightWin2);
+
+  // Window - back wall (1 large window)
+  const backWin = createHouseWindow(2.0, winH);
+  backWin.position.set(0, winY, -houseD * 0.5 - 0.02);
+  backWin.rotation.y = Math.PI;
+  house.add(backWin);
+
+  // Window - front wall left side (above door area)
+  const frontWin1 = createHouseWindow(1.1, 1.2);
+  frontWin1.position.set(-(doorW * 0.5 + frontSideW * 0.5), winY, houseD * 0.5 + 0.02);
+  house.add(frontWin1);
+  const frontWin2 = createHouseWindow(1.1, 1.2);
+  frontWin2.position.set((doorW * 0.5 + frontSideW * 0.5), winY, houseD * 0.5 + 0.02);
+  house.add(frontWin2);
+
+  // Corner posts
+  const postSize = 0.18;
+  const postH = wallH + 0.16;
+  const corners = [
+    [-houseW * 0.5, -houseD * 0.5],
+    [houseW * 0.5, -houseD * 0.5],
+    [-houseW * 0.5, houseD * 0.5],
+    [houseW * 0.5, houseD * 0.5]
+  ];
+  for (const [cx, cz] of corners) {
+    const post = new THREE.Mesh(new THREE.BoxGeometry(postSize, postH, postSize), trimMat);
+    post.position.set(cx, postH * 0.5 + 0.1, cz);
+    post.castShadow = true;
+    house.add(post);
+  }
 
   // Foundation/base trim
   const foundationH = 0.28;
@@ -4115,15 +4098,22 @@ function addMineArea() {
     hairColor: 0x1f2937,
     hatColor: 0x111827
   });
-  const mineShopShop = createVendorShop(
-    MINE_SHOP_NPC_POS.x,
-    MINE_SHOP_NPC_POS.z,
-    0
-  );
+  const mineShopStall = createVendorStall({
+    label: 'Pick Axes',
+    signColor: '#2a1b10',
+    canopyA: 0x16a34a,
+    canopyB: 0xf8fafc,
+    vendor: mineShopVendor
+  });
   mineShopVendor.position.set(0, VENDOR_STAND_Y, -3);
-  mineShopShop.position.set(MINE_SHOP_NPC_POS.x, 1.35, MINE_SHOP_NPC_POS.z);
-  mineShopShop.rotation.y = Math.PI;
-  mine.add(mineShopShop);
+  const mineShopLocalPos = new THREE.Vector3(
+    MINE_SHOP_NPC_POS.x - MINE_POS.x,
+    0,
+    MINE_SHOP_NPC_POS.z - MINE_POS.z
+  );
+  mineShopStall.position.copy(mineShopLocalPos);
+  mineShopStall.rotation.y = Math.atan2(-mineShopLocalPos.x, -mineShopLocalPos.z);
+  mine.add(mineShopStall);
   mineShopNpcMesh = mineShopVendor;
   addWorldCollider(MINE_SHOP_NPC_POS.x, MINE_SHOP_NPC_POS.z, 1.04, 'npc');
 
@@ -4133,15 +4123,22 @@ function addMineArea() {
     hairColor: 0x111827,
     hatColor: 0x334155
   });
-  const oreTraderShop = createVendorShop(
-    MINE_ORE_TRADER_POS.x,
-    MINE_ORE_TRADER_POS.z,
-    0
-  );
+  const oreTraderStall = createVendorStall({
+    label: 'Ores',
+    signColor: '#3b1909',
+    canopyA: 0xf59e0b,
+    canopyB: 0xf8fafc,
+    vendor: oreTraderVendor
+  });
   oreTraderVendor.position.set(0, VENDOR_STAND_Y, -3);
-  oreTraderShop.position.set(MINE_ORE_TRADER_POS.x, 1.35, MINE_ORE_TRADER_POS.z);
-  oreTraderShop.rotation.y = Math.PI;
-  mine.add(oreTraderShop);
+  const oreTraderLocalPos = new THREE.Vector3(
+    MINE_ORE_TRADER_POS.x - MINE_POS.x,
+    0,
+    MINE_ORE_TRADER_POS.z - MINE_POS.z
+  );
+  oreTraderStall.position.copy(oreTraderLocalPos);
+  oreTraderStall.rotation.y = Math.atan2(-oreTraderLocalPos.x, -oreTraderLocalPos.z);
+  mine.add(oreTraderStall);
   mineOreTraderNpcMesh = oreTraderVendor;
   addWorldCollider(MINE_ORE_TRADER_POS.x, MINE_ORE_TRADER_POS.z, 1.04, 'npc');
 
@@ -4151,15 +4148,22 @@ function addMineArea() {
     hairColor: 0x0f172a,
     hatColor: 0x1e293b
   });
-  const questShop = createVendorShop(
-    QUEST_NPC_POS.x,
-    QUEST_NPC_POS.z,
-    0
-  );
+  const questStall = createVendorStall({
+    label: 'Quests',
+    signColor: '#1f2937',
+    canopyA: 0x4f46e5,
+    canopyB: 0xffffff,
+    vendor: questVendor
+  });
   questVendor.position.set(0, VENDOR_STAND_Y, -3);
-  questShop.position.set(QUEST_NPC_POS.x, 1.35, QUEST_NPC_POS.z);
-  questShop.rotation.y = Math.PI;
-  mine.add(questShop);
+  const questLocalPos = new THREE.Vector3(
+    QUEST_NPC_POS.x - MINE_POS.x,
+    0,
+    QUEST_NPC_POS.z - MINE_POS.z
+  );
+  questStall.position.copy(questLocalPos);
+  questStall.rotation.y = Math.atan2(-questLocalPos.x, -questLocalPos.z);
+  mine.add(questStall);
   questNpcMesh = questVendor;
   addWorldCollider(QUEST_NPC_POS.x, QUEST_NPC_POS.z, 1.04, 'npc');
 }
