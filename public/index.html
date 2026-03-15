@@ -911,6 +911,7 @@
       #rod-shop-panel,
       #market-panel,
       #ore-panel,
+      #furniture-trader-panel,
       #home-panel {
         gap: 12px;
         padding: 16px;
@@ -931,6 +932,7 @@
         max-height: min(86vh, 760px);
       }
 
+      #furniture-trader-panel,
       #fish-index-panel {
         width: min(760px, calc(100vw - 24px));
       }
@@ -949,6 +951,7 @@
       #inventory-panel .modal-head,
       #rod-shop-panel .modal-head,
       #ore-panel .modal-head,
+      #furniture-trader-panel .modal-head,
       #home-panel .modal-head,
       #fish-index-header {
         padding-bottom: 8px;
@@ -959,6 +962,7 @@
       #inventory-panel .modal-head h2,
       #rod-shop-panel .modal-head h2,
       #ore-panel .modal-head h2,
+      #furniture-trader-panel .modal-head h2,
       #home-panel .modal-head h2,
       #fish-index-header h2 {
         font-size: 22px;
@@ -969,6 +973,7 @@
       #inventory-panel .modal-close,
       #rod-shop-panel .modal-close,
       #ore-panel .modal-close,
+      #furniture-trader-panel .modal-close,
       #home-panel .modal-close,
       #fish-index-close {
         width: 34px;
@@ -997,7 +1002,8 @@
 
       #inventory-panel .inventory-entry,
       #fish-index-panel .fish-entry,
-      #rod-shop-panel .market-section {
+      #rod-shop-panel .market-section,
+      #furniture-trader-panel .market-section {
         border-radius: 14px;
         border: 1px solid rgba(148, 163, 184, 0.28);
         background:
@@ -1008,12 +1014,14 @@
       }
 
       #market-panel .market-grid,
-      #ore-panel .market-grid {
+      #ore-panel .market-grid,
+      #furniture-trader-panel .market-grid {
         gap: 12px;
       }
 
       #market-panel .market-section,
-      #ore-panel .market-section {
+      #ore-panel .market-section,
+      #furniture-trader-panel .market-section {
         border-radius: 14px;
         padding: 12px 14px;
         gap: 10px;
@@ -1026,13 +1034,15 @@
       }
 
       #market-panel .market-section h3,
-      #ore-panel .market-section h3 {
+      #ore-panel .market-section h3,
+      #furniture-trader-panel .market-section h3 {
         font-size: 16px;
         letter-spacing: 0.25px;
       }
 
       #market-panel .market-field,
-      #ore-panel .market-field {
+      #ore-panel .market-field,
+      #furniture-trader-panel .market-field {
         font-size: 12px;
         color: #b9c8dc;
         letter-spacing: 0.2px;
@@ -1064,7 +1074,9 @@
       #market-panel select,
       #market-panel input[type="number"],
       #ore-panel select,
-      #ore-panel input[type="number"] {
+      #ore-panel input[type="number"],
+      #furniture-trader-panel select,
+      #furniture-trader-panel input[type="number"] {
         width: 100%;
         min-height: 40px;
         border-radius: 10px;
@@ -1078,32 +1090,38 @@
       }
 
       #market-panel input[type="number"],
-      #ore-panel input[type="number"] {
+      #ore-panel input[type="number"],
+      #furniture-trader-panel input[type="number"] {
         max-width: 120px;
       }
 
       #market-panel select:focus,
       #market-panel input[type="number"]:focus,
       #ore-panel select:focus,
-      #ore-panel input[type="number"]:focus {
+      #ore-panel input[type="number"]:focus,
+      #furniture-trader-panel select:focus,
+      #furniture-trader-panel input[type="number"]:focus {
         border-color: rgba(34, 211, 238, 0.72);
         box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.18);
       }
 
       #market-panel button,
-      #ore-panel button {
+      #ore-panel button,
+      #furniture-trader-panel button {
         min-height: 38px;
         border-radius: 11px;
         transition: transform 120ms ease, filter 120ms ease, box-shadow 120ms ease;
       }
 
       #market-panel button:not(:disabled):hover,
-      #ore-panel button:not(:disabled):hover {
+      #ore-panel button:not(:disabled):hover,
+      #furniture-trader-panel button:not(:disabled):hover {
         transform: translateY(-1px);
       }
 
       #market-panel button:disabled,
-      #ore-panel button:disabled {
+      #ore-panel button:disabled,
+      #furniture-trader-panel button:disabled {
         opacity: 0.45;
         cursor: not-allowed;
         filter: saturate(0.6);
@@ -1175,11 +1193,33 @@
       #market-status,
       #ore-status,
       #rod-shop-status,
+      #furniture-trader-status,
       #home-status {
         padding: 8px 10px;
         border-radius: 10px;
         border: 1px solid rgba(148, 163, 184, 0.22);
         background: rgba(2, 8, 20, 0.45);
+      }
+
+      #furniture-trader-summary {
+        font-size: 12px;
+        color: #cbd5e1;
+        line-height: 1.45;
+      }
+
+      #furniture-trader-list {
+        display: grid;
+        gap: 10px;
+      }
+
+      .furniture-trader-card {
+        margin: 0;
+      }
+
+      .furniture-trader-card-meta {
+        font-size: 12px;
+        color: #cbd5e1;
+        line-height: 1.45;
       }
 
       #home-grid {

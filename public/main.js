@@ -7140,18 +7140,13 @@ function renderFurnitureTraderModal() {
   furnitureTraderListEl.innerHTML = '';
   for (const item of trader.items) {
     const card = document.createElement('article');
-    card.className = 'market-section';
-    card.style.margin = '0';
-    card.style.padding = '10px';
+    card.className = 'market-section furniture-trader-card';
 
     const title = document.createElement('h3');
     title.textContent = item.label;
-    title.style.margin = '0';
-    title.style.fontSize = '15px';
 
     const meta = document.createElement('div');
-    meta.style.fontSize = '12px';
-    meta.style.color = '#cbd5e1';
+    meta.className = 'furniture-trader-card-meta';
     if (item.owned) {
       meta.textContent = 'Status: owned and ready for your room.';
     } else if (!item.availableThisCycle) {
