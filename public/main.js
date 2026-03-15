@@ -4492,30 +4492,30 @@ function addMainHouseRoomInterior() {
     new THREE.BoxGeometry(3.4, 0.42, 2.2),
     new THREE.MeshStandardMaterial({ color: 0x6b3f22, roughness: 0.88 })
   );
-  bedFrame.position.y = floorY + 0.24;
+  bedFrame.position.y = 0.24;
   bedFrame.castShadow = true;
   const bedMattress = new THREE.Mesh(
     new THREE.BoxGeometry(3.16, 0.28, 1.95),
     new THREE.MeshStandardMaterial({ color: 0xe5e7eb, roughness: 0.8 })
   );
-  bedMattress.position.y = floorY + 0.58;
+  bedMattress.position.y = 0.58;
   const bedPillow = new THREE.Mesh(
     new THREE.BoxGeometry(0.9, 0.2, 1.7),
     new THREE.MeshStandardMaterial({ color: 0xbfdbfe, roughness: 0.76 })
   );
-  bedPillow.position.set(1.15, floorY + 0.77, 0);
+  bedPillow.position.set(1.15, 0.77, 0);
   const bedHeadboard = new THREE.Mesh(
     new THREE.BoxGeometry(0.12, 1.2, 2.2),
     new THREE.MeshStandardMaterial({ color: 0x5a3118, roughness: 0.85 })
   );
-  bedHeadboard.position.set(1.65, floorY + 0.84, 0);
+  bedHeadboard.position.set(1.65, 0.84, 0);
   const bedFootboard = new THREE.Mesh(
     new THREE.BoxGeometry(0.1, 0.6, 2.2),
     new THREE.MeshStandardMaterial({ color: 0x5a3118, roughness: 0.85 })
   );
-  bedFootboard.position.set(-1.65, floorY + 0.54, 0);
+  bedFootboard.position.set(-1.65, 0.54, 0);
   bed.add(bedFrame, bedMattress, bedPillow, bedHeadboard, bedFootboard);
-  bed.position.set(HOUSE_ROOM_BASE.x + 4.55, 0, HOUSE_ROOM_BASE.z - 2.6);
+  bed.position.set(HOUSE_ROOM_BASE.x + 4.55, floorY, HOUSE_ROOM_BASE.z - 2.6);
   bed.rotation.y = -Math.PI * 0.5;
   addFurniture('bed', bed);
 
@@ -4524,14 +4524,14 @@ function addMainHouseRoomInterior() {
     new THREE.BoxGeometry(0.65, 0.08, 0.55),
     new THREE.MeshStandardMaterial({ color: 0x5b3a24, roughness: 0.86 })
   );
-  nsTop.position.y = floorY + 0.68;
+  nsTop.position.y = 0.68;
   for (const sx of [-1, 1]) {
     for (const sz of [-1, 1]) {
       const leg = new THREE.Mesh(
         new THREE.BoxGeometry(0.06, 0.6, 0.06),
         new THREE.MeshStandardMaterial({ color: 0x4a2f1f, roughness: 0.88 })
       );
-      leg.position.set(sx * 0.24, floorY + 0.34, sz * 0.18);
+      leg.position.set(sx * 0.24, 0.34, sz * 0.18);
       nightstand.add(leg);
     }
   }
@@ -4539,14 +4539,14 @@ function addMainHouseRoomInterior() {
     new THREE.BoxGeometry(0.5, 0.12, 0.02),
     new THREE.MeshStandardMaterial({ color: 0x3d2515, roughness: 0.82 })
   );
-  nsDrawer.position.set(0, floorY + 0.48, 0.27);
+  nsDrawer.position.set(0, 0.48, 0.27);
   const nsKnob = new THREE.Mesh(
     new THREE.SphereGeometry(0.03, 6, 6),
     new THREE.MeshStandardMaterial({ color: 0xd4a44a, roughness: 0.3, metalness: 0.5 })
   );
-  nsKnob.position.set(0, floorY + 0.48, 0.29);
+  nsKnob.position.set(0, 0.48, 0.29);
   nightstand.add(nsTop, nsDrawer, nsKnob);
-  nightstand.position.set(HOUSE_ROOM_BASE.x + 4.55, 0, HOUSE_ROOM_BASE.z - 5.3);
+  nightstand.position.set(HOUSE_ROOM_BASE.x + 4.55, floorY, HOUSE_ROOM_BASE.z - 5.3);
   room.add(nightstand);
 
   const table = new THREE.Group();
@@ -4554,7 +4554,7 @@ function addMainHouseRoomInterior() {
     new THREE.BoxGeometry(1.9, 0.16, 1.3),
     new THREE.MeshStandardMaterial({ color: 0x5b3a24, roughness: 0.86 })
   );
-  tableTop.position.y = floorY + 1.1;
+  tableTop.position.y = 1.1;
   table.add(tableTop);
   for (const sx of [-1, 1]) {
     for (const sz of [-1, 1]) {
@@ -4562,7 +4562,7 @@ function addMainHouseRoomInterior() {
         new THREE.BoxGeometry(0.12, 0.95, 0.12),
         new THREE.MeshStandardMaterial({ color: 0x4a2f1f, roughness: 0.88 })
       );
-      leg.position.set(sx * 0.78, floorY + 0.54, sz * 0.5);
+      leg.position.set(sx * 0.78, 0.54, sz * 0.5);
       table.add(leg);
     }
   }
@@ -4570,9 +4570,9 @@ function addMainHouseRoomInterior() {
     new THREE.CylinderGeometry(0.12, 0.15, 0.08, 8),
     new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.75 })
   );
-  centerpiece.position.y = floorY + 1.22;
+  centerpiece.position.y = 1.22;
   table.add(centerpiece);
-  table.position.set(HOUSE_ROOM_BASE.x - 0.85, 0, HOUSE_ROOM_BASE.z + 0.85);
+  table.position.set(HOUSE_ROOM_BASE.x - 0.85, floorY, HOUSE_ROOM_BASE.z + 0.85);
   table.castShadow = true;
   addFurniture('table', table);
 
@@ -4581,22 +4581,22 @@ function addMainHouseRoomInterior() {
     new THREE.CylinderGeometry(0.18, 0.2, 0.08, 10),
     new THREE.MeshStandardMaterial({ color: 0x71717a, roughness: 0.45, metalness: 0.5 })
   );
-  lampBase.position.y = floorY + 0.08;
+  lampBase.position.y = 0.08;
   const lampStem = new THREE.Mesh(
     new THREE.CylinderGeometry(0.06, 0.08, 1.22, 10),
     new THREE.MeshStandardMaterial({ color: 0x6b7280, roughness: 0.48, metalness: 0.52 })
   );
-  lampStem.position.y = floorY + 0.72;
+  lampStem.position.y = 0.72;
   const lampShade = new THREE.Mesh(
     new THREE.ConeGeometry(0.38, 0.52, 14),
     new THREE.MeshStandardMaterial({ color: 0xfef3c7, roughness: 0.54 })
   );
-  lampShade.position.y = floorY + 1.52;
+  lampShade.position.y = 1.52;
   lampShade.rotation.x = Math.PI;
   const lampGlow = new THREE.PointLight(0xfef3c7, 0.75, 9, 2);
-  lampGlow.position.y = floorY + 1.28;
+  lampGlow.position.y = 1.28;
   lamp.add(lampBase, lampStem, lampShade, lampGlow);
-  lamp.position.set(HOUSE_ROOM_BASE.x + 2.95, 0, HOUSE_ROOM_BASE.z - 0.75);
+  lamp.position.set(HOUSE_ROOM_BASE.x + 2.95, floorY, HOUSE_ROOM_BASE.z - 0.75);
   addFurniture('lamp', lamp);
 
   const plant = new THREE.Group();
@@ -4604,20 +4604,20 @@ function addMainHouseRoomInterior() {
     new THREE.CylinderGeometry(0.25, 0.3, 0.4, 12),
     new THREE.MeshStandardMaterial({ color: 0x9a3412, roughness: 0.82 })
   );
-  pot.position.y = floorY + 0.22;
+  pot.position.y = 0.22;
   const potRim = new THREE.Mesh(
     new THREE.TorusGeometry(0.26, 0.03, 6, 12),
     new THREE.MeshStandardMaterial({ color: 0x7c2d12, roughness: 0.8 })
   );
-  potRim.position.y = floorY + 0.42;
+  potRim.position.y = 0.42;
   potRim.rotation.x = Math.PI / 2;
   const leaves = new THREE.Mesh(
     new THREE.DodecahedronGeometry(0.42, 1),
     new THREE.MeshStandardMaterial({ color: 0x22c55e, roughness: 0.7 })
   );
-  leaves.position.y = floorY + 0.82;
+  leaves.position.y = 0.82;
   plant.add(pot, potRim, leaves);
-  plant.position.set(HOUSE_ROOM_BASE.x - 4.75, 0, HOUSE_ROOM_BASE.z - 3.9);
+  plant.position.set(HOUSE_ROOM_BASE.x - 4.75, floorY, HOUSE_ROOM_BASE.z - 3.9);
   addFurniture('plant', plant);
 
   room.traverse((obj) => {
