@@ -6265,7 +6265,6 @@ function clampToPlayableGround(x, z, allowMine = false) {
   const INTERIOR_RADIUS = INTERIOR_PLAY_RADIUS;
   const HOUSE_ROOM_RADIUS = HOUSE_ROOM_PLAY_RADIUS;
   const HOUSE_HALL_RADIUS = HOUSE_HALL_PLAY_RADIUS;
-  const HOUSE_HALL_RADIUS = HOUSE_HALL_PLAY_RADIUS;
   const mineSwimBlocked = allowMine && blocksMineEscapeSwim(x, z);
   const inSwim = isSwimZone(x, z) && !mineSwimBlocked;
 
@@ -6480,7 +6479,7 @@ function groundHeightAt(x, z, currentY) {
 }
 
 function shouldSwimAt(x, z, y) {
-  return isWaterAt(x, z) && y <= GROUND_Y + 0.16 && !inLighthouseInterior && !inHouseRoom;
+  return isWaterAt(x, z) && y <= GROUND_Y + 0.16 && !inLighthouseInterior && !inHouseRoom && !inHouseHall;
 }
 
 function swimAnimationLevel(nowMs) {
@@ -6585,7 +6584,7 @@ function applyLocalSurfaceState(local) {
     local.swimTargetY = null;
     return;
   }
-  const inWater = isWaterAt(local.x, local.z) && !inLighthouseInterior && !inHouseRoom && !local.onBoat;
+  const inWater = isWaterAt(local.x, local.z) && !inLighthouseInterior && !inHouseRoom && !inHouseHall && !local.onBoat;
   if (!inWater) {
     local.isSwimming = false;
     local.swimTargetY = null;
@@ -6632,7 +6631,7 @@ function isServerSyncRange(x, z, allowMine = false) {
 }
 
 function canEnterSwim(local) {
-  return !local.onBoat && !inLighthouseInterior && !inHouseRoom;
+  return !local.onBoat && !inLighthouseInterior && !inHouseRoom && !inHouseHall;
 }
 
 function movementSpeedForState(local) {
@@ -9933,12 +9932,28 @@ function isNearFurnitureVendor(local) {
   return Boolean(local) && distance2D(local, FURNITURE_VENDOR_POS) <= 3.3;
 }
 
-function isNearHouseExit(local) {
+function isNearHouseRoomExit(local) {
   return Boolean(local) && inHouseRoom && distance2D(local, HOUSE_ROOM_EXIT_POS) <= HOUSE_ROOM_EXIT_INTERACT_RADIUS;
+}
+
+function isNearHouseHallExit(local) {
+  return Boolean(local) && inHouseHall && distance2D(local, HOUSE_HALL_EXIT_POS) <= HOUSE_HALL_EXIT_INTERACT_RADIUS;
 }
 
 function isNearHouseWorkshop(local) {
   return Boolean(local) && inHouseRoom && distance2D(local, HOUSE_ROOM_WORKSHOP_POS) <= HOUSE_ROOM_WORKSHOP_INTERACT_RADIUS;
+}
+
+function getNearbyHouseHallDoor(local, radius = 2.6) {
+  if (!local || !inHouseHall) return null;
+  let best = null;
+  for (const door of houseHallRoomDoors) {
+    const dist = Math.hypot(local.x - door.position.x, local.z - door.position.z);
+    if (dist <= radius && (!best || dist < best.dist)) {
+      best = { door, dist };
+    }
+  }
+  return best?.door || null;
 }
 
 function nearestFishingSpot(local, radius = FISHING_SPOT_RADIUS) {
@@ -10104,7 +10119,7 @@ function setFishingHoldState(holding) {
 }
 
 function tryFishingSpotInteract(local) {
-  if (!local || inMine || inLighthouseInterior || inHouseRoom || local.onBoat) return false;
+  if (!local || inMine || inLighthouseInterior || inHouseRoom || inHouseHall || local.onBoat) return false;
   const spot = nearestFishingSpot(local);
   if (!spot) return false;
   if (!questState.hasFishingRod) {
@@ -10206,6 +10221,59 @@ function homeWorkshopInteract(local) {
   if (!homeStatusEl?.textContent?.trim()) {
     setHomeStatus('Place owned furniture here and repaint your room.', '#cbd5e1');
   }
+  return true;
+}
+
+function claimHouseRoom(roomId, onSuccess) {
+  socket.emit('home:claimRoom', { roomId }, (resp) => {
+    if (!resp?.ok) {
+      openNpcDialogue({
+        name: 'Room Door',
+        text: resp?.error || 'Could not claim this room.',
+        primaryLabel: 'Okay',
+        secondaryLabel: 'Close'
+      });
+      return;
+    }
+    if (resp.progress) {
+      applyProgressState(resp.progress);
+    }
+    if (typeof onSuccess === 'function') {
+      onSuccess();
+    }
+  });
+}
+
+function houseHallDoorInteract(local) {
+  if (!inHouseHall) return false;
+  const door = getNearbyHouseHallDoor(local);
+  if (!door) return false;
+  const roomState = normalizeHomeRoomState(questState.homeRoom);
+  if (roomState.roomId === door.id) {
+    enterHouseRoom(local);
+    return true;
+  }
+  if (roomState.roomId) {
+    openNpcDialogue({
+      name: 'Room Door',
+      text: 'You already claimed a room. This one is locked.',
+      primaryLabel: 'Okay',
+      secondaryLabel: 'Close'
+    });
+    return true;
+  }
+  const roomNumber = door.id.split('-')[1] || door.id;
+  openNpcDialogue({
+    name: 'Room Door',
+    text: `Claim Room ${roomNumber}? You can customize it after claiming.`,
+    primaryLabel: 'Claim Room',
+    secondaryLabel: 'Cancel',
+    onPrimary: () => {
+      claimHouseRoom(door.id, () => {
+        enterHouseRoom(local);
+      });
+    }
+  });
   return true;
 }
 
@@ -10396,11 +10464,30 @@ function exitMineToEntrance(local) {
 
 function exitHouseToMain(local) {
   inHouseRoom = false;
+  inHouseHall = false;
   if (houseRoomGroup) houseRoomGroup.visible = false;
+  if (houseHallGroup) houseHallGroup.visible = false;
   setHomeModalOpen(false);
   const outX = HOUSE_DOOR_POS.x;
   const outZ = HOUSE_DOOR_POS.z + 2.45;
   teleportLocal(local, { x: outX, y: GROUND_Y, z: outZ }, Math.PI);
+}
+
+function exitHouseRoomToHall(local) {
+  inHouseRoom = false;
+  inHouseHall = true;
+  if (houseRoomGroup) houseRoomGroup.visible = false;
+  if (houseHallGroup) houseHallGroup.visible = true;
+  setHomeModalOpen(false);
+  teleportLocal(local, { x: HOUSE_HALL_ENTRY_POS.x, y: GROUND_Y, z: HOUSE_HALL_ENTRY_POS.z }, Math.PI);
+}
+
+function enterHouseRoom(local) {
+  inHouseHall = false;
+  inHouseRoom = true;
+  if (houseHallGroup) houseHallGroup.visible = false;
+  if (houseRoomGroup) houseRoomGroup.visible = true;
+  teleportLocal(local, { x: HOUSE_ROOM_ENTRY_POS.x, y: GROUND_Y, z: HOUSE_ROOM_ENTRY_POS.z }, Math.PI);
 }
 
 function startMineSwing(id, nowMs = Date.now()) {
@@ -10452,11 +10539,11 @@ function tryMineNode(local) {
 function tryAutoTeleport(local, now = performance.now()) {
   if (!local || isTeleporting || mineWarningOpen || now < teleportTriggerLockUntil) return false;
 
-  const nearMineEntrance = !inMine && !inLighthouseInterior && !inHouseRoom && !local.onBoat && distance2D(local, MINE_ENTRY_POS) < 2.2;
-  const nearLighthouseEntry = !inMine && !inLighthouseInterior && !inHouseRoom && !local.onBoat && (
+  const nearMineEntrance = !inMine && !inLighthouseInterior && !inHouseRoom && !inHouseHall && !local.onBoat && distance2D(local, MINE_ENTRY_POS) < 2.2;
+  const nearLighthouseEntry = !inMine && !inLighthouseInterior && !inHouseRoom && !inHouseHall && !local.onBoat && (
     distance2D(local, LIGHTHOUSE_DOOR_POS) < 2.35
   );
-  const nearHouseEntry = !inMine && !inLighthouseInterior && !inHouseRoom && !local.onBoat
+  const nearHouseEntry = !inMine && !inLighthouseInterior && !inHouseRoom && !inHouseHall && !local.onBoat
     && distance2D(local, HOUSE_DOOR_POS) < HOUSE_DOOR_INTERACT_RADIUS;
 
   if (nearMineEntrance) {
@@ -10503,9 +10590,11 @@ function tryAutoTeleport(local, now = performance.now()) {
       inMine = false;
       inLighthouseInterior = false;
       if (lighthouseInteriorGroup) lighthouseInteriorGroup.visible = false;
-      inHouseRoom = true;
-      if (houseRoomGroup) houseRoomGroup.visible = true;
-      teleportLocal(local, { x: HOUSE_ROOM_ENTRY_POS.x, y: GROUND_Y, z: HOUSE_ROOM_ENTRY_POS.z }, Math.PI);
+      inHouseHall = true;
+      inHouseRoom = false;
+      if (houseHallGroup) houseHallGroup.visible = true;
+      if (houseRoomGroup) houseRoomGroup.visible = false;
+      teleportLocal(local, { x: HOUSE_HALL_ENTRY_POS.x, y: GROUND_Y, z: HOUSE_HALL_ENTRY_POS.z }, Math.PI);
     });
     lastInteractAt = now;
     return true;
@@ -10526,8 +10615,17 @@ function getManualInteractTarget(local) {
   if (npcDialogueOpen) {
     return { mode: 'docked', label: 'Next', caption: 'Tap' };
   }
-  if (isNearHouseExit(local)) {
-    return { mode: 'world', label: 'Exit', caption: 'Tap', worldPos: HOUSE_ROOM_EXIT_POS, offsetY: 0.95 };
+  if (isNearHouseRoomExit(local)) {
+    return { mode: 'world', label: 'Hall', caption: 'Tap', worldPos: HOUSE_ROOM_EXIT_POS, offsetY: 0.95 };
+  }
+  if (isNearHouseHallExit(local)) {
+    return { mode: 'world', label: 'Exit', caption: 'Tap', worldPos: HOUSE_HALL_EXIT_POS, offsetY: 0.95 };
+  }
+  const hallDoor = getNearbyHouseHallDoor(local);
+  if (hallDoor) {
+    const claimedId = normalizeHomeRoomState(questState.homeRoom).roomId;
+    const label = claimedId === hallDoor.id ? 'Enter' : (claimedId ? 'Locked' : 'Claim');
+    return { mode: 'world', label, caption: 'Tap', worldPos: hallDoor.position, offsetY: 0.95 };
   }
   if (isNearHouseWorkshop(local)) {
     return { mode: 'world', label: 'Build', caption: 'Tap', worldPos: HOUSE_ROOM_WORKSHOP_POS, offsetY: 1.0 };
@@ -10690,7 +10788,8 @@ function tryInteract() {
   if (tryAutoTeleport(local, now)) return;
   const nearMineExit = inMine && distance2D(local, MINE_EXIT_POS) < 3.1;
   const nearMineCrystal = inMine && isNearMineCrystal(local);
-  const nearHouseExit = isNearHouseExit(local);
+  const nearHouseRoomExit = isNearHouseRoomExit(local);
+  const nearHouseHallExit = isNearHouseHallExit(local);
   const nearHouseWorkshop = isNearHouseWorkshop(local);
   const nearInteriorPortal = inLighthouseInterior && distance2D(local, INTERIOR_EXIT_PORTAL_POS) < 3.1;
   const nearTopPortal = !inLighthouseInterior && !local.onBoat && distance2D(local, LIGHTHOUSE_TOP_POS) < 1.25 && local.y > 11.6;
@@ -10711,7 +10810,15 @@ function tryInteract() {
     return;
   }
 
-  if (nearHouseExit) {
+  if (nearHouseRoomExit) {
+    runTeleportTransition('exit-home', () => {
+      exitHouseRoomToHall(local);
+    });
+    lastInteractAt = now;
+    return;
+  }
+
+  if (nearHouseHallExit) {
     runTeleportTransition('exit-home', () => {
       exitHouseToMain(local);
     });
@@ -10724,6 +10831,11 @@ function tryInteract() {
       lastInteractAt = now;
       return;
     }
+  }
+
+  if (inHouseHall && houseHallDoorInteract(local)) {
+    lastInteractAt = now;
+    return;
   }
 
   if (inHouseRoom) {
@@ -12648,9 +12760,29 @@ function updateInteractionHint() {
     interactHintEl.textContent = 'Boat controls: W/S move, A/D steer, E to get off anywhere';
     return;
   }
+  if (inHouseHall) {
+    if (isNearHouseHallExit(local)) {
+      interactHintEl.textContent = 'Press E at the marker to exit the house';
+      return;
+    }
+    const hallDoor = getNearbyHouseHallDoor(local);
+    if (hallDoor) {
+      const claimedId = normalizeHomeRoomState(questState.homeRoom).roomId;
+      if (claimedId === hallDoor.id) {
+        interactHintEl.textContent = 'Press E to enter your room';
+      } else if (claimedId) {
+        interactHintEl.textContent = 'This room is already claimed';
+      } else {
+        interactHintEl.textContent = `Press E to claim Room ${hallDoor.id.split('-')[1]}`;
+      }
+      return;
+    }
+    interactHintEl.textContent = 'Hallway: choose an empty room to claim';
+    return;
+  }
   if (inHouseRoom) {
-    if (isNearHouseExit(local)) {
-      interactHintEl.textContent = 'Press E at the marker to exit your room';
+    if (isNearHouseRoomExit(local)) {
+      interactHintEl.textContent = 'Press E at the marker to return to the hall';
       return;
     }
     if (isNearHouseWorkshop(local)) {
@@ -12729,7 +12861,7 @@ function updateInteractionHint() {
     return;
   }
   if (distance2D(local, HOUSE_DOOR_POS) < 2.6) {
-    interactHintEl.textContent = 'Walk through the house door to enter your room';
+    interactHintEl.textContent = 'Walk through the house door to enter the hall';
     return;
   }
   if (distance2D(local, QUEST_NPC_POS) < 3.4) {
@@ -12950,6 +13082,9 @@ function updateHouseRoomVisuals(nowMs) {
   if (houseRoomGroup) {
     houseRoomGroup.visible = inHouseRoom;
   }
+  if (houseHallGroup) {
+    houseHallGroup.visible = inHouseHall;
+  }
   if (houseRoomExitMarker) {
     houseRoomExitMarker.position.y = GROUND_Y + 0.02;
     const icon = houseRoomExitMarker.userData?.icon;
@@ -12981,6 +13116,19 @@ function updateHouseRoomVisuals(nowMs) {
     if (glow) {
       glow.intensity = 0.32 + (Math.sin(nowMs * 0.0042 + 2.1) * 0.5 + 0.5) * 0.2;
     }
+  }
+  if (houseHallExitMarker) {
+    houseHallExitMarker.position.y = GROUND_Y + 0.05;
+    houseHallExitMarker.rotation.z = nowMs * 0.001;
+  }
+  if (houseHallRoomDoors.length) {
+    const spin = nowMs * 0.0012;
+    houseHallRoomDoors.forEach((door) => {
+      if (door.ring) {
+        door.ring.rotation.z = spin;
+        door.ring.position.y = GROUND_Y + 0.05 + Math.sin(nowMs * 0.003 + door.ring.position.x) * 0.04;
+      }
+    });
   }
 }
 
