@@ -4245,13 +4245,17 @@ function addMineArea() {
   scene.add(mineEntrance);
   mineEntranceMesh = mineEntrance;
 
+  const mineStallVendorScale = 0.65;
+  const mineStallVendorY = VENDOR_STAND_Y - 0.05;
+  const mineStallVendorZ = -1.0;
+
   const mineShopVendor = createVendorNpc({
     shirtColor: 0xb45309,
     skinColor: 0xd6a581,
     hairColor: 0x1f2937,
     hatColor: 0x111827
   });
-  mineShopVendor.scale.setScalar(0.78);
+  mineShopVendor.scale.setScalar(mineStallVendorScale);
   const mineShopStall = createVendorStall({
     label: 'Pickaxes',
     signColor: '#2f2417',
@@ -4264,7 +4268,7 @@ function addMineArea() {
     0,
     MINE_SHOP_NPC_POS.z - MINE_POS.z
   );
-  mineShopVendor.position.set(0, VENDOR_STAND_Y, -2.6);
+  mineShopVendor.position.set(0, mineStallVendorY, mineStallVendorZ);
   mineShopStall.rotation.y = Math.atan2(-mineShopStall.position.x, -mineShopStall.position.z);
   mine.add(mineShopStall);
   mineShopNpcMesh = mineShopVendor;
@@ -4276,21 +4280,22 @@ function addMineArea() {
     hairColor: 0x111827,
     hatColor: 0x334155
   });
-  const oreTraderShop = createVendorStall({
-    label: 'Ores',
-    signColor: '#1f2937',
-    canopyA: 0x4b5563,
-    canopyB: 0xe2e8f0,
+  oreTraderVendor.scale.setScalar(mineStallVendorScale);
+  const oreTraderStall = createVendorStall({
+    label: 'Ore Trader',
+    signColor: '#2b2f3a',
+    canopyA: 0x94a3b8,
+    canopyB: 0xf8fafc,
     vendor: oreTraderVendor
   });
-  oreTraderShop.position.set(
+  oreTraderStall.position.set(
     MINE_ORE_TRADER_POS.x - MINE_POS.x,
     0,
     MINE_ORE_TRADER_POS.z - MINE_POS.z
   );
-  oreTraderVendor.position.set(0, VENDOR_STAND_Y, -2.6);
-  oreTraderShop.rotation.y = Math.atan2(-oreTraderShop.position.x, -oreTraderShop.position.z);
-  mine.add(oreTraderShop);
+  oreTraderVendor.position.set(0, mineStallVendorY, mineStallVendorZ);
+  oreTraderStall.rotation.y = Math.atan2(-oreTraderStall.position.x, -oreTraderStall.position.z);
+  mine.add(oreTraderStall);
   mineOreTraderNpcMesh = oreTraderVendor;
   addWorldCollider(MINE_ORE_TRADER_POS.x, MINE_ORE_TRADER_POS.z, 1.04, 'npc');
 
@@ -4300,7 +4305,7 @@ function addMineArea() {
     hairColor: 0x0f172a,
     hatColor: 0x1e293b
   });
-  questVendor.scale.setScalar(0.78);
+  questVendor.scale.setScalar(mineStallVendorScale);
   const questStall = createVendorStall({
     label: 'Quests',
     signColor: '#2f2a3b',
@@ -4313,7 +4318,7 @@ function addMineArea() {
     0,
     QUEST_NPC_POS.z - MINE_POS.z
   );
-  questVendor.position.set(0, VENDOR_STAND_Y, -2.6);
+  questVendor.position.set(0, mineStallVendorY, mineStallVendorZ);
   questStall.rotation.y = Math.atan2(-questStall.position.x, -questStall.position.z);
   mine.add(questStall);
   questNpcMesh = questVendor;
