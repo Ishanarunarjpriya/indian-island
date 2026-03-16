@@ -456,6 +456,8 @@ const _mineNodeWorldPos = new THREE.Vector3();
 const _mineCrystalWorldPos = new THREE.Vector3();
 const _mineFocusLook = new THREE.Vector3();
 const _mineFocusCameraPos = new THREE.Vector3();
+const _mobileUseWorldPos = new THREE.Vector3();
+const _mobileUseScreenPos = new THREE.Vector3();
 const _nameTagWorldPos = new THREE.Vector3();
 let npcDialogueOpen = false;
 let npcDialoguePrimaryAction = null;
@@ -1172,6 +1174,8 @@ const joystickEl = document.getElementById('joystick');
 const joystickStickEl = document.getElementById('joystick-stick');
 const mobileJumpEl = document.getElementById('btn-jump');
 const mobileUseEl = document.getElementById('btn-use');
+const mobileUseCaptionEl = mobileUseEl?.querySelector('.mobile-use-caption') ?? null;
+const mobileUseLabelEl = mobileUseEl?.querySelector('.mobile-use-label') ?? null;
 const mobileConsumeEl = document.getElementById('btn-consume');
 
 let localVoiceStream = null;
@@ -4217,7 +4221,7 @@ function addMainHouseRoomInterior() {
   const loungeCenterX = roomCenterX + 1.1;
   const loungeCenterZ = roomCenterZ + 0.95;
   const readingCornerX = roomCenterX + halfWidth - 2.85;
-  const readingCornerZ = roomCenterZ + 1.65;
+  const readingCornerZ = roomCenterZ + 0.3;
 
   const floor = new THREE.Mesh(new THREE.BoxGeometry(halfWidth * 2, 0.22, halfDepth * 2), floorMat);
   floor.position.set(HOUSE_ROOM_BASE.x, floorY - 0.11, HOUSE_ROOM_BASE.z);
@@ -4313,6 +4317,68 @@ function addMainHouseRoomInterior() {
   const dfTop = new THREE.Mesh(new THREE.BoxGeometry(doorWidth + doorFrameThick * 2, doorFrameThick, doorFrameDepth), doorFrameMat);
   dfTop.position.set(HOUSE_ROOM_BASE.x, floorY + doorFrameH + doorFrameThick * 0.5, doorFrameZ);
   room.add(dfLeft, dfRight, dfTop);
+
+  const doorLeafMat = new THREE.MeshStandardMaterial({ color: 0x4b2f1d, roughness: 0.78 });
+  const doorGlassMat = new THREE.MeshStandardMaterial({
+    color: 0xc8e6fb,
+    roughness: 0.08,
+    metalness: 0.08,
+    transparent: true,
+    opacity: 0.42
+  });
+  const doorHandleMat = new THREE.MeshStandardMaterial({ color: 0xd3a64f, roughness: 0.32, metalness: 0.68 });
+  const doorLeafW = doorWidth * 0.5 - 0.14;
+  const doorLeafH = doorFrameH - 0.18;
+  const doorLeafT = 0.08;
+  const doorPanelZ = doorFrameZ - 0.08;
+
+  function createInteriorDoorLeaf(side = -1) {
+    const leaf = new THREE.Group();
+    const slab = new THREE.Mesh(new THREE.BoxGeometry(doorLeafW, doorLeafH, doorLeafT), doorLeafMat);
+    slab.position.y = doorLeafH * 0.5;
+    const railTop = new THREE.Mesh(new THREE.BoxGeometry(doorLeafW - 0.16, 0.12, 0.02), trimMat);
+    railTop.position.set(0, doorLeafH - 0.3, doorLeafT * 0.5 + 0.02);
+    const railMid = railTop.clone();
+    railMid.position.y = doorLeafH * 0.54;
+    const railBot = railTop.clone();
+    railBot.position.y = 0.42;
+    const stileL = new THREE.Mesh(new THREE.BoxGeometry(0.12, doorLeafH - 0.2, 0.02), trimMat);
+    stileL.position.set(-doorLeafW * 0.5 + 0.14, doorLeafH * 0.5, doorLeafT * 0.5 + 0.02);
+    const stileR = stileL.clone();
+    stileR.position.x = doorLeafW * 0.5 - 0.14;
+    const glass = new THREE.Mesh(new THREE.BoxGeometry(doorLeafW - 0.42, doorLeafH * 0.32, 0.02), doorGlassMat);
+    glass.position.set(0, doorLeafH * 0.7, doorLeafT * 0.5 + 0.03);
+    const lowerPanel = new THREE.Mesh(new THREE.BoxGeometry(doorLeafW - 0.42, doorLeafH * 0.24, 0.02), trimMat);
+    lowerPanel.position.set(0, doorLeafH * 0.27, doorLeafT * 0.5 + 0.03);
+    const handle = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 10), doorHandleMat);
+    handle.position.set(side * (doorLeafW * 0.5 - 0.18), doorLeafH * 0.48, doorLeafT * 0.5 + 0.05);
+    leaf.add(slab, railTop, railMid, railBot, stileL, stileR, glass, lowerPanel, handle);
+    return leaf;
+  }
+
+  const leftDoorLeaf = createInteriorDoorLeaf(-1);
+  leftDoorLeaf.position.set(HOUSE_ROOM_BASE.x - doorWidth * 0.5 + doorLeafW * 0.5 + 0.02, floorY, doorPanelZ);
+  leftDoorLeaf.rotation.y = Math.PI * 0.16;
+  const rightDoorLeaf = createInteriorDoorLeaf(1);
+  rightDoorLeaf.position.set(HOUSE_ROOM_BASE.x + doorWidth * 0.5 - doorLeafW * 0.5 - 0.02, floorY, doorPanelZ);
+  rightDoorLeaf.rotation.y = -Math.PI * 0.16;
+
+  const transom = new THREE.Mesh(
+    new THREE.BoxGeometry(doorWidth - 0.2, 0.46, 0.05),
+    doorGlassMat
+  );
+  transom.position.set(HOUSE_ROOM_BASE.x, floorY + doorFrameH - 0.34, doorFrameZ - 0.03);
+  const transomBar = new THREE.Mesh(
+    new THREE.BoxGeometry(0.08, 0.46, 0.06),
+    trimMat
+  );
+  transomBar.position.copy(transom.position);
+  const threshold = new THREE.Mesh(
+    new THREE.BoxGeometry(doorWidth + 0.12, 0.04, 0.22),
+    new THREE.MeshStandardMaterial({ color: 0x4b5563, roughness: 0.88 })
+  );
+  threshold.position.set(HOUSE_ROOM_BASE.x, floorY + 0.03, HOUSE_ROOM_BASE.z + halfDepth - 0.09);
+  room.add(leftDoorLeaf, rightDoorLeaf, transom, transomBar, threshold);
 
   const doorStep = new THREE.Mesh(
     new THREE.BoxGeometry(doorWidth + 0.6, 0.06, 0.5),
@@ -4452,30 +4518,121 @@ function addMainHouseRoomInterior() {
   workshopSign.position.set(workspaceCenterX, floorY + 3.22, workspaceWallZ + 0.06);
   room.add(workshopSign);
 
-  houseRoomExitMarker = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.94, 0.94, 0.11, 22),
-    new THREE.MeshStandardMaterial({
-      color: 0x7dd3fc,
-      emissive: 0x0369a1,
-      emissiveIntensity: 1.02,
-      roughness: 0.34
-    })
-  );
-  houseRoomExitMarker.rotation.x = -Math.PI / 2;
-  houseRoomExitMarker.position.set(HOUSE_ROOM_EXIT_POS.x, floorY + 0.08, HOUSE_ROOM_EXIT_POS.z);
+  function createHouseRoomMarker({
+    ringRadius = 0.92,
+    ringColor = 0x7dd3fc,
+    emissiveColor = 0x0369a1,
+    iconType = 'exit'
+  } = {}) {
+    const marker = new THREE.Group();
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(ringRadius, 0.08, 10, 28),
+      new THREE.MeshStandardMaterial({
+        color: ringColor,
+        emissive: emissiveColor,
+        emissiveIntensity: 0.82,
+        roughness: 0.22,
+        metalness: 0.08
+      })
+    );
+    ring.rotation.x = Math.PI * 0.5;
+    const plate = new THREE.Mesh(
+      new THREE.CylinderGeometry(ringRadius * 0.68, ringRadius * 0.68, 0.04, 22),
+      new THREE.MeshStandardMaterial({
+        color: 0x10314d,
+        emissive: emissiveColor,
+        emissiveIntensity: 0.18,
+        roughness: 0.28,
+        transparent: true,
+        opacity: 0.82
+      })
+    );
+    plate.rotation.x = Math.PI * 0.5;
+    plate.position.y = 0.005;
+    const glow = new THREE.PointLight(ringColor, 0.46, 5.4, 2);
+    glow.position.y = 0.95;
+    const icon = new THREE.Group();
+
+    if (iconType === 'exit') {
+      const frame = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.54, 0.08), trimMat);
+      frame.position.y = 0.98;
+      const voidCut = new THREE.Mesh(
+        new THREE.BoxGeometry(0.2, 0.34, 0.1),
+        new THREE.MeshStandardMaterial({
+          color: ringColor,
+          emissive: emissiveColor,
+          emissiveIntensity: 0.9,
+          roughness: 0.18,
+          transparent: true,
+          opacity: 0.84
+        })
+      );
+      voidCut.position.set(-0.03, 0.96, 0.03);
+      const arrow = new THREE.Mesh(
+        new THREE.ConeGeometry(0.12, 0.22, 3),
+        new THREE.MeshStandardMaterial({
+          color: ringColor,
+          emissive: emissiveColor,
+          emissiveIntensity: 0.92,
+          roughness: 0.2
+        })
+      );
+      arrow.rotation.z = -Math.PI * 0.5;
+      arrow.position.set(0.18, 0.96, 0.02);
+      icon.add(frame, voidCut, arrow);
+    } else {
+      const board = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.08, 0.22), deskTopMat);
+      board.position.y = 0.94;
+      const legL = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.26, 0.06), deskBaseMat);
+      legL.position.set(-0.16, 0.76, 0);
+      const legR = legL.clone();
+      legR.position.x = 0.16;
+      const tool = new THREE.Mesh(
+        new THREE.BoxGeometry(0.08, 0.28, 0.08),
+        new THREE.MeshStandardMaterial({
+          color: ringColor,
+          emissive: emissiveColor,
+          emissiveIntensity: 0.88,
+          roughness: 0.24
+        })
+      );
+      tool.position.set(0, 1.18, 0);
+      const toolHead = new THREE.Mesh(
+        new THREE.BoxGeometry(0.24, 0.08, 0.08),
+        new THREE.MeshStandardMaterial({
+          color: ringColor,
+          emissive: emissiveColor,
+          emissiveIntensity: 0.88,
+          roughness: 0.24
+        })
+      );
+      toolHead.position.set(0, 1.28, 0);
+      icon.add(board, legL, legR, tool, toolHead);
+    }
+
+    marker.add(ring, plate, icon, glow);
+    marker.userData.ring = ring;
+    marker.userData.icon = icon;
+    marker.userData.glow = glow;
+    return marker;
+  }
+
+  houseRoomExitMarker = createHouseRoomMarker({
+    ringRadius: 0.94,
+    ringColor: 0x7dd3fc,
+    emissiveColor: 0x0369a1,
+    iconType: 'exit'
+  });
+  houseRoomExitMarker.position.set(HOUSE_ROOM_EXIT_POS.x, floorY + 0.02, HOUSE_ROOM_EXIT_POS.z);
   room.add(houseRoomExitMarker);
 
-  houseRoomWorkshopMarker = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.7, 0.7, 0.08, 18),
-    new THREE.MeshStandardMaterial({
-      color: 0x22d3ee,
-      emissive: 0x155e75,
-      emissiveIntensity: 0.95,
-      roughness: 0.3
-    })
-  );
-  houseRoomWorkshopMarker.rotation.x = -Math.PI / 2;
-  houseRoomWorkshopMarker.position.set(HOUSE_ROOM_WORKSHOP_POS.x, floorY + 0.07, HOUSE_ROOM_WORKSHOP_POS.z);
+  houseRoomWorkshopMarker = createHouseRoomMarker({
+    ringRadius: 0.72,
+    ringColor: 0x5eead4,
+    emissiveColor: 0x0f766e,
+    iconType: 'workshop'
+  });
+  houseRoomWorkshopMarker.position.set(HOUSE_ROOM_WORKSHOP_POS.x, floorY + 0.02, HOUSE_ROOM_WORKSHOP_POS.z);
   room.add(houseRoomWorkshopMarker);
 
   const winFrameDepth = wallThickness + 0.14;
@@ -4854,8 +5011,8 @@ function addMainHouseRoomInterior() {
     }
   }
   readingChair.add(readingSeat, readingBack, readingArmL, readingArmR, chairCushion);
-  readingChair.position.set(readingCornerX - 1.22, floorY, readingCornerZ + 0.2);
-  readingChair.rotation.y = Math.PI * 0.16;
+  readingChair.position.set(readingCornerX - 0.62, floorY, readingCornerZ + 0.04);
+  readingChair.rotation.y = Math.PI * 0.3;
   room.add(readingChair);
 
   const readingSideTable = new THREE.Group();
@@ -4873,7 +5030,7 @@ function addMainHouseRoomInterior() {
   const readingMug = nsCup.clone();
   readingMug.position.set(0.1, 0.7, -0.04);
   readingSideTable.add(readingSideTop, readingSideBase, readingSideFoot, readingBook, readingMug);
-  readingSideTable.position.set(readingCornerX - 2.0, floorY, readingCornerZ - 0.38);
+  readingSideTable.position.set(readingCornerX - 1.58, floorY, readingCornerZ - 0.62);
   room.add(readingSideTable);
 
   const blanketBench = new THREE.Group();
@@ -4905,6 +5062,10 @@ function addMainHouseRoomInterior() {
   addWallCollisionFromMesh(frontLeftWall, 'house-room');
   addWallCollisionFromMesh(frontRightWall, 'house-room');
   addWallCollisionFromMesh(frontTopWall, 'house-room');
+  addWorldCollider(bedroomCenterX, bedsideZ, 0.44, 'house-room');
+  addWorldCollider(readingCornerX - 0.62, readingCornerZ + 0.04, 0.74, 'house-room');
+  addWorldCollider(readingCornerX - 1.58, readingCornerZ - 0.62, 0.34, 'house-room');
+  addWorldCollider(bedroomCenterX - 2.2, bedroomCenterZ, 0.7, 'house-room');
   applyHomeRoomVisuals();
 }
 
@@ -9538,35 +9699,119 @@ function tryAutoTeleport(local, now = performance.now()) {
 }
 
 function hasManualInteractTarget(local) {
-  if (!local) return false;
-  if (npcDialogueOpen) return true;
-  if (fishingMiniGame.active) return true;
-  if (isTeleporting) return false;
-  if (isNearHouseExit(local) || isNearHouseWorkshop(local)) return true;
-  if (inHouseRoom) return false;
+  return Boolean(getManualInteractTarget(local));
+}
 
-  const nearMineExit = inMine && distance2D(local, MINE_EXIT_POS) < 3.1;
-  if (nearMineExit) return true;
-  if (inMine && isNearMineCrystal(local)) return true;
-  if (inMine && getNearbyOreNode(local)) return true;
-  if (inMine && distance2D(local, MINE_SHOP_NPC_POS) <= 3.2) return true;
-  if (inMine && distance2D(local, MINE_ORE_TRADER_POS) <= 3.2) return true;
-  if (distance2D(local, QUEST_NPC_POS) <= 3.2) return true;
-  if (isNearFishingVendor(local)) return true;
-  if (isNearFishMarket(local)) return true;
-  if (isNearFurnitureVendor(local)) return true;
-  if (!inMine && nearestFishingSpot(local)) return true;
+function getManualInteractTarget(local) {
+  if (!local || isTeleporting) return null;
+  if (fishingMiniGame.active || fishingMiniGame.starting) {
+    return { mode: 'docked', label: 'Reel', caption: 'Hold' };
+  }
+  if (npcDialogueOpen) {
+    return { mode: 'docked', label: 'Next', caption: 'Tap' };
+  }
+  if (isNearHouseExit(local)) {
+    return { mode: 'world', label: 'Exit', caption: 'Tap', worldPos: HOUSE_ROOM_EXIT_POS, offsetY: 0.95 };
+  }
+  if (isNearHouseWorkshop(local)) {
+    return { mode: 'world', label: 'Build', caption: 'Tap', worldPos: HOUSE_ROOM_WORKSHOP_POS, offsetY: 1.0 };
+  }
+  if (inHouseRoom) return null;
+  if (inMine && distance2D(local, MINE_EXIT_POS) < 3.1) {
+    return { mode: 'world', label: 'Exit', caption: 'Tap', worldPos: MINE_EXIT_POS, offsetY: 1.05 };
+  }
+  if (inMine && isNearMineCrystal(local)) {
+    mineCentralCrystalMesh?.getWorldPosition(_mobileUseWorldPos);
+    return { mode: 'world', label: 'Leave', caption: 'Tap', worldPos: _mobileUseWorldPos, offsetY: 0.55 };
+  }
+  if (inMine) {
+    const oreNode = getNearbyOreNode(local);
+    if (oreNode) {
+      oreNode.mesh.getWorldPosition(_mobileUseWorldPos);
+      return { mode: 'world', label: 'Mine', caption: 'Tap', worldPos: _mobileUseWorldPos, offsetY: 0.85 };
+    }
+    if (distance2D(local, MINE_SHOP_NPC_POS) <= 3.2) {
+      return { mode: 'world', label: 'Shop', caption: 'Tap', worldPos: MINE_SHOP_NPC_POS, offsetY: 1.45 };
+    }
+    if (distance2D(local, MINE_ORE_TRADER_POS) <= 3.2) {
+      return { mode: 'world', label: 'Sell', caption: 'Tap', worldPos: MINE_ORE_TRADER_POS, offsetY: 1.45 };
+    }
+  }
+  if (distance2D(local, QUEST_NPC_POS) <= 3.2) {
+    return { mode: 'world', label: 'Talk', caption: 'Tap', worldPos: QUEST_NPC_POS, offsetY: 1.45 };
+  }
+  if (isNearFishingVendor(local)) {
+    return { mode: 'world', label: 'Shop', caption: 'Tap', worldPos: FISHING_VENDOR_POS, offsetY: 1.45 };
+  }
+  if (isNearFishMarket(local)) {
+    return { mode: 'world', label: 'Sell', caption: 'Tap', worldPos: MARKET_VENDOR_POS, offsetY: 1.45 };
+  }
+  if (isNearFurnitureVendor(local)) {
+    return { mode: 'world', label: 'Shop', caption: 'Tap', worldPos: FURNITURE_VENDOR_POS, offsetY: 1.45 };
+  }
+  if (!inMine) {
+    const fishingSpot = nearestFishingSpot(local);
+    if (fishingSpot) {
+      return {
+        mode: 'world',
+        label: questState.hasFishingRod ? 'Fish' : 'Rod',
+        caption: 'Tap',
+        worldPos: fishingSpot,
+        offsetY: 0.75
+      };
+    }
+  }
 
-  const nearInteriorPortal = inLighthouseInterior && distance2D(local, INTERIOR_EXIT_PORTAL_POS) < 3.1;
-  if (nearInteriorPortal) return true;
-  const nearTopPortal = !inLighthouseInterior && !local.onBoat && distance2D(local, LIGHTHOUSE_TOP_POS) < 1.25 && local.y > 11.6;
-  if (nearTopPortal) return true;
+  if (inLighthouseInterior && distance2D(local, INTERIOR_EXIT_PORTAL_POS) < 3.1) {
+    return { mode: 'world', label: 'Climb', caption: 'Tap', worldPos: INTERIOR_EXIT_PORTAL_POS, offsetY: 1.0 };
+  }
+  if (!inLighthouseInterior && !local.onBoat && distance2D(local, LIGHTHOUSE_TOP_POS) < 1.25 && local.y > 11.6) {
+    return { mode: 'world', label: 'Enter', caption: 'Tap', worldPos: LIGHTHOUSE_TOP_POS, offsetY: 0.8 };
+  }
 
-  if (boatState.onboard || allowBoatBoard(local)) return true;
+  if (boatState.onboard) {
+    return { mode: 'docked', label: 'Leave', caption: 'Tap' };
+  }
+  if (allowBoatBoard(local)) {
+    if (boatState.mesh && distance2D(local, boatState) < 5.2) {
+      boatState.mesh.getWorldPosition(_mobileUseWorldPos);
+      return { mode: 'world', label: 'Boat', caption: 'Tap', worldPos: _mobileUseWorldPos, offsetY: 1.0 };
+    }
+    const dockSlot = nearestDockSlot(local, 6);
+    if (dockSlot) {
+      return { mode: 'world', label: 'Boat', caption: 'Tap', worldPos: dockSlot.dock, offsetY: 1.15 };
+    }
+    return { mode: 'docked', label: 'Boat', caption: 'Tap' };
+  }
 
   const beacon = interactables.get('beacon');
-  if (!beacon) return false;
-  return Math.hypot(local.x - beacon.x, local.z - beacon.z) <= 4.2;
+  if (!beacon || Math.hypot(local.x - beacon.x, local.z - beacon.z) > 4.2) {
+    return null;
+  }
+  beaconCore.getWorldPosition(_mobileUseWorldPos);
+  return { mode: 'world', label: 'Toggle', caption: 'Tap', worldPos: _mobileUseWorldPos, offsetY: 0.4 };
+}
+
+function updateMobileUseButtonPlacement(target) {
+  if (!mobileUseEl) return false;
+  if (!target || target.mode !== 'world' || !target.worldPos) return false;
+
+  const viewportX = window.innerWidth * 0.5;
+  const viewportY = window.innerHeight * 0.5;
+  const projected = _mobileUseScreenPos.copy(target.worldPos);
+  projected.y += target.offsetY ?? 1.0;
+  projected.project(camera);
+
+  const isVisible = projected.z > -1 && projected.z < 1 && Math.abs(projected.x) < 1.16 && Math.abs(projected.y) < 1.16;
+  if (!isVisible) return false;
+
+  const x = THREE.MathUtils.clamp(projected.x * viewportX + viewportX, 58, window.innerWidth - 58);
+  const y = THREE.MathUtils.clamp(-projected.y * viewportY + viewportY, 96, window.innerHeight - 164);
+  mobileUseEl.style.left = `${x}px`;
+  mobileUseEl.style.top = `${y}px`;
+  mobileUseEl.style.right = '';
+  mobileUseEl.style.bottom = '';
+  return true;
 }
 
 function updateMobileUseButtonVisibility(local) {
@@ -9574,15 +9819,44 @@ function updateMobileUseButtonVisibility(local) {
     refreshConsumeActionVisibility(local);
     return;
   }
-  const canUse = Boolean(local)
+  const target = Boolean(local)
     && isAuthenticated
     && !mineWarningOpen
     && !menuOpen
     && !isAnyGameplayOverlayOpen()
     && authModalEl.classList.contains('hidden')
     && customizeModalEl.classList.contains('hidden')
-    && hasManualInteractTarget(local);
-  mobileUseEl.classList.toggle('hidden', !canUse);
+    ? getManualInteractTarget(local)
+    : null;
+
+  if (!target) {
+    mobileUseEl.classList.add('hidden');
+    mobileUseEl.classList.remove('is-contextual', 'is-docked');
+    mobileUseEl.style.left = '';
+    mobileUseEl.style.top = '';
+    mobileUseEl.style.right = '';
+    mobileUseEl.style.bottom = '';
+    refreshConsumeActionVisibility(local);
+    return;
+  }
+
+  if (mobileUseCaptionEl) mobileUseCaptionEl.textContent = target.caption || 'Tap';
+  if (mobileUseLabelEl) {
+    mobileUseLabelEl.textContent = target.label || 'Use';
+  } else {
+    mobileUseEl.textContent = target.label || 'Use';
+  }
+
+  const isContextual = updateMobileUseButtonPlacement(target);
+  mobileUseEl.classList.toggle('is-contextual', isContextual);
+  mobileUseEl.classList.toggle('is-docked', !isContextual);
+  if (!isContextual) {
+    mobileUseEl.style.left = '';
+    mobileUseEl.style.top = '';
+    mobileUseEl.style.right = '';
+    mobileUseEl.style.bottom = '';
+  }
+  mobileUseEl.classList.remove('hidden');
   refreshConsumeActionVisibility(local);
 }
 
@@ -11780,10 +12054,36 @@ function updateHouseRoomVisuals(nowMs) {
     houseRoomGroup.visible = inHouseRoom;
   }
   if (houseRoomExitMarker) {
-    houseRoomExitMarker.position.y = GROUND_Y + 0.08 + Math.sin(nowMs * 0.004 + 0.9) * 0.045;
+    houseRoomExitMarker.position.y = GROUND_Y + 0.02;
+    const icon = houseRoomExitMarker.userData?.icon;
+    const ring = houseRoomExitMarker.userData?.ring;
+    const glow = houseRoomExitMarker.userData?.glow;
+    if (icon) {
+      icon.position.y = Math.sin(nowMs * 0.004 + 0.9) * 0.05;
+      icon.rotation.y = Math.sin(nowMs * 0.0018 + 0.3) * 0.14;
+    }
+    if (ring) {
+      ring.rotation.z = nowMs * 0.0008;
+    }
+    if (glow) {
+      glow.intensity = 0.36 + (Math.sin(nowMs * 0.004 + 1.4) * 0.5 + 0.5) * 0.22;
+    }
   }
   if (houseRoomWorkshopMarker) {
-    houseRoomWorkshopMarker.position.y = GROUND_Y + 0.07 + Math.sin(nowMs * 0.004 + 1.8) * 0.04;
+    houseRoomWorkshopMarker.position.y = GROUND_Y + 0.02;
+    const icon = houseRoomWorkshopMarker.userData?.icon;
+    const ring = houseRoomWorkshopMarker.userData?.ring;
+    const glow = houseRoomWorkshopMarker.userData?.glow;
+    if (icon) {
+      icon.position.y = Math.sin(nowMs * 0.004 + 1.8) * 0.045;
+      icon.rotation.y = -Math.sin(nowMs * 0.0019 + 0.8) * 0.14;
+    }
+    if (ring) {
+      ring.rotation.z = -nowMs * 0.0009;
+    }
+    if (glow) {
+      glow.intensity = 0.32 + (Math.sin(nowMs * 0.0042 + 2.1) * 0.5 + 0.5) * 0.2;
+    }
   }
 }
 
