@@ -2911,6 +2911,7 @@ function createVendorShop(x, z, yaw = 0, options = {}) {
   const shop = new THREE.Group();
   shop.position.set(x, 1.35, z);
   shop.rotation.y = yaw;
+  const vendor = options?.vendor || null;
   
   const wallMat = new THREE.MeshStandardMaterial({ color: 0x8b7355, roughness: 0.88 });
   const trimMat = new THREE.MeshStandardMaterial({ color: 0x6b5a44, roughness: 0.9 });
@@ -2986,6 +2987,11 @@ function createVendorShop(x, z, yaw = 0, options = {}) {
   const canopy = new THREE.Mesh(new THREE.BoxGeometry(shopW * 1.2, 0.2, shopD * 0.6), canopyMat);
   canopy.position.set(0, wallH + 0.1, -shopD * 0.3);
   shop.add(canopy);
+
+  if (vendor) {
+    vendor.position.set(0, 0.1, -1.9);
+    shop.add(vendor);
+  }
   
   return shop;
 }
@@ -4248,9 +4254,9 @@ function addMineArea() {
   const mineShopShop = createVendorShop(
     MINE_SHOP_NPC_POS.x,
     MINE_SHOP_NPC_POS.z,
-    0
+    0,
+    { vendor: mineShopVendor }
   );
-  mineShopVendor.position.set(0, VENDOR_STAND_Y, -3);
   mineShopShop.position.set(MINE_SHOP_NPC_POS.x, 1.35, MINE_SHOP_NPC_POS.z);
   mineShopShop.rotation.y = Math.PI;
   mine.add(mineShopShop);
@@ -4266,9 +4272,9 @@ function addMineArea() {
   const oreTraderShop = createVendorShop(
     MINE_ORE_TRADER_POS.x,
     MINE_ORE_TRADER_POS.z,
-    0
+    0,
+    { vendor: oreTraderVendor }
   );
-  oreTraderVendor.position.set(0, VENDOR_STAND_Y, -3);
   oreTraderShop.position.set(MINE_ORE_TRADER_POS.x, 1.35, MINE_ORE_TRADER_POS.z);
   oreTraderShop.rotation.y = Math.PI;
   mine.add(oreTraderShop);
@@ -4284,9 +4290,9 @@ function addMineArea() {
   const questShop = createVendorShop(
     QUEST_NPC_POS.x,
     QUEST_NPC_POS.z,
-    0
+    0,
+    { vendor: questVendor }
   );
-  questVendor.position.set(0, VENDOR_STAND_Y, -3);
   questShop.position.set(QUEST_NPC_POS.x, 1.35, QUEST_NPC_POS.z);
   questShop.rotation.y = Math.PI;
   mine.add(questShop);
