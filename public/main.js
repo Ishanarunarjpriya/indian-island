@@ -3700,7 +3700,7 @@ function createVendorNpc({
 } = {}) {
   const npc = new THREE.Group();
   // Slightly taller than player-height silhouette so vendors stand clearly above stall surfaces.
-  const npcScale = 1.7;
+  const npcScale = 1.95;
 
   const pantsMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.84 });
   const shirtMat = new THREE.MeshStandardMaterial({ color: shirtColor, roughness: 0.8 });
@@ -4259,13 +4259,13 @@ function addMineArea() {
     canopyB: 0xfef3c7,
     vendor: mineShopVendor
   });
-  mineShopVendor.position.set(0, VENDOR_STAND_Y, -0.9);
   mineShopStall.position.set(
     MINE_SHOP_NPC_POS.x - MINE_POS.x,
     0,
     MINE_SHOP_NPC_POS.z - MINE_POS.z
   );
-  mineShopStall.rotation.y = Math.PI;
+  mineShopVendor.position.set(0, VENDOR_STAND_Y, -2.6);
+  mineShopStall.rotation.y = Math.atan2(-mineShopStall.position.x, -mineShopStall.position.z);
   mine.add(mineShopStall);
   mineShopNpcMesh = mineShopVendor;
   addWorldCollider(MINE_SHOP_NPC_POS.x, MINE_SHOP_NPC_POS.z, 1.04, 'npc');
@@ -4276,18 +4276,20 @@ function addMineArea() {
     hairColor: 0x111827,
     hatColor: 0x334155
   });
-  const oreTraderShop = createVendorShop(
-    MINE_ORE_TRADER_POS.x - MINE_POS.x,
-    MINE_ORE_TRADER_POS.z - MINE_POS.z,
-    0,
-    { vendor: oreTraderVendor }
-  );
+  const oreTraderShop = createVendorStall({
+    label: 'Ores',
+    signColor: '#1f2937',
+    canopyA: 0x4b5563,
+    canopyB: 0xe2e8f0,
+    vendor: oreTraderVendor
+  });
   oreTraderShop.position.set(
     MINE_ORE_TRADER_POS.x - MINE_POS.x,
-    1.35,
+    0,
     MINE_ORE_TRADER_POS.z - MINE_POS.z
   );
-  oreTraderShop.rotation.y = Math.PI;
+  oreTraderVendor.position.set(0, VENDOR_STAND_Y, -2.6);
+  oreTraderShop.rotation.y = Math.atan2(-oreTraderShop.position.x, -oreTraderShop.position.z);
   mine.add(oreTraderShop);
   mineOreTraderNpcMesh = oreTraderVendor;
   addWorldCollider(MINE_ORE_TRADER_POS.x, MINE_ORE_TRADER_POS.z, 1.04, 'npc');
@@ -4306,13 +4308,13 @@ function addMineArea() {
     canopyB: 0xf5f3ff,
     vendor: questVendor
   });
-  questVendor.position.set(0, VENDOR_STAND_Y, -0.9);
   questStall.position.set(
     QUEST_NPC_POS.x - MINE_POS.x,
     0,
     QUEST_NPC_POS.z - MINE_POS.z
   );
-  questStall.rotation.y = Math.PI;
+  questVendor.position.set(0, VENDOR_STAND_Y, -2.6);
+  questStall.rotation.y = Math.atan2(-questStall.position.x, -questStall.position.z);
   mine.add(questStall);
   questNpcMesh = questVendor;
   addWorldCollider(QUEST_NPC_POS.x, QUEST_NPC_POS.z, 1.04, 'npc');
