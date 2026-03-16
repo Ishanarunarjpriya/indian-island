@@ -2482,6 +2482,7 @@ function addFishingIsland() {
     hairColor: 0x1f2937,
     hatColor: 0x0f172a
   });
+  vendor.scale.setScalar(0.65);
   const stall = createVendorStall({
     label: 'Fishing',
     signColor: '#0b2940',
@@ -2489,9 +2490,8 @@ function addFishingIsland() {
     canopyB: 0xffffff,
     vendor
   });
-  vendor.position.set(0, VENDOR_STAND_Y, -3);
   const fishingHouseYaw = Math.atan2(-FISHING_VENDOR_POS.x, -FISHING_VENDOR_POS.z);
-  addStoreBuilding(FISHING_VENDOR_POS.x, FISHING_VENDOR_POS.z, fishingHouseYaw, { collisions: false });
+  vendor.position.set(0, VENDOR_STAND_Y - 0.05, -1.0);
   stall.position.set(FISHING_VENDOR_POS.x, 0, FISHING_VENDOR_POS.z);
   stall.rotation.y = fishingHouseYaw;
   scene.add(stall);
@@ -2555,6 +2555,7 @@ function addMarketIsland() {
     hairColor: 0x111827,
     hatColor: 0x3f2a1a
   });
+  vendor.scale.setScalar(0.65);
   const stall = createVendorStall({
     label: 'Fish Market',
     signColor: '#2f2417',
@@ -2562,9 +2563,8 @@ function addMarketIsland() {
     canopyB: 0xffffff,
     vendor
   });
-  vendor.position.set(0, VENDOR_STAND_Y, -3);
   const marketHouseYaw = Math.atan2(-MARKET_VENDOR_POS.x, -MARKET_VENDOR_POS.z);
-  addStoreBuilding(MARKET_VENDOR_POS.x, MARKET_VENDOR_POS.z, marketHouseYaw, { collisions: false });
+  vendor.position.set(0, VENDOR_STAND_Y - 0.05, -1.0);
   stall.position.set(MARKET_VENDOR_POS.x, 0, MARKET_VENDOR_POS.z);
   stall.rotation.y = marketHouseYaw;
   scene.add(stall);
@@ -2637,6 +2637,7 @@ function addFurnitureIsland() {
     hairColor: 0x3f2a1a,
     hatColor: 0x7c2d12
   });
+  vendor.scale.setScalar(0.65);
   const stall = createVendorStall({
     label: 'Furniture',
     signColor: '#46271a',
@@ -2644,9 +2645,8 @@ function addFurnitureIsland() {
     canopyB: 0xfffbeb,
     vendor
   });
-  vendor.position.set(0, VENDOR_STAND_Y, -3);
   const furnitureHouseYaw = Math.atan2(-FURNITURE_VENDOR_POS.x, -FURNITURE_VENDOR_POS.z);
-  addStoreBuilding(FURNITURE_VENDOR_POS.x, FURNITURE_VENDOR_POS.z, furnitureHouseYaw, { collisions: false });
+  vendor.position.set(0, VENDOR_STAND_Y - 0.05, -1.0);
   stall.position.set(FURNITURE_VENDOR_POS.x, 0, FURNITURE_VENDOR_POS.z);
   stall.rotation.y = furnitureHouseYaw;
   scene.add(stall);
@@ -3635,14 +3635,39 @@ function addStoreBuilding(x, z, yaw = 0, options = {}) {
   store.add(right);
 
   const frontWallH = wallH * 0.7;
-  const frontWall = new THREE.Mesh(new THREE.BoxGeometry(storeW, frontWallH, wallT), wallMat);
-  frontWall.position.set(0, frontWallH * 0.5 + 0.1, storeD * 0.5 - wallT * 0.5);
-  store.add(frontWall);
+  const doorW = 2.0 * storeScale;
+  const doorH = 3.8 * storeScale;
+  const sideWallW = (storeW - doorW) * 0.5;
+
+  const frontWallLeft = new THREE.Mesh(new THREE.BoxGeometry(sideWallW, frontWallH, wallT), wallMat);
+  frontWallLeft.position.set(-(doorW * 0.5 + sideWallW * 0.5), frontWallH * 0.5 + 0.1, storeD * 0.5 - wallT * 0.5);
+  store.add(frontWallLeft);
+  const frontWallRight = frontWallLeft.clone();
+  frontWallRight.position.x = doorW * 0.5 + sideWallW * 0.5;
+  store.add(frontWallRight);
+
+  const doorTopH = frontWallH - doorH;
+  const doorTop = new THREE.Mesh(new THREE.BoxGeometry(doorW, doorTopH, wallT), wallMat);
+  doorTop.position.set(0, doorH + doorTopH * 0.5 + 0.1, storeD * 0.5 - wallT * 0.5);
+  store.add(doorTop);
+
+  const doorMat = new THREE.MeshStandardMaterial({ color: 0x4a3728, roughness: 0.85 });
+  const doorPanel = new THREE.Mesh(new THREE.BoxGeometry(doorW - 0.16, doorH - 0.1, 0.1), doorMat);
+  doorPanel.position.set(0, doorH * 0.5 + 0.1, storeD * 0.5 + 0.04);
+  store.add(doorPanel);
+
+  const handleMat = new THREE.MeshStandardMaterial({ color: 0xfbbf24, roughness: 0.3, metalness: 0.8 });
+  const handle = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 8), handleMat);
+  handle.position.set(doorW * 0.32, doorH * 0.5, storeD * 0.5 + 0.14);
+  store.add(handle);
 
   const upperFrontWallH = wallH * 0.35;
-  const upperFrontWall = new THREE.Mesh(new THREE.BoxGeometry(storeW, upperFrontWallH, wallT), wallMat);
-  upperFrontWall.position.set(0, frontWallH + upperFrontWallH * 0.5 + 0.1, storeD * 0.5 - wallT * 0.5);
-  store.add(upperFrontWall);
+  const upperFrontWallLeft = new THREE.Mesh(new THREE.BoxGeometry(sideWallW, upperFrontWallH, wallT), wallMat);
+  upperFrontWallLeft.position.set(-(doorW * 0.5 + sideWallW * 0.5), frontWallH + upperFrontWallH * 0.5 + 0.1, storeD * 0.5 - wallT * 0.5);
+  store.add(upperFrontWallLeft);
+  const upperFrontWallRight = upperFrontWallLeft.clone();
+  upperFrontWallRight.position.x = doorW * 0.5 + sideWallW * 0.5;
+  store.add(upperFrontWallRight);
 
   const windowW = 3.2;
   const windowH = 2.6;
@@ -3672,30 +3697,28 @@ function addStoreBuilding(x, z, yaw = 0, options = {}) {
   }
 
   const awningW = storeW * 0.85;
-  const awningD = 2.2;
-  const awningH = 0.18;
-  const awningY = wallH * 0.58;
-  const awning = new THREE.Mesh(new THREE.BoxGeometry(awningW, awningH, awningD), awningMat);
-  awning.position.set(0, awningY, storeD * 0.5 - awningD * 0.5);
-  awning.castShadow = true;
-  store.add(awning);
+  const awningD = 2.6;
+  const awningH = 0.16;
+  const awningBackY = wallH * 0.58;
+  const awningFrontY = awningBackY - 0.6;
+  const awningMidY = (awningBackY + awningFrontY) / 2;
+
+  const awningGeo = new THREE.BoxGeometry(awningW, awningH, awningD);
+  const awningSlanted = new THREE.Mesh(awningGeo, awningMat);
+  awningSlanted.rotation.x = -0.22;
+  awningSlanted.position.set(0, awningMidY, storeD * 0.5 - awningD * 0.35);
+  awningSlanted.castShadow = true;
+  store.add(awningSlanted);
 
   for (let i = 0; i < 6; i++) {
-    const stripe = new THREE.Mesh(new THREE.BoxGeometry(awningW * 0.16, awningH + 0.04, awningD + 0.04), i % 2 === 0 ? awningMat : new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.8 }));
-    stripe.position.set(-awningW * 0.45 + i * awningW * 0.18, awningY, storeD * 0.5 - awningD * 0.5);
+    const stripeGeo = new THREE.BoxGeometry(awningW * 0.15, awningH + 0.02, awningD * 0.95);
+    const stripeMat = i % 2 === 0 ? awningMat : new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.8 });
+    const stripe = new THREE.Mesh(stripeGeo, stripeMat);
+    stripe.rotation.x = -0.22;
+    stripe.position.set(-awningW * 0.43 + i * awningW * 0.175, awningMidY, storeD * 0.5 - awningD * 0.35);
+    stripe.castShadow = true;
     store.add(stripe);
   }
-
-  const awningSupportW = 0.16;
-  const awningSupportD = 0.16;
-  const awningSupportH = awningY;
-  const supportL = new THREE.Mesh(new THREE.BoxGeometry(awningSupportW, awningSupportH, awningSupportD), trimMat);
-  supportL.position.set(-awningW * 0.4, awningSupportH * 0.5 + 0.1, storeD * 0.5 - awningD * 0.5);
-  supportL.castShadow = true;
-  store.add(supportL);
-  const supportR = supportL.clone();
-  supportR.position.x = awningW * 0.4;
-  store.add(supportR);
 
   const signW = 4.8;
   const signH = 1.8;
