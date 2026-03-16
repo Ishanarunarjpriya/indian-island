@@ -540,6 +540,10 @@ const debugLevelValueEl = document.getElementById('debug-level-value');
 const debugLevelSetEl = document.getElementById('debug-level-set');
 const debugKickPlayerEl = document.getElementById('debug-kick-player');
 const debugKickEl = document.getElementById('debug-kick');
+const debugBanDurationEl = document.getElementById('debug-ban-duration');
+const debugBanUnitEl = document.getElementById('debug-ban-unit');
+const debugBanEl = document.getElementById('debug-ban');
+const debugUnbanEl = document.getElementById('debug-unban');
 const debugStatusEl = document.getElementById('debug-status');
 const saveQuitEl = document.getElementById('save-quit');
 const authModalEl = document.getElementById('auth-modal');
@@ -1374,6 +1378,43 @@ function sendDebugKick() {
       return;
     }
     setDebugStatus('Player kicked.');
+  });
+}
+
+function sendDebugBan(action) {
+  const targetId = String(debugKickPlayerEl?.value || '').trim();
+  if (!targetId) {
+    setDebugStatus('Select a player to ban.', true);
+    return;
+  }
+  const target = players.get(targetId);
+  const targetUsername = target?.accountUsername || '';
+  const targetProfileId = target?.profileId || '';
+  let durationMs = 0;
+  if (action !== 'unban') {
+    const amount = Math.max(1, Math.floor(Number(debugBanDurationEl?.value) || 0));
+    if (!amount) {
+      setDebugStatus('Enter a ban duration.', true);
+      return;
+    }
+    const unit = String(debugBanUnitEl?.value || 'minutes');
+    let multiplier = 60_000;
+    if (unit === 'hours') multiplier = 60 * 60_000;
+    if (unit === 'days') multiplier = 24 * 60 * 60_000;
+    durationMs = amount * multiplier;
+  }
+  socket.emit('debug:ban', {
+    targetId,
+    targetUsername,
+    targetProfileId,
+    action,
+    durationMs
+  }, (resp) => {
+    if (!resp?.ok) {
+      setDebugStatus(resp?.error || 'Ban failed.', true);
+      return;
+    }
+    setDebugStatus(resp?.message || (action === 'unban' ? 'Account unbanned.' : 'Account banned.'));
   });
 }
 
@@ -11283,6 +11324,8 @@ debugWorldApplyEl?.addEventListener('click', sendDebugWorldUpdate);
 debugAddEl?.addEventListener('click', () => sendDebugInventoryUpdate(1));
 debugRemoveEl?.addEventListener('click', () => sendDebugInventoryUpdate(-1));
 debugKickEl?.addEventListener('click', sendDebugKick);
+debugBanEl?.addEventListener('click', () => sendDebugBan('ban'));
+debugUnbanEl?.addEventListener('click', () => sendDebugBan('unban'));
 debugCoinsAddEl?.addEventListener('click', () => sendDebugProgressUpdate('coins', 'add'));
 debugCoinsRemoveEl?.addEventListener('click', () => sendDebugProgressUpdate('coins', 'remove'));
 debugXpAddEl?.addEventListener('click', () => sendDebugProgressUpdate('xp', 'add'));

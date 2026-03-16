@@ -310,6 +310,7 @@ let accountSaveTimer = null;
 let shuttingDown = false;
 let dbClient = null;
 let dbReady = false;
+let accountsBanColumn = false;
 
 app.use(express.static('public'));
 
@@ -319,6 +320,37 @@ app.get('/voice-config', (req, res) => {
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
+}
+
+function normalizeBanUntil(value) {
+  const ts = Math.floor(Number(value) || 0);
+  return Number.isFinite(ts) && ts > 0 ? ts : 0;
+}
+
+function formatBanUntil(ts) {
+  try {
+    return new Date(ts).toISOString();
+  } catch {
+    return 'unknown';
+  }
+}
+
+function formatDurationMs(ms) {
+  const total = Math.max(0, Math.floor(Number(ms) || 0));
+  if (!total) return '0 minutes';
+  const seconds = Math.floor(total / 1000);
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const minutes = Math.max(1, Math.floor((seconds % 3600) / 60));
+  const parts = [];
+  if (days) parts.push(`${days} day${days === 1 ? '' : 's'}`);
+  if (hours) parts.push(`${hours} hour${hours === 1 ? '' : 's'}`);
+  if (minutes || !parts.length) parts.push(`${minutes} minute${minutes === 1 ? '' : 's'}`);
+  return parts.join(' ');
+}
+
+function isBanActive(banUntil) {
+  return normalizeBanUntil(banUntil) > Date.now();
 }
 
 function xpNeededForLevel(level) {
@@ -1472,6 +1504,19 @@ async function initDatabase() {
       )
     `);
     await client.execute('create index if not exists idx_accounts_profile_id on accounts(profile_id)');
+    try {
+      await client.execute('alter table accounts add column banned_until integer');
+    } catch {
+      // Column may already exist; ignore.
+    }
+    try {
+      const columns = await client.execute(`pragma table_info(accounts)`);
+      accountsBanColumn = Array.isArray(columns.rows)
+        ? columns.rows.some((row) => String(row.name || '').toLowerCase() === 'banned_until')
+        : false;
+    } catch {
+      accountsBanColumn = false;
+    }
     dbReady = true;
     return true;
   } catch (error) {
@@ -1510,7 +1555,17 @@ async function loadProfilesFromDb() {
 async function loadAccountsFromDb() {
   if (!dbReady) return;
   const client = getDbClient();
-  const result = await client.execute('select username, salt, hash, profile_id from accounts');
+  let result;
+  try {
+    result = await client.execute(
+      accountsBanColumn
+        ? 'select username, salt, hash, profile_id, banned_until from accounts'
+        : 'select username, salt, hash, profile_id from accounts'
+    );
+  } catch (error) {
+    console.error('[db] Failed to load accounts:', error?.message || error);
+    result = await client.execute('select username, salt, hash, profile_id from accounts');
+  }
   const rows = Array.isArray(result.rows) ? result.rows : [];
   accounts.clear();
   for (const row of rows) {
@@ -1519,7 +1574,12 @@ async function loadAccountsFromDb() {
     const hash = typeof row.hash === 'string' ? row.hash : '';
     const profileId = sanitizeProfileId(row.profile_id) || `acct-${username}`;
     if (!username || !salt || !hash) continue;
-    accounts.set(username, { username, salt, hash, profileId });
+    const bannedUntilRaw = accountsBanColumn ? row.banned_until : 0;
+    let bannedUntil = normalizeBanUntil(bannedUntilRaw);
+    if (bannedUntil && bannedUntil <= Date.now()) {
+      bannedUntil = 0;
+    }
+    accounts.set(username, { username, salt, hash, profileId, bannedUntil });
   }
 }
 
@@ -1554,15 +1614,35 @@ async function saveProfileToDb(profileId, profile) {
 async function saveAccountToDb(username, account) {
   if (!dbReady || !username || !account) return;
   const client = getDbClient();
+  if (!accountsBanColumn) {
+    await client.execute({
+      sql: `insert into accounts (username, salt, hash, profile_id, updated_at)
+            values (?, ?, ?, ?, datetime('now'))
+            on conflict(username) do update
+            set salt = excluded.salt,
+                hash = excluded.hash,
+                profile_id = excluded.profile_id,
+                updated_at = datetime('now')`,
+      args: [username, account.salt, account.hash, account.profileId]
+    });
+    return;
+  }
   await client.execute({
-    sql: `insert into accounts (username, salt, hash, profile_id, updated_at)
-          values (?, ?, ?, ?, datetime('now'))
+    sql: `insert into accounts (username, salt, hash, profile_id, banned_until, updated_at)
+          values (?, ?, ?, ?, ?, datetime('now'))
           on conflict(username) do update
           set salt = excluded.salt,
               hash = excluded.hash,
               profile_id = excluded.profile_id,
+              banned_until = excluded.banned_until,
               updated_at = datetime('now')`,
-    args: [username, account.salt, account.hash, account.profileId]
+    args: [
+      username,
+      account.salt,
+      account.hash,
+      account.profileId,
+      normalizeBanUntil(account.bannedUntil)
+    ]
   });
 }
 
@@ -1613,7 +1693,11 @@ function readAccounts() {
       const hash = typeof account?.hash === 'string' ? account.hash : '';
       const profileId = sanitizeProfileId(account?.profileId) || `acct-${username}`;
       if (!salt || !hash) continue;
-      accounts.set(username, { username, salt, hash, profileId });
+      let bannedUntil = normalizeBanUntil(account?.bannedUntil);
+      if (bannedUntil && bannedUntil <= Date.now()) {
+        bannedUntil = 0;
+      }
+      accounts.set(username, { username, salt, hash, profileId, bannedUntil });
     }
   } catch {
     // Ignore corrupt account storage and continue.
@@ -1642,7 +1726,8 @@ function serializeAccounts() {
     serialized[username] = {
       salt: account.salt,
       hash: account.hash,
-      profileId: account.profileId
+      profileId: account.profileId,
+      bannedUntil: normalizeBanUntil(account.bannedUntil)
     };
   }
   return serialized;
@@ -1738,6 +1823,17 @@ function findAccountByUsernameLikeName(name, excludeProfileId = null) {
   for (const account of accounts.values()) {
     if (excludeProfileId && account.profileId === excludeProfileId) continue;
     if (normalizeNameKey(account.username) === key) {
+      return account;
+    }
+  }
+  return null;
+}
+
+function findAccountByProfileId(profileId) {
+  const key = sanitizeProfileId(profileId);
+  if (!key) return null;
+  for (const account of accounts.values()) {
+    if (account.profileId === key) {
       return account;
     }
   }
@@ -1874,7 +1970,7 @@ io.on('connection', (socket) => {
     const { salt, hash } = hashPassword(password);
     const profileId = `acct-${username}`;
     const profileWasCreated = ensureProfileExists(profileId, username, { deferSave: true });
-    const account = { username, salt, hash, profileId };
+    const account = { username, salt, hash, profileId, bannedUntil: 0 };
     accounts.set(username, account);
     try {
       if (dbReady) {
@@ -1909,6 +2005,21 @@ io.on('connection', (socket) => {
     if (!account || !verifyPassword(password, account.salt, account.hash)) {
       if (typeof ack === 'function') ack({ ok: false, error: 'Invalid username or password.' });
       return;
+    }
+    const bannedUntil = normalizeBanUntil(account.bannedUntil);
+    if (bannedUntil && bannedUntil > Date.now()) {
+      const remaining = Math.max(0, bannedUntil - Date.now());
+      if (typeof ack === 'function') {
+        ack({
+          ok: false,
+          error: `Account banned for ${formatDurationMs(remaining)} (until ${formatBanUntil(bannedUntil)}).`
+        });
+      }
+      return;
+    }
+    if (bannedUntil && bannedUntil <= Date.now()) {
+      account.bannedUntil = 0;
+      scheduleAccountSave();
     }
     ensureProfileExists(account.profileId, username);
     spawnPlayer(socket, account.profileId, username);
@@ -3149,6 +3260,90 @@ io.on('connection', (socket) => {
     targetSocket.emit('debug:kicked', { reason: 'You were kicked by a creator.' });
     setTimeout(() => targetSocket.disconnect(true), 150);
     if (typeof ack === 'function') ack({ ok: true });
+  });
+
+  socket.on('debug:ban', (payload, ack) => {
+    const actor = players.get(socket.id);
+    if (!actor || !isCreatorPlayer(actor)) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Creator access required.' });
+      return;
+    }
+    const targetId = String(payload?.targetId || '').trim();
+    const targetProfileIdRaw = String(payload?.targetProfileId || '').trim();
+    const targetUsernameRaw = String(payload?.targetUsername || '').trim();
+    if (!targetId && !targetProfileIdRaw && !targetUsernameRaw) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Target is required.' });
+      return;
+    }
+
+    let targetPlayer = targetId ? players.get(targetId) : null;
+    if (!targetPlayer && (targetProfileIdRaw || targetUsernameRaw)) {
+      const normalizedProfileId = sanitizeProfileId(targetProfileIdRaw);
+      const normalizedUsername = sanitizeUsername(targetUsernameRaw);
+      for (const [id, player] of players.entries()) {
+        if (!player) continue;
+        const playerProfileId = String(player.profileId || '');
+        const playerUsername = String(player.username || '');
+        if (normalizedProfileId && playerProfileId === normalizedProfileId) {
+          targetPlayer = player;
+          break;
+        }
+        if (normalizedUsername) {
+          if (playerUsername && playerUsername === normalizedUsername) {
+            targetPlayer = player;
+            break;
+          }
+          if (playerProfileId && playerProfileId === `acct-${normalizedUsername}`) {
+            targetPlayer = player;
+            break;
+          }
+        }
+      }
+    }
+
+    if (targetPlayer && targetPlayer.id === socket.id) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'You cannot ban yourself.' });
+      return;
+    }
+
+    const profileId = sanitizeProfileId(targetPlayer?.profileId || targetProfileIdRaw)
+      || (sanitizeUsername(targetUsernameRaw) ? `acct-${sanitizeUsername(targetUsernameRaw)}` : '');
+    const account =
+      (profileId ? findAccountByProfileId(profileId) : null)
+      || (sanitizeUsername(targetUsernameRaw) ? accounts.get(sanitizeUsername(targetUsernameRaw)) : null)
+      || (sanitizeUsername(targetPlayer?.username) ? accounts.get(sanitizeUsername(targetPlayer.username)) : null);
+
+    if (!account) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Account not found.' });
+      return;
+    }
+
+    const action = String(payload?.action || '').trim().toLowerCase();
+    const durationMsRaw = Math.floor(Number(payload?.durationMs) || 0);
+    if (action === 'unban' || durationMsRaw <= 0) {
+      account.bannedUntil = 0;
+      scheduleAccountSave();
+      if (typeof ack === 'function') ack({ ok: true, message: 'Account unbanned.' });
+      return;
+    }
+
+    const MAX_BAN_MS = 1000 * 60 * 60 * 24 * 3650;
+    const durationMs = clamp(durationMsRaw, 60_000, MAX_BAN_MS);
+    const bannedUntil = Date.now() + durationMs;
+    account.bannedUntil = bannedUntil;
+    scheduleAccountSave();
+
+    if (targetPlayer) {
+      const targetSocket = io.sockets.sockets.get(targetPlayer.id);
+      if (targetSocket) {
+        targetSocket.emit('debug:kicked', { reason: `You were banned until ${formatBanUntil(bannedUntil)}.` });
+        setTimeout(() => targetSocket.disconnect(true), 150);
+      }
+    }
+
+    if (typeof ack === 'function') {
+      ack({ ok: true, message: `Account banned until ${formatBanUntil(bannedUntil)}.` });
+    }
   });
 
   socket.on('emote', (payload) => {

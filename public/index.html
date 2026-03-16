@@ -2631,6 +2631,19 @@
           <div class="menu-actions">
             <button id="debug-kick" type="button">Kick</button>
           </div>
+          <div class="menu-actions debug-row">
+            <label class="debug-label" for="debug-ban-duration">Ban Duration</label>
+            <input id="debug-ban-duration" type="number" min="1" step="1" value="60" />
+            <select id="debug-ban-unit">
+              <option value="minutes">Minutes</option>
+              <option value="hours">Hours</option>
+              <option value="days">Days</option>
+            </select>
+          </div>
+          <div class="menu-actions">
+            <button id="debug-ban" type="button">Ban Account</button>
+            <button id="debug-unban" type="button">Unban</button>
+          </div>
         </section>
         <p id="debug-status"></p>
         <div class="menu-actions">
