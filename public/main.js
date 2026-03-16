@@ -6276,7 +6276,6 @@ function clampToPlayableGround(x, z, allowMine = false) {
   const INTERIOR_RADIUS = INTERIOR_PLAY_RADIUS;
   const HOUSE_ROOM_RADIUS = HOUSE_ROOM_PLAY_RADIUS;
   const HOUSE_HALL_RADIUS = HOUSE_HALL_PLAY_RADIUS;
-  const HOUSE_HALL_RADIUS = HOUSE_HALL_PLAY_RADIUS;
   const mineSwimBlocked = allowMine && blocksMineEscapeSwim(x, z);
   const inSwim = isSwimZone(x, z) && !mineSwimBlocked;
 
@@ -6875,7 +6874,7 @@ function isWithinPlayableWorld(x, z, allowMine = false) {
   const onLeaderboardIsland = Math.hypot(x - LEADERBOARD_ISLAND_POS.x, z - LEADERBOARD_ISLAND_POS.z) <= LEADERBOARD_RADIUS;
   const inInterior = Math.hypot(x - LIGHTHOUSE_INTERIOR_BASE.x, z - LIGHTHOUSE_INTERIOR_BASE.z) <= INTERIOR_RADIUS;
   const inHouseRoomZone = Math.hypot(x - HOUSE_ROOM_BASE.x, z - HOUSE_ROOM_BASE.z) <= HOUSE_ROOM_RADIUS;
-  const inHouseHallZone = Math.hypot(x - HOUSE_HALL_BASE.x, z - HOUSE_HALL_BASE.z) <= HOUSE_HALL_RADIUS;
+  const inHouseHallZone = Math.hypot(x - HOUSE_HALL_BASE.x, z - HOUSE_HALL_BASE.z) <= HOUSE_HALL_PLAY_RADIUS;
   const inMine = allowMine && mineDistance(x, z) <= MINE_PLAY_RADIUS;
   const inSwim = isSwimZone(x, z) && !mineSwimBlocked;
   return onMain || onLighthouse || onMineEntryIsland || onFishingIsland || onMarketIsland || onLeaderboardIsland || inInterior || inHouseRoomZone || inHouseHallZone || inMine || inSwim;
@@ -12790,7 +12789,10 @@ function updateInteractionHint() {
       }
       return;
     }
-    interactHintEl.textContent = 'Hallway: choose an empty room to claim';
+    const claimedId = normalizeHomeRoomState(questState.homeRoom).roomId;
+    interactHintEl.textContent = claimedId
+      ? 'Hallway: find your room to enter'
+      : 'Hallway: choose an empty room to claim';
     return;
   }
   if (inHouseRoom) {
