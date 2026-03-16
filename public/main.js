@@ -14,7 +14,6 @@ let pendingJump = false;
 let emoteWheelOpen = false;
 let menuOpen = false;
 let debugMenuOpen = false;
-let debugPasswordOpen = false;
 let isAuthenticated = false;
 const CHAT_BUBBLE_MS = 4500;
 let lastMineAt = 0;
@@ -377,8 +376,8 @@ const FISH_CATALOG_SORTED = [...FISH_CATALOG].sort((a, b) => {
   if (rarityGap !== 0) return rarityGap;
   return a.name.localeCompare(b.name);
 });
-const DEBUG_MENU_PASSWORD = 'HMSINDIANDEVS123';
 const DEBUG_TAP_RESET_MS = 2500;
+const WORLD_CYCLE_MS = 240000;
 const WORLD_TIME_PRESETS = {
   day: 0.5,
   evening: 0.72,
@@ -518,16 +517,11 @@ const voiceQuickToggleEl = document.getElementById('voice-quick-toggle');
 const fullscreenToggleEl = document.getElementById('fullscreen-toggle');
 const menuOverlayEl = document.getElementById('menu-overlay');
 const menuTitleEl = document.getElementById('menu-title');
-const debugPanelEl = document.getElementById('debug-panel');
-const debugPasswordOverlayEl = document.getElementById('debug-password-overlay');
-const debugPasswordInputEl = document.getElementById('debug-password-input');
-const debugPasswordSubmitEl = document.getElementById('debug-password-submit');
-const debugPasswordCancelEl = document.getElementById('debug-password-cancel');
-const debugPasswordStatusEl = document.getElementById('debug-password-status');
 const debugOverlayEl = document.getElementById('debug-overlay');
 const debugCloseEl = document.getElementById('debug-close');
 const debugWeatherSelectEl = document.getElementById('debug-weather');
 const debugTimeSelectEl = document.getElementById('debug-time');
+const debugCycleSelectEl = document.getElementById('debug-cycle');
 const debugWorldApplyEl = document.getElementById('debug-world-apply');
 const debugPlayerSelectEl = document.getElementById('debug-player');
 const debugItemTypeEl = document.getElementById('debug-item-type');
@@ -535,6 +529,15 @@ const debugItemSelectEl = document.getElementById('debug-item');
 const debugAmountEl = document.getElementById('debug-amount');
 const debugAddEl = document.getElementById('debug-add');
 const debugRemoveEl = document.getElementById('debug-remove');
+const debugProgressPlayerEl = document.getElementById('debug-progress-player');
+const debugCoinsAmountEl = document.getElementById('debug-coins-amount');
+const debugCoinsAddEl = document.getElementById('debug-coins-add');
+const debugCoinsRemoveEl = document.getElementById('debug-coins-remove');
+const debugXpAmountEl = document.getElementById('debug-xp-amount');
+const debugXpAddEl = document.getElementById('debug-xp-add');
+const debugXpRemoveEl = document.getElementById('debug-xp-remove');
+const debugLevelValueEl = document.getElementById('debug-level-value');
+const debugLevelSetEl = document.getElementById('debug-level-set');
 const debugKickPlayerEl = document.getElementById('debug-kick-player');
 const debugKickEl = document.getElementById('debug-kick');
 const debugStatusEl = document.getElementById('debug-status');
@@ -636,7 +639,7 @@ const gameplayPanels = [
   'hud', 'mini-panel', 'chat-panel', 'world-state', 'top-left-toolbar',
   'inventory-bar', 'mining-meter', 'fishing-meter', 'fish-catch-card',
   'fish-index-modal', 'inventory-modal', 'market-modal', 'rod-shop-modal', 'ore-modal', 'furniture-trader-modal', 'home-modal',
-  'debug-overlay', 'debug-password-overlay'
+  'debug-overlay'
 ]
   .map((id) => document.getElementById(id))
   .filter(Boolean);
@@ -762,10 +765,8 @@ let minimapExpanded = false;
 let minimapEnabled = localStorage.getItem('island_minimap_enabled') !== '0';
 let debugTapCount = 0;
 let debugTapResetAt = 0;
-let debugUnlocked = false;
-let debugSessionPassword = '';
 let worldStateLocked = false;
-let worldState = { weather: 'clear', timeOfDay: 'day' };
+let worldState = { weather: 'clear', timeOfDay: 'day', cycleTime: false, cycleStart: 0, cycleOffset: WORLD_TIME_PRESETS.day };
 let fishIndexOpen = false;
 let inventoryModalOpen = false;
 let marketModalOpen = false;
@@ -886,8 +887,7 @@ function isAnyGameplayOverlayOpen() {
     || oreModalOpen
     || furnitureTraderModalOpen
     || homeModalOpen
-    || debugMenuOpen
-    || debugPasswordOpen;
+    || debugMenuOpen;
 }
 
 function setFishIndexOpen(open) {
@@ -1186,9 +1186,7 @@ function setAuthModalOpen(open, statusText = '') {
     menuOpen = false;
     menuOverlayEl?.classList.add('hidden');
     debugMenuOpen = false;
-    debugPasswordOpen = false;
     debugOverlayEl?.classList.add('hidden');
-    debugPasswordOverlayEl?.classList.add('hidden');
     resetMiningAccuracyGame();
     resetFishingMiniGame();
     hideFishCatchCard();
@@ -1217,23 +1215,6 @@ function isCreatorAccount() {
   return typeof tag === 'string' && tag.toLowerCase() === 'creator';
 }
 
-function updateDebugPanelVisibility() {
-  if (!debugPanelEl) return;
-  debugPanelEl.classList.toggle('hidden', !debugUnlocked);
-}
-
-function setDebugPasswordOpen(open) {
-  debugPasswordOpen = Boolean(open);
-  debugPasswordOverlayEl?.classList.toggle('hidden', !debugPasswordOpen);
-  if (debugPasswordOpen) {
-    debugPasswordStatusEl.textContent = '';
-    if (debugPasswordInputEl) {
-      debugPasswordInputEl.value = '';
-      debugPasswordInputEl.focus();
-    }
-  }
-}
-
 function setDebugMenuOpen(open) {
   debugMenuOpen = Boolean(open);
   debugOverlayEl?.classList.toggle('hidden', !debugMenuOpen);
@@ -1251,15 +1232,21 @@ function setDebugMenuOpen(open) {
 function refreshDebugWorldControls() {
   if (debugWeatherSelectEl) debugWeatherSelectEl.value = worldState.weather;
   if (debugTimeSelectEl) debugTimeSelectEl.value = worldState.timeOfDay;
+  if (debugCycleSelectEl) debugCycleSelectEl.value = worldState.cycleTime ? 'cycle' : 'fixed';
 }
 
 function refreshDebugPlayerLists() {
-  if (!debugPlayerSelectEl && !debugKickPlayerEl) return;
-  const options = [...players.values()]
-    .map((player) => ({
-      id: player.id,
-      label: displayNameWithTag(player.name || `Player-${String(player.id).slice(0, 4)}`, player.accountTag)
-    }))
+  if (!debugPlayerSelectEl && !debugKickPlayerEl && !debugProgressPlayerEl) return;
+  const options = [...players.entries()]
+    .map(([id, player]) => {
+      const baseLabel = displayNameWithTag(player.name || `Player-${String(id).slice(0, 4)}`, player.accountTag);
+      const accountUsername = player.accountUsername
+        || (typeof player.profileId === 'string' && player.profileId.toLowerCase().startsWith('acct-')
+          ? player.profileId.slice(5)
+          : '');
+      const label = accountUsername ? `${baseLabel} (@${accountUsername})` : baseLabel;
+      return { id, label };
+    })
     .sort((a, b) => a.label.localeCompare(b.label));
   const fillSelect = (selectEl) => {
     if (!selectEl) return;
@@ -1276,6 +1263,7 @@ function refreshDebugPlayerLists() {
     }
   };
   fillSelect(debugPlayerSelectEl);
+  fillSelect(debugProgressPlayerEl);
   fillSelect(debugKickPlayerEl);
 }
 
@@ -1310,7 +1298,12 @@ function refreshDebugItemOptions() {
 function applyWorldState(nextState = {}) {
   const weather = nextState?.weather === 'rain' ? 'rain' : 'clear';
   const timeOfDay = WORLD_TIME_PRESETS[nextState?.timeOfDay] != null ? nextState.timeOfDay : 'day';
-  worldState = { weather, timeOfDay };
+  const cycleTime = nextState?.cycleTime === true;
+  const cycleStart = Number(nextState?.cycleStart || 0);
+  const cycleOffset = Number.isFinite(Number(nextState?.cycleOffset))
+    ? Number(nextState.cycleOffset)
+    : WORLD_TIME_PRESETS[timeOfDay] ?? WORLD_TIME_PRESETS.day;
+  worldState = { weather, timeOfDay, cycleTime, cycleStart, cycleOffset };
   worldStateLocked = true;
   rainActive = weather === 'rain';
   dayTime = WORLD_TIME_PRESETS[timeOfDay] ?? dayTime;
@@ -1323,32 +1316,13 @@ function setDebugStatus(message = '', isError = false) {
   debugStatusEl.style.color = isError ? '#fca5a5' : '#86efac';
 }
 
-function handleDebugPasswordSubmit() {
-  if (!debugPasswordInputEl) return;
-  const entered = debugPasswordInputEl.value.trim();
-  if (entered !== DEBUG_MENU_PASSWORD) {
-    if (debugPasswordStatusEl) {
-      debugPasswordStatusEl.textContent = 'Incorrect password.';
-    }
-    return;
-  }
-  debugUnlocked = true;
-  debugSessionPassword = entered;
-  setDebugPasswordOpen(false);
-  setDebugMenuOpen(true);
-  setDebugStatus('');
-}
-
 function sendDebugWorldUpdate() {
-  if (!debugSessionPassword) {
-    setDebugStatus('Unlock the debug menu first.', true);
-    return;
-  }
   const weather = debugWeatherSelectEl?.value === 'rain' ? 'rain' : 'clear';
   const timeOfDay = ['day', 'evening', 'night'].includes(debugTimeSelectEl?.value)
     ? debugTimeSelectEl.value
     : 'day';
-  socket.emit('debug:world', { password: debugSessionPassword, weather, timeOfDay }, (resp) => {
+  const cycleTime = debugCycleSelectEl?.value === 'cycle';
+  socket.emit('debug:world', { weather, timeOfDay, cycleTime }, (resp) => {
     if (!resp?.ok) {
       setDebugStatus(resp?.error || 'World update failed.', true);
       return;
@@ -1359,10 +1333,6 @@ function sendDebugWorldUpdate() {
 }
 
 function sendDebugInventoryUpdate(deltaSign = 1) {
-  if (!debugSessionPassword) {
-    setDebugStatus('Unlock the debug menu first.', true);
-    return;
-  }
   const targetId = String(debugPlayerSelectEl?.value || '').trim();
   if (!targetId) {
     setDebugStatus('Select a player.', true);
@@ -1380,7 +1350,7 @@ function sendDebugInventoryUpdate(deltaSign = 1) {
     return;
   }
   const delta = deltaSign > 0 ? amount : -amount;
-  socket.emit('debug:inventory', { password: debugSessionPassword, targetId, itemType, itemId, delta }, (resp) => {
+  socket.emit('debug:inventory', { targetId, itemType, itemId, delta }, (resp) => {
     if (!resp?.ok) {
       setDebugStatus(resp?.error || 'Inventory update failed.', true);
       return;
@@ -1390,21 +1360,47 @@ function sendDebugInventoryUpdate(deltaSign = 1) {
 }
 
 function sendDebugKick() {
-  if (!debugSessionPassword) {
-    setDebugStatus('Unlock the debug menu first.', true);
-    return;
-  }
   const targetId = String(debugKickPlayerEl?.value || '').trim();
   if (!targetId) {
     setDebugStatus('Select a player to kick.', true);
     return;
   }
-  socket.emit('debug:kick', { password: debugSessionPassword, targetId }, (resp) => {
+  const target = players.get(targetId);
+  const targetUsername = target?.accountUsername || '';
+  const targetProfileId = target?.profileId || '';
+  socket.emit('debug:kick', { targetId, targetUsername, targetProfileId }, (resp) => {
     if (!resp?.ok) {
       setDebugStatus(resp?.error || 'Kick failed.', true);
       return;
     }
     setDebugStatus('Player kicked.');
+  });
+}
+
+function sendDebugProgressUpdate(kind, action) {
+  const targetId = String(debugProgressPlayerEl?.value || '').trim();
+  if (!targetId) {
+    setDebugStatus('Select a player.', true);
+    return;
+  }
+  let amount = 0;
+  if (kind === 'coins') {
+    amount = Math.max(1, Math.floor(Number(debugCoinsAmountEl?.value) || 0));
+  } else if (kind === 'xp') {
+    amount = Math.max(1, Math.floor(Number(debugXpAmountEl?.value) || 0));
+  } else if (kind === 'level') {
+    amount = Math.max(1, Math.floor(Number(debugLevelValueEl?.value) || 0));
+  }
+  if (!amount) {
+    setDebugStatus('Enter an amount.', true);
+    return;
+  }
+  socket.emit('debug:progress', { targetId, kind, action, amount }, (resp) => {
+    if (!resp?.ok) {
+      setDebugStatus(resp?.error || 'Progress update failed.', true);
+      return;
+    }
+    setDebugStatus('Progress updated.');
   });
 }
 
@@ -7105,6 +7101,8 @@ function addPlayer(data) {
   tag.className = 'player-tag';
   const baseName = data.name || `Player-${String(data.id).slice(0, 4)}`;
   const accountTag = normalizeAccountTag(data?.accountTag);
+  const profileId = typeof data.profileId === 'string' ? data.profileId.trim() : '';
+  const accountUsername = resolveAccountUsername(data);
   applyTaggedNameToElement(tag, baseName, accountTag);
   nameTagsEl.appendChild(tag);
 
@@ -7114,6 +7112,9 @@ function addPlayer(data) {
   nameTagsEl.appendChild(bubble);
 
   players.set(data.id, {
+    id: data.id,
+    profileId,
+    accountUsername,
     mesh,
     x: data.x,
     y: data.y ?? 0,
@@ -7187,6 +7188,17 @@ function normalizeAccountTag(value) {
   const raw = typeof value === 'string' ? value.trim() : '';
   if (!raw) return null;
   return raw.slice(0, 24);
+}
+
+function resolveAccountUsername(data) {
+  if (!data) return '';
+  const direct = typeof data.username === 'string' ? data.username.trim() : '';
+  if (direct) return direct.toLowerCase();
+  const profileId = typeof data.profileId === 'string' ? data.profileId.trim() : '';
+  if (profileId.toLowerCase().startsWith('acct-')) {
+    return profileId.slice(5).toLowerCase();
+  }
+  return '';
 }
 
 function applyTaggedNameToElement(element, name, accountTag = null) {
@@ -11259,19 +11271,8 @@ menuTitleEl?.addEventListener('click', () => {
   debugTapCount += 1;
   if (debugTapCount >= 5) {
     debugTapCount = 0;
-    setDebugPasswordOpen(true);
+    setDebugMenuOpen(true);
   }
-});
-debugPasswordSubmitEl?.addEventListener('click', handleDebugPasswordSubmit);
-debugPasswordCancelEl?.addEventListener('click', () => setDebugPasswordOpen(false));
-debugPasswordInputEl?.addEventListener('keydown', (event) => {
-  if (event.key === 'Enter') {
-    event.preventDefault();
-    handleDebugPasswordSubmit();
-  }
-});
-debugPasswordOverlayEl?.addEventListener('click', (event) => {
-  if (event.target === debugPasswordOverlayEl) setDebugPasswordOpen(false);
 });
 debugCloseEl?.addEventListener('click', () => setDebugMenuOpen(false));
 debugOverlayEl?.addEventListener('click', (event) => {
@@ -11282,6 +11283,11 @@ debugWorldApplyEl?.addEventListener('click', sendDebugWorldUpdate);
 debugAddEl?.addEventListener('click', () => sendDebugInventoryUpdate(1));
 debugRemoveEl?.addEventListener('click', () => sendDebugInventoryUpdate(-1));
 debugKickEl?.addEventListener('click', sendDebugKick);
+debugCoinsAddEl?.addEventListener('click', () => sendDebugProgressUpdate('coins', 'add'));
+debugCoinsRemoveEl?.addEventListener('click', () => sendDebugProgressUpdate('coins', 'remove'));
+debugXpAddEl?.addEventListener('click', () => sendDebugProgressUpdate('xp', 'add'));
+debugXpRemoveEl?.addEventListener('click', () => sendDebugProgressUpdate('xp', 'remove'));
+debugLevelSetEl?.addEventListener('click', () => sendDebugProgressUpdate('level', 'set'));
 chatToggleEl?.addEventListener('click', () => {
   if (!isAuthenticated) return;
   setChatPanelOpen(!chatPanelOpen);
@@ -11862,6 +11868,13 @@ const _fogColor = new THREE.Color();
 function updateDayAndWeather(delta, nowSeconds) {
   if (!worldStateLocked) {
     dayTime = (dayTime + delta / 240) % 1;
+  } else if (worldState.cycleTime) {
+    const cycleStart = Number(worldState.cycleStart || 0);
+    const offset = Number.isFinite(Number(worldState.cycleOffset))
+      ? Number(worldState.cycleOffset)
+      : WORLD_TIME_PRESETS[worldState.timeOfDay] ?? WORLD_TIME_PRESETS.day;
+    const elapsed = (Date.now() - cycleStart) / WORLD_CYCLE_MS;
+    dayTime = ((offset + elapsed) % 1 + 1) % 1;
   } else if (WORLD_TIME_PRESETS[worldState.timeOfDay] != null) {
     dayTime = WORLD_TIME_PRESETS[worldState.timeOfDay];
   }

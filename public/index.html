@@ -1456,8 +1456,7 @@
         letter-spacing: 0.3px;
       }
 
-      #debug-overlay,
-      #debug-password-overlay {
+      #debug-overlay {
         position: fixed;
         inset: 0;
         z-index: 35;
@@ -1467,8 +1466,7 @@
         place-items: center;
       }
 
-      #debug-panel,
-      #debug-password-panel {
+      #debug-panel {
         width: min(560px, calc(100vw - 28px));
         max-height: min(86vh, 760px);
         overflow-y: auto;
@@ -1477,16 +1475,14 @@
         gap: 12px;
       }
 
-      #debug-panel h2,
-      #debug-password-panel h2 {
+      #debug-panel h2 {
         margin: 0;
         font-size: 17px;
         letter-spacing: 0.3px;
       }
 
       #debug-panel select,
-      #debug-panel input,
-      #debug-password-panel input {
+      #debug-panel input {
         width: 100%;
         height: 32px;
         border-radius: 10px;
@@ -1508,8 +1504,7 @@
         color: #cbd5e1;
       }
 
-      #debug-status,
-      #debug-password-status {
+      #debug-status {
         min-height: 16px;
         font-size: 12px;
         color: #fca5a5;
@@ -2533,29 +2528,10 @@
             <button id="performance-toggle" type="button">Graphics: Quality</button>
           </div>
         </section>
-        <section id="debug-panel" class="menu-section hidden">
-          <h3>Debug</h3>
-          <p style="margin:0;font-size:12px;color:#cbd5e1;">Creator tools unlocked.</p>
-        </section>
         <section class="menu-section">
           <h3>Account</h3>
           <button id="save-quit" type="button">Save and Quit</button>
         </section>
-      </section>
-    </div>
-
-    <div id="debug-password-overlay" class="hidden">
-      <section id="debug-password-panel" class="panel">
-        <h2>Creator Debug</h2>
-        <div class="auth-field">
-          <label for="debug-password-input">Password</label>
-          <input id="debug-password-input" type="password" autocomplete="off" />
-        </div>
-        <div class="menu-actions">
-          <button id="debug-password-submit" type="button">Unlock</button>
-          <button id="debug-password-cancel" type="button">Cancel</button>
-        </div>
-        <p id="debug-password-status"></p>
       </section>
     </div>
 
@@ -2577,6 +2553,13 @@
               <option value="day">Day</option>
               <option value="evening">Evening</option>
               <option value="night">Night</option>
+            </select>
+          </div>
+          <div class="menu-actions debug-row">
+            <label class="debug-label" for="debug-cycle">Cycle Day/Night</label>
+            <select id="debug-cycle">
+              <option value="fixed">Fixed</option>
+              <option value="cycle">Cycle</option>
             </select>
           </div>
           <div class="menu-actions">
@@ -2607,6 +2590,36 @@
           <div class="menu-actions">
             <button id="debug-add" type="button">Add</button>
             <button id="debug-remove" type="button">Remove</button>
+          </div>
+        </section>
+        <section class="menu-section">
+          <h3>Progress</h3>
+          <div class="menu-actions debug-row">
+            <label class="debug-label" for="debug-progress-player">Player</label>
+            <select id="debug-progress-player"></select>
+          </div>
+          <div class="menu-actions debug-row">
+            <label class="debug-label" for="debug-coins-amount">Coins</label>
+            <input id="debug-coins-amount" type="number" min="1" step="1" value="100" />
+          </div>
+          <div class="menu-actions">
+            <button id="debug-coins-add" type="button">Add Coins</button>
+            <button id="debug-coins-remove" type="button">Remove Coins</button>
+          </div>
+          <div class="menu-actions debug-row">
+            <label class="debug-label" for="debug-xp-amount">XP</label>
+            <input id="debug-xp-amount" type="number" min="1" step="1" value="100" />
+          </div>
+          <div class="menu-actions">
+            <button id="debug-xp-add" type="button">Add XP</button>
+            <button id="debug-xp-remove" type="button">Remove XP</button>
+          </div>
+          <div class="menu-actions debug-row">
+            <label class="debug-label" for="debug-level-value">Level</label>
+            <input id="debug-level-value" type="number" min="1" step="1" value="1" />
+          </div>
+          <div class="menu-actions">
+            <button id="debug-level-set" type="button">Set Level</button>
           </div>
         </section>
         <section class="menu-section">

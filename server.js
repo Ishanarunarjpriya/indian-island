@@ -111,13 +111,18 @@ const ACCOUNT_ROLE_TAG_BY_PROFILE_ID = new Map([
   ['acct-ishyfishyinthedishy', 'Creator'],
   ['acct-eye_wonder_who', 'Creator']
 ]);
-const DEBUG_MENU_PASSWORD = 'HMSINDIANDEVS123';
 const WORLD_TIME_PRESETS = new Map([
   ['day', 0.5],
   ['evening', 0.72],
   ['night', 0.9]
 ]);
-let worldState = { weather: 'clear', timeOfDay: 'day' };
+let worldState = {
+  weather: 'clear',
+  timeOfDay: 'day',
+  cycleTime: false,
+  cycleStart: 0,
+  cycleOffset: WORLD_TIME_PRESETS.get('day')
+};
 const CHAT_FILTER_WORDS = [
   'fuck',
   'fucking',
@@ -1392,7 +1397,15 @@ function isCreatorPlayer(player) {
 function sanitizeWorldState(value = {}) {
   const weather = value?.weather === 'rain' ? 'rain' : 'clear';
   const timeOfDay = WORLD_TIME_PRESETS.has(value?.timeOfDay) ? value.timeOfDay : worldState.timeOfDay;
-  return { weather, timeOfDay };
+  const hasCycleToggle = typeof value?.cycleTime === 'boolean';
+  const cycleTime = hasCycleToggle ? value.cycleTime === true : worldState.cycleTime === true;
+  const cycleOffset =
+    WORLD_TIME_PRESETS.get(timeOfDay) ??
+    WORLD_TIME_PRESETS.get(worldState.timeOfDay) ??
+    WORLD_TIME_PRESETS.get('day') ??
+    0.5;
+  const cycleStart = cycleTime ? (hasCycleToggle ? Date.now() : worldState.cycleStart || Date.now()) : 0;
+  return { weather, timeOfDay, cycleTime, cycleStart, cycleOffset };
 }
 
 function hashPassword(password, salt = crypto.randomBytes(16).toString('hex')) {
@@ -1768,10 +1781,14 @@ function ensureProfileExists(profileId, username, options = {}) {
 function spawnPlayer(socket, profileId, username) {
   ensureProfileExists(profileId, username);
   const profile = profiles.get(profileId);
+  const accountUsername = typeof username === 'string' && username.trim()
+    ? username.trim().toLowerCase()
+    : (String(profileId || '').toLowerCase().startsWith('acct-') ? String(profileId).slice(5) : '');
   const spawnPoint = randomMainIslandSpawn(WORLD_LIMIT * 0.65);
   const spawn = {
     id: socket.id,
     profileId,
+    username: accountUsername,
     accountTag: accountRoleTagForProfileId(profileId),
     name: profile?.name || username || `Player-${socket.id.slice(0, 4)}`,
     x: spawnPoint.x,
@@ -2957,10 +2974,6 @@ io.on('connection', (socket) => {
       if (typeof ack === 'function') ack({ ok: false, error: 'Creator access required.' });
       return;
     }
-    if (payload?.password !== DEBUG_MENU_PASSWORD) {
-      if (typeof ack === 'function') ack({ ok: false, error: 'Invalid password.' });
-      return;
-    }
     worldState = sanitizeWorldState(payload || {});
     io.emit('world:update', worldState);
     if (typeof ack === 'function') ack({ ok: true, worldState });
@@ -2970,10 +2983,6 @@ io.on('connection', (socket) => {
     const actor = players.get(socket.id);
     if (!actor || !isCreatorPlayer(actor)) {
       if (typeof ack === 'function') ack({ ok: false, error: 'Creator access required.' });
-      return;
-    }
-    if (payload?.password !== DEBUG_MENU_PASSWORD) {
-      if (typeof ack === 'function') ack({ ok: false, error: 'Invalid password.' });
       return;
     }
     const targetId = String(payload?.targetId || '').trim();
@@ -3030,28 +3039,111 @@ io.on('connection', (socket) => {
     if (typeof ack === 'function') ack({ ok: true });
   });
 
+  socket.on('debug:progress', (payload, ack) => {
+    const actor = players.get(socket.id);
+    if (!actor || !isCreatorPlayer(actor)) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Creator access required.' });
+      return;
+    }
+    const targetId = String(payload?.targetId || '').trim();
+    const target = targetId ? players.get(targetId) : null;
+    if (!target) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Target player not found.' });
+      return;
+    }
+    const progress = target.progress;
+    if (!progress) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Target progress unavailable.' });
+      return;
+    }
+
+    const kind = String(payload?.kind || '').trim().toLowerCase();
+    const action = String(payload?.action || '').trim().toLowerCase();
+    const amount = clamp(Math.floor(Number(payload?.amount) || 0), 0, 2_000_000_000);
+
+    if (kind === 'coins') {
+      if (!amount) {
+        if (typeof ack === 'function') ack({ ok: false, error: 'Amount is required.' });
+        return;
+      }
+      const current = clamp(Math.floor(Number(progress.coins) || 0), 0, 100_000_000);
+      const delta = action === 'remove' ? -amount : amount;
+      progress.coins = clamp(current + delta, 0, 100_000_000);
+    } else if (kind === 'xp') {
+      if (!amount) {
+        if (typeof ack === 'function') ack({ ok: false, error: 'Amount is required.' });
+        return;
+      }
+      if (action === 'remove') {
+        progress.xp = clamp((progress.xp || 0) - amount, 0, 2_000_000_000);
+        normalizeProgressLevel(progress);
+      } else {
+        grantExperience(progress, amount);
+      }
+    } else if (kind === 'level') {
+      const targetLevel = clamp(Math.floor(Number(payload?.amount) || 1), 1, MAX_PLAYER_LEVEL);
+      let totalXp = 0;
+      for (let level = 1; level < targetLevel; level += 1) {
+        totalXp += xpNeededForLevel(level);
+      }
+      progress.xp = clamp(totalXp, 0, 2_000_000_000);
+      normalizeProgressLevel(progress);
+    } else {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Unknown debug action.' });
+      return;
+    }
+
+    persistPlayerProgress(target, { immediate: true });
+    const targetSocket = io.sockets.sockets.get(target.id);
+    if (targetSocket) {
+      emitProgress(targetSocket, target);
+    }
+    if (typeof ack === 'function') ack({ ok: true });
+  });
+
   socket.on('debug:kick', (payload, ack) => {
     const actor = players.get(socket.id);
     if (!actor || !isCreatorPlayer(actor)) {
       if (typeof ack === 'function') ack({ ok: false, error: 'Creator access required.' });
       return;
     }
-    if (payload?.password !== DEBUG_MENU_PASSWORD) {
-      if (typeof ack === 'function') ack({ ok: false, error: 'Invalid password.' });
-      return;
-    }
     const targetId = String(payload?.targetId || '').trim();
-    if (!targetId) {
+    const targetProfileIdRaw = String(payload?.targetProfileId || '').trim();
+    const targetUsernameRaw = String(payload?.targetUsername || '').trim();
+    if (!targetId && !targetProfileIdRaw && !targetUsernameRaw) {
       if (typeof ack === 'function') ack({ ok: false, error: 'Target is required.' });
       return;
     }
-    if (targetId === socket.id) {
-      if (typeof ack === 'function') ack({ ok: false, error: 'You cannot kick yourself.' });
-      return;
+    let targetSocket = targetId ? io.sockets.sockets.get(targetId) : null;
+    if (!targetSocket) {
+      const normalizedProfileId = targetProfileIdRaw.toLowerCase();
+      const normalizedUsername = targetUsernameRaw.toLowerCase();
+      for (const [id, player] of players.entries()) {
+        if (!player) continue;
+        const playerProfileId = String(player.profileId || '').toLowerCase();
+        const playerUsername = String(player.username || '').toLowerCase();
+        if (normalizedProfileId && playerProfileId === normalizedProfileId) {
+          targetSocket = io.sockets.sockets.get(id);
+          break;
+        }
+        if (normalizedUsername) {
+          if (playerUsername && playerUsername === normalizedUsername) {
+            targetSocket = io.sockets.sockets.get(id);
+            break;
+          }
+          if (playerProfileId && playerProfileId === `acct-${normalizedUsername}`) {
+            targetSocket = io.sockets.sockets.get(id);
+            break;
+          }
+        }
+      }
     }
-    const targetSocket = io.sockets.sockets.get(targetId);
     if (!targetSocket) {
       if (typeof ack === 'function') ack({ ok: false, error: 'Target player not found.' });
+      return;
+    }
+    if (targetSocket.id === socket.id) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'You cannot kick yourself.' });
       return;
     }
     targetSocket.emit('debug:kicked', { reason: 'You were kicked by a creator.' });
