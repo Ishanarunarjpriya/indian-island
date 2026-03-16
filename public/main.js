@@ -2491,7 +2491,6 @@ function addFishingIsland() {
   });
   vendor.position.set(0, VENDOR_STAND_Y, -3);
   const fishingHouseYaw = Math.atan2(-FISHING_VENDOR_POS.x, -FISHING_VENDOR_POS.z);
-  addWoodHouse(FISHING_VENDOR_POS.x, FISHING_VENDOR_POS.z, fishingHouseYaw, { collisions: false });
   stall.position.set(FISHING_VENDOR_POS.x, 0, FISHING_VENDOR_POS.z);
   stall.rotation.y = fishingHouseYaw;
   scene.add(stall);
@@ -6047,15 +6046,9 @@ function isWaterAt(x, z) {
   if (Math.hypot(x - FURNITURE_DOCK_POS.x, z - FURNITURE_DOCK_POS.z) <= 14) return false;
   if (Math.hypot(x - LEADERBOARD_DOCK_POS.x, z - LEADERBOARD_DOCK_POS.z) <= 14) return false;
 
-  // Hard land-safe radius for the main island footprint.
-  if (radius <= worldLimit + 8.4) return false;
-
   const angle = Math.atan2(z, x);
-  // Keep all shoreline blends (sand + hand-shaped beach edits) walkable.
-  // Ocean should only start clearly beyond the island rim.
   const shorelineRadius = mainIslandRadiusAtAngle(angle) + 7.4;
-  const onMainIslandLand = radius <= shorelineRadius;
-  if (onMainIslandLand) return false;
+  if (radius <= shorelineRadius) return false;
 
   // The dock-side beach uses custom blended geometry that can extend beyond radialShape.
   // Keep that blended shoreline region dry so players walk there instead of swimming.
