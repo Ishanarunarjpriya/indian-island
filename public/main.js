@@ -2994,7 +2994,109 @@ function createMarketStall(x, z, yaw = 0, options = {}) {
   return stall;
 }
 
-  // Foundation/base trim
+function addWoodHouse(x, z, yaw = 0, options = {}) {
+  const collisions = options?.collisions !== false;
+  const house = new THREE.Group();
+  house.position.set(x, 1.35, z);
+  house.rotation.y = yaw;
+  const wallMat = new THREE.MeshStandardMaterial({ color: 0x7b4f2d, roughness: 0.88 });
+  const trimMat = new THREE.MeshStandardMaterial({ color: 0x5b3a24, roughness: 0.9 });
+  const roofMat = new THREE.MeshStandardMaterial({ color: 0x4e3423, roughness: 0.9 });
+  const stoneMat = new THREE.MeshStandardMaterial({ color: 0x6b7280, roughness: 0.92 });
+  const brickMat = new THREE.MeshStandardMaterial({ color: 0x92400e, roughness: 0.85 });
+  const doorMat = new THREE.MeshStandardMaterial({ color: 0x3f2510, roughness: 0.82 });
+
+  const houseScale = 1.18;
+  const houseW = 9.4 * houseScale;
+  const houseD = 8.0 * houseScale;
+  const wallH = 3.2 * houseScale;
+  const wallT = 0.22;
+  const doorW = 1.9 * houseScale;
+  const doorH = 2.45 * houseScale;
+  const floor = new THREE.Mesh(new THREE.BoxGeometry(houseW, 0.2, houseD), wallMat);
+  floor.position.y = 0.08;
+  floor.receiveShadow = true;
+  house.add(floor);
+
+  const back = new THREE.Mesh(new THREE.BoxGeometry(houseW, wallH, wallT), wallMat);
+  back.position.set(0, wallH * 0.5 + 0.1, -houseD * 0.5 + wallT * 0.5);
+  const left = new THREE.Mesh(new THREE.BoxGeometry(wallT, wallH, houseD), wallMat);
+  left.position.set(-houseW * 0.5 + wallT * 0.5, wallH * 0.5 + 0.1, 0);
+  const right = left.clone();
+  right.position.x = houseW * 0.5 - wallT * 0.5;
+
+  const frontSideW = (houseW - doorW) * 0.5;
+  const frontLeft = new THREE.Mesh(new THREE.BoxGeometry(frontSideW, wallH, wallT), wallMat);
+  frontLeft.position.set(-(doorW * 0.5 + frontSideW * 0.5), wallH * 0.5 + 0.1, houseD * 0.5 - wallT * 0.5);
+  const frontRight = frontLeft.clone();
+  frontRight.position.x = -frontLeft.position.x;
+  const frontTop = new THREE.Mesh(new THREE.BoxGeometry(doorW, wallH - doorH, wallT), wallMat);
+  frontTop.position.set(0, doorH + (wallH - doorH) * 0.5 + 0.1, houseD * 0.5 - wallT * 0.5);
+
+  house.add(back, left, right, frontLeft, frontRight, frontTop);
+
+  const doorPanel = new THREE.Mesh(new THREE.BoxGeometry(doorW - 0.14, doorH - 0.08, 0.08), doorMat);
+  doorPanel.position.set(0, doorH * 0.5 + 0.04, houseD * 0.5 + 0.04);
+  house.add(doorPanel);
+  const handleMat = new THREE.MeshStandardMaterial({ color: 0xfbbf24, roughness: 0.3, metalness: 0.8 });
+  const handle = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 8), handleMat);
+  handle.position.set(doorW * 0.28, doorH * 0.48, houseD * 0.5 + 0.12);
+  house.add(handle);
+
+  const frameTop = new THREE.Mesh(new THREE.BoxGeometry(doorW + 0.24, 0.12, 0.12), trimMat);
+  frameTop.position.set(0, doorH + 0.16, houseD * 0.5 + 0.02);
+  const frameLeft = new THREE.Mesh(new THREE.BoxGeometry(0.1, doorH, 0.12), trimMat);
+  frameLeft.position.set(-doorW * 0.5 - 0.06, doorH * 0.5 + 0.1, houseD * 0.5 + 0.02);
+  const frameRight = frameLeft.clone();
+  frameRight.position.x = doorW * 0.5 + 0.06;
+  house.add(frameTop, frameLeft, frameRight);
+
+  const winW = 1.4;
+  const winH = 1.5;
+  const winY = wallH * 0.5 + 0.35;
+  const leftWin1 = createHouseWindow(winW, winH);
+  leftWin1.position.set(-houseW * 0.5 - 0.02, winY, -houseD * 0.22);
+  leftWin1.rotation.y = -Math.PI * 0.5;
+  const leftWin2 = createHouseWindow(winW, winH);
+  leftWin2.position.set(-houseW * 0.5 - 0.02, winY, houseD * 0.22);
+  leftWin2.rotation.y = -Math.PI * 0.5;
+  house.add(leftWin1, leftWin2);
+
+  const rightWin1 = createHouseWindow(winW, winH);
+  rightWin1.position.set(houseW * 0.5 + 0.02, winY, -houseD * 0.22);
+  rightWin1.rotation.y = Math.PI * 0.5;
+  const rightWin2 = createHouseWindow(winW, winH);
+  rightWin2.position.set(houseW * 0.5 + 0.02, winY, houseD * 0.22);
+  rightWin2.rotation.y = Math.PI * 0.5;
+  house.add(rightWin1, rightWin2);
+
+  const backWin = createHouseWindow(2.0, winH);
+  backWin.position.set(0, winY, -houseD * 0.5 - 0.02);
+  backWin.rotation.y = Math.PI;
+  house.add(backWin);
+
+  const frontWin1 = createHouseWindow(1.1, 1.2);
+  frontWin1.position.set(-(doorW * 0.5 + frontSideW * 0.5), winY, houseD * 0.5 + 0.02);
+  house.add(frontWin1);
+  const frontWin2 = createHouseWindow(1.1, 1.2);
+  frontWin2.position.set((doorW * 0.5 + frontSideW * 0.5), winY, houseD * 0.5 + 0.02);
+  house.add(frontWin2);
+
+  const postSize = 0.18;
+  const postH = wallH + 0.16;
+  const corners = [
+    [-houseW * 0.5, -houseD * 0.5],
+    [houseW * 0.5, -houseD * 0.5],
+    [-houseW * 0.5, houseD * 0.5],
+    [houseW * 0.5, houseD * 0.5]
+  ];
+  for (const [cx, cz] of corners) {
+    const post = new THREE.Mesh(new THREE.BoxGeometry(postSize, postH, postSize), trimMat);
+    post.position.set(cx, postH * 0.5 + 0.1, cz);
+    post.castShadow = true;
+    house.add(post);
+  }
+
   const foundationH = 0.28;
   const foundation = new THREE.Mesh(
     new THREE.BoxGeometry(houseW + 0.3, foundationH, houseD + 0.3),
@@ -3031,7 +3133,6 @@ function createMarketStall(x, z, yaw = 0, options = {}) {
 
   house.add(eave, roof, roofPeak);
 
-  // Chimney
   const chimneyW = 0.7;
   const chimneyD = 0.7;
   const chimneyH = 2.8;
@@ -3039,7 +3140,6 @@ function createMarketStall(x, z, yaw = 0, options = {}) {
   const chimneyBody = new THREE.Mesh(new THREE.BoxGeometry(chimneyW, chimneyH, chimneyD), brickMat);
   chimneyBody.castShadow = true;
   chimneyBase.add(chimneyBody);
-  // Chimney cap
   const chimneyCap = new THREE.Mesh(
     new THREE.BoxGeometry(chimneyW + 0.2, 0.12, chimneyD + 0.2),
     stoneMat
@@ -3047,7 +3147,6 @@ function createMarketStall(x, z, yaw = 0, options = {}) {
   chimneyCap.position.y = chimneyH * 0.5 + 0.06;
   chimneyCap.castShadow = true;
   chimneyBase.add(chimneyCap);
-  // Brick detail bands
   for (let i = 0; i < 4; i++) {
     const band = new THREE.Mesh(
       new THREE.BoxGeometry(chimneyW + 0.04, 0.06, chimneyD + 0.04),
@@ -3059,10 +3158,8 @@ function createMarketStall(x, z, yaw = 0, options = {}) {
   chimneyBase.position.set(houseW * 0.22, wallH + 1.6, -houseD * 0.15);
   house.add(chimneyBase);
 
-  // Porch
   const porchDepth = 2.2;
   const porchW = doorW + 2.4;
-  // Porch floor
   const porchFloor = new THREE.Mesh(
     new THREE.BoxGeometry(porchW, 0.14, porchDepth),
     new THREE.MeshStandardMaterial({ color: 0x6b5340, roughness: 0.88 })
@@ -3070,7 +3167,6 @@ function createMarketStall(x, z, yaw = 0, options = {}) {
   porchFloor.position.set(0, 0.02, houseD * 0.5 + porchDepth * 0.5 - 0.05);
   porchFloor.receiveShadow = true;
   house.add(porchFloor);
-  // Porch roof
   const porchRoof = new THREE.Mesh(
     new THREE.BoxGeometry(porchW + 0.3, 0.1, porchDepth + 0.2),
     roofMat
@@ -3078,7 +3174,6 @@ function createMarketStall(x, z, yaw = 0, options = {}) {
   porchRoof.position.set(0, doorH + 0.5, houseD * 0.5 + porchDepth * 0.5 - 0.05);
   porchRoof.castShadow = true;
   house.add(porchRoof);
-  // Porch support posts
   const porchPostH = doorH + 0.35;
   const porchPostPositions = [
     [-porchW * 0.5 + 0.12, 0, houseD * 0.5 + porchDepth - 0.15],
@@ -3092,7 +3187,6 @@ function createMarketStall(x, z, yaw = 0, options = {}) {
     post.position.set(px, porchPostH * 0.5 + 0.1, pz);
     post.castShadow = true;
     house.add(post);
-    // Post base
     const postBase = new THREE.Mesh(
       new THREE.BoxGeometry(0.28, 0.18, 0.28),
       stoneMat
@@ -3100,7 +3194,6 @@ function createMarketStall(x, z, yaw = 0, options = {}) {
     postBase.position.set(px, 0.12, pz);
     house.add(postBase);
   }
-  // Porch steps
   const stepW = porchW * 0.6;
   for (let i = 0; i < 3; i++) {
     const step = new THREE.Mesh(
@@ -3111,10 +3204,8 @@ function createMarketStall(x, z, yaw = 0, options = {}) {
     step.receiveShadow = true;
     house.add(step);
   }
-  // Porch railing
   const railH = 0.7;
   const railMat = trimMat;
-  // Side rails
   for (const side of [-1, 1]) {
     const rail = new THREE.Mesh(
       new THREE.BoxGeometry(0.06, railH, porchDepth - 0.3),
@@ -3122,7 +3213,6 @@ function createMarketStall(x, z, yaw = 0, options = {}) {
     );
     rail.position.set(side * (porchW * 0.5 - 0.12), railH * 0.5 + 0.14, houseD * 0.5 + porchDepth * 0.5 - 0.05);
     house.add(rail);
-    // Top rail bar
     const topBar = new THREE.Mesh(
       new THREE.BoxGeometry(0.08, 0.06, porchDepth - 0.3),
       railMat
@@ -3131,7 +3221,6 @@ function createMarketStall(x, z, yaw = 0, options = {}) {
     house.add(topBar);
   }
 
-  // Flower boxes under front windows
   const flowerBoxMat = new THREE.MeshStandardMaterial({ color: 0x5b3a24, roughness: 0.85 });
   const flowerMat = new THREE.MeshStandardMaterial({ color: 0xf472b6, roughness: 0.7 });
   const leafMat = new THREE.MeshStandardMaterial({ color: 0x22c55e, roughness: 0.7 });
@@ -3143,7 +3232,6 @@ function createMarketStall(x, z, yaw = 0, options = {}) {
     const box = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.18, 0.22), flowerBoxMat);
     box.position.set(bx, by, bz);
     house.add(box);
-    // Flowers
     for (let fi = 0; fi < 4; fi++) {
       const flower = new THREE.Mesh(new THREE.SphereGeometry(0.09, 6, 6), flowerMat);
       flower.position.set(bx - 0.4 + fi * 0.26, by + 0.16, bz);
@@ -3154,7 +3242,6 @@ function createMarketStall(x, z, yaw = 0, options = {}) {
     }
   }
 
-  // Roof shingle detail - ridge lines
   const ridgeMat = new THREE.MeshStandardMaterial({ color: 0x3d2b1f, roughness: 0.9 });
   for (let i = 0; i < 3; i++) {
     const ridge = new THREE.Mesh(
