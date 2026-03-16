@@ -123,7 +123,8 @@
       #hud {
         position: fixed;
         right: 16px;
-        bottom: 98px;
+        top: 16px;
+        bottom: auto;
         z-index: 10;
         padding: 12px 14px;
         min-width: 240px;
@@ -2200,11 +2201,11 @@
       }
 
       body.mobile-ui #chat-panel {
-        top: auto;
+        top: calc(82px + env(safe-area-inset-top));
         left: max(8px, env(safe-area-inset-left));
-        right: max(8px, env(safe-area-inset-right));
-        bottom: calc(188px + env(safe-area-inset-bottom));
-        width: auto;
+        right: auto;
+        bottom: auto;
+        width: min(360px, calc(100vw - 16px));
         max-height: 36vh;
         z-index: 22;
       }
@@ -2279,7 +2280,7 @@
         left: 50% !important;
         right: auto !important;
         transform: translateX(-50%);
-        bottom: calc(88px + env(safe-area-inset-bottom));
+        bottom: calc(20px + env(safe-area-inset-bottom));
         gap: 8px;
         padding: 6px 8px;
         z-index: 20;

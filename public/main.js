@@ -971,6 +971,7 @@ function updatePerformanceToggleLabel() {
 
 function setMinimapExpanded(expanded) {
   if (!minimapEnabled) expanded = false;
+  if (isMobileLayout()) expanded = false;
   minimapExpanded = Boolean(expanded);
   miniPanelEl?.classList.toggle('expanded', minimapExpanded);
   setMinimapCanvasSize(minimapExpanded);
@@ -10931,6 +10932,7 @@ performanceToggleEl?.addEventListener('click', () => {
 });
 minimapEl?.addEventListener('click', () => {
   if (!minimapEnabled) return;
+  if (isMobileLayout()) return;
   setMinimapExpanded(!minimapExpanded);
 });
 saveQuitEl?.addEventListener('click', () => {
