@@ -111,6 +111,13 @@ const ACCOUNT_ROLE_TAG_BY_PROFILE_ID = new Map([
   ['acct-ishyfishyinthedishy', 'Creator'],
   ['acct-eye_wonder_who', 'Creator']
 ]);
+const DEBUG_MENU_PASSWORD = 'HMSINDIANDEVS123';
+const WORLD_TIME_PRESETS = new Map([
+  ['day', 0.5],
+  ['evening', 0.72],
+  ['night', 0.9]
+]);
+let worldState = { weather: 'clear', timeOfDay: 'day' };
 const CHAT_FILTER_WORDS = [
   'fuck',
   'fucking',
@@ -1378,6 +1385,16 @@ function accountRoleTagForProfileId(profileId) {
   return ACCOUNT_ROLE_TAG_BY_PROFILE_ID.get(key) || null;
 }
 
+function isCreatorPlayer(player) {
+  return accountRoleTagForProfileId(player?.profileId) === 'Creator';
+}
+
+function sanitizeWorldState(value = {}) {
+  const weather = value?.weather === 'rain' ? 'rain' : 'clear';
+  const timeOfDay = WORLD_TIME_PRESETS.has(value?.timeOfDay) ? value.timeOfDay : worldState.timeOfDay;
+  return { weather, timeOfDay };
+}
+
 function hashPassword(password, salt = crypto.randomBytes(16).toString('hex')) {
   const hash = crypto.scryptSync(password, salt, 64).toString('hex');
   return { salt, hash };
@@ -1778,7 +1795,8 @@ function spawnPlayer(socket, profileId, username) {
     players: [...players.values()],
     worldLimit: WORLD_LIMIT,
     interactables: [...interactables.values()],
-    progress: progressSnapshot(spawn.progress)
+    progress: progressSnapshot(spawn.progress),
+    worldState
   });
   socket.broadcast.emit('playerJoined', spawn);
 }
@@ -2931,6 +2949,114 @@ io.on('connection', (socket) => {
         sentAt: Date.now()
       });
     }
+  });
+
+  socket.on('debug:world', (payload, ack) => {
+    const actor = players.get(socket.id);
+    if (!actor || !isCreatorPlayer(actor)) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Creator access required.' });
+      return;
+    }
+    if (payload?.password !== DEBUG_MENU_PASSWORD) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Invalid password.' });
+      return;
+    }
+    worldState = sanitizeWorldState(payload || {});
+    io.emit('world:update', worldState);
+    if (typeof ack === 'function') ack({ ok: true, worldState });
+  });
+
+  socket.on('debug:inventory', (payload, ack) => {
+    const actor = players.get(socket.id);
+    if (!actor || !isCreatorPlayer(actor)) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Creator access required.' });
+      return;
+    }
+    if (payload?.password !== DEBUG_MENU_PASSWORD) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Invalid password.' });
+      return;
+    }
+    const targetId = String(payload?.targetId || '').trim();
+    const target = targetId ? players.get(targetId) : null;
+    if (!target) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Target player not found.' });
+      return;
+    }
+    const delta = clamp(Math.floor(Number(payload?.delta) || 0), -1_000_000, 1_000_000);
+    if (!delta) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Amount is required.' });
+      return;
+    }
+    const progress = target.progress;
+    if (!progress) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Target progress unavailable.' });
+      return;
+    }
+    const itemType = payload?.itemType === 'fish' ? 'fish' : 'inventory';
+    if (itemType === 'fish') {
+      const fishId = String(payload?.itemId || '').trim();
+      if (!FISH_SPECIES_IDS.has(fishId)) {
+        if (typeof ack === 'function') ack({ ok: false, error: 'Unknown fish.' });
+        return;
+      }
+      if (!progress.fishBag || typeof progress.fishBag !== 'object') {
+        progress.fishBag = {};
+      }
+      const current = clamp(Math.floor(Number(progress.fishBag[fishId]) || 0), 0, 1_000_000);
+      const next = clamp(current + delta, 0, 1_000_000);
+      if (next > 0) {
+        progress.fishBag[fishId] = next;
+      } else {
+        delete progress.fishBag[fishId];
+      }
+      if (delta > 0) {
+        progress.fishIndex[fishId] = clamp((progress.fishIndex[fishId] || 0) + delta, 1, 1_000_000);
+      }
+      progress.inventory.fish = clamp(computeTotalFishInBag(progress.fishBag), 0, 1_000_000);
+    } else {
+      const itemId = String(payload?.itemId || '').trim();
+      const inventoryKeys = Object.keys(defaultInventory()).filter((key) => key !== 'fish');
+      if (!inventoryKeys.includes(itemId)) {
+        if (typeof ack === 'function') ack({ ok: false, error: 'Unknown inventory item.' });
+        return;
+      }
+      progress.inventory[itemId] = clamp((progress.inventory[itemId] || 0) + delta, 0, 1_000_000);
+    }
+    persistPlayerProgress(target, { immediate: true });
+    const targetSocket = io.sockets.sockets.get(target.id);
+    if (targetSocket) {
+      emitProgress(targetSocket, target);
+    }
+    if (typeof ack === 'function') ack({ ok: true });
+  });
+
+  socket.on('debug:kick', (payload, ack) => {
+    const actor = players.get(socket.id);
+    if (!actor || !isCreatorPlayer(actor)) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Creator access required.' });
+      return;
+    }
+    if (payload?.password !== DEBUG_MENU_PASSWORD) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Invalid password.' });
+      return;
+    }
+    const targetId = String(payload?.targetId || '').trim();
+    if (!targetId) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Target is required.' });
+      return;
+    }
+    if (targetId === socket.id) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'You cannot kick yourself.' });
+      return;
+    }
+    const targetSocket = io.sockets.sockets.get(targetId);
+    if (!targetSocket) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Target player not found.' });
+      return;
+    }
+    targetSocket.emit('debug:kicked', { reason: 'You were kicked by a creator.' });
+    setTimeout(() => targetSocket.disconnect(true), 150);
+    if (typeof ack === 'function') ack({ ok: true });
   });
 
   socket.on('emote', (payload) => {

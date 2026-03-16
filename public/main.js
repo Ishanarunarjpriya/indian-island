@@ -13,6 +13,8 @@ let lastEmoteAt = 0;
 let pendingJump = false;
 let emoteWheelOpen = false;
 let menuOpen = false;
+let debugMenuOpen = false;
+let debugPasswordOpen = false;
 let isAuthenticated = false;
 const CHAT_BUBBLE_MS = 4500;
 let lastMineAt = 0;
@@ -375,6 +377,13 @@ const FISH_CATALOG_SORTED = [...FISH_CATALOG].sort((a, b) => {
   if (rarityGap !== 0) return rarityGap;
   return a.name.localeCompare(b.name);
 });
+const DEBUG_MENU_PASSWORD = 'HMSINDIANDEVS123';
+const DEBUG_TAP_RESET_MS = 2500;
+const WORLD_TIME_PRESETS = {
+  day: 0.5,
+  evening: 0.72,
+  night: 0.9
+};
 const FISHING_ROD_TIERS = ['basic', 'reinforced', 'expert', 'master', 'mythic'];
 const FISHING_ROD_TIER_LABEL = {
   basic: 'Basic Rod',
@@ -508,6 +517,27 @@ const chatToggleEl = document.getElementById('chat-toggle');
 const voiceQuickToggleEl = document.getElementById('voice-quick-toggle');
 const fullscreenToggleEl = document.getElementById('fullscreen-toggle');
 const menuOverlayEl = document.getElementById('menu-overlay');
+const menuTitleEl = document.getElementById('menu-title');
+const debugPanelEl = document.getElementById('debug-panel');
+const debugPasswordOverlayEl = document.getElementById('debug-password-overlay');
+const debugPasswordInputEl = document.getElementById('debug-password-input');
+const debugPasswordSubmitEl = document.getElementById('debug-password-submit');
+const debugPasswordCancelEl = document.getElementById('debug-password-cancel');
+const debugPasswordStatusEl = document.getElementById('debug-password-status');
+const debugOverlayEl = document.getElementById('debug-overlay');
+const debugCloseEl = document.getElementById('debug-close');
+const debugWeatherSelectEl = document.getElementById('debug-weather');
+const debugTimeSelectEl = document.getElementById('debug-time');
+const debugWorldApplyEl = document.getElementById('debug-world-apply');
+const debugPlayerSelectEl = document.getElementById('debug-player');
+const debugItemTypeEl = document.getElementById('debug-item-type');
+const debugItemSelectEl = document.getElementById('debug-item');
+const debugAmountEl = document.getElementById('debug-amount');
+const debugAddEl = document.getElementById('debug-add');
+const debugRemoveEl = document.getElementById('debug-remove');
+const debugKickPlayerEl = document.getElementById('debug-kick-player');
+const debugKickEl = document.getElementById('debug-kick');
+const debugStatusEl = document.getElementById('debug-status');
 const saveQuitEl = document.getElementById('save-quit');
 const authModalEl = document.getElementById('auth-modal');
 const authUsernameEl = document.getElementById('auth-username');
@@ -605,7 +635,8 @@ const homeStatusEl = document.getElementById('home-status');
 const gameplayPanels = [
   'hud', 'mini-panel', 'chat-panel', 'world-state', 'top-left-toolbar',
   'inventory-bar', 'mining-meter', 'fishing-meter', 'fish-catch-card',
-  'fish-index-modal', 'inventory-modal', 'market-modal', 'rod-shop-modal', 'ore-modal', 'furniture-trader-modal', 'home-modal'
+  'fish-index-modal', 'inventory-modal', 'market-modal', 'rod-shop-modal', 'ore-modal', 'furniture-trader-modal', 'home-modal',
+  'debug-overlay', 'debug-password-overlay'
 ]
   .map((id) => document.getElementById(id))
   .filter(Boolean);
@@ -729,6 +760,12 @@ let chatPanelOpen = cachedChatOpen === null ? true : cachedChatOpen === '1';
 let pointerLocked = false;
 let minimapExpanded = false;
 let minimapEnabled = localStorage.getItem('island_minimap_enabled') !== '0';
+let debugTapCount = 0;
+let debugTapResetAt = 0;
+let debugUnlocked = false;
+let debugSessionPassword = '';
+let worldStateLocked = false;
+let worldState = { weather: 'clear', timeOfDay: 'day' };
 let fishIndexOpen = false;
 let inventoryModalOpen = false;
 let marketModalOpen = false;
@@ -842,7 +879,15 @@ function closeCommerceModals() {
 }
 
 function isAnyGameplayOverlayOpen() {
-  return fishIndexOpen || inventoryModalOpen || marketModalOpen || rodShopModalOpen || oreModalOpen || furnitureTraderModalOpen || homeModalOpen;
+  return fishIndexOpen
+    || inventoryModalOpen
+    || marketModalOpen
+    || rodShopModalOpen
+    || oreModalOpen
+    || furnitureTraderModalOpen
+    || homeModalOpen
+    || debugMenuOpen
+    || debugPasswordOpen;
 }
 
 function setFishIndexOpen(open) {
@@ -1140,6 +1185,10 @@ function setAuthModalOpen(open, statusText = '') {
     closeCommerceModals();
     menuOpen = false;
     menuOverlayEl?.classList.add('hidden');
+    debugMenuOpen = false;
+    debugPasswordOpen = false;
+    debugOverlayEl?.classList.add('hidden');
+    debugPasswordOverlayEl?.classList.add('hidden');
     resetMiningAccuracyGame();
     resetFishingMiniGame();
     hideFishCatchCard();
@@ -1161,6 +1210,42 @@ function setMenuOpen(open) {
     resetFishingMiniGame();
   }
   menuOverlayEl?.classList.toggle('hidden', !open);
+}
+
+function isCreatorAccount() {
+  const tag = normalizeAccountTag(players.get(localPlayerId)?.accountTag);
+  return typeof tag === 'string' && tag.toLowerCase() === 'creator';
+}
+
+function updateDebugPanelVisibility() {
+  if (!debugPanelEl) return;
+  debugPanelEl.classList.toggle('hidden', !debugUnlocked);
+}
+
+function setDebugPasswordOpen(open) {
+  debugPasswordOpen = Boolean(open);
+  debugPasswordOverlayEl?.classList.toggle('hidden', !debugPasswordOpen);
+  if (debugPasswordOpen) {
+    debugPasswordStatusEl.textContent = '';
+    if (debugPasswordInputEl) {
+      debugPasswordInputEl.value = '';
+      debugPasswordInputEl.focus();
+    }
+  }
+}
+
+function setDebugMenuOpen(open) {
+  debugMenuOpen = Boolean(open);
+  debugOverlayEl?.classList.toggle('hidden', !debugMenuOpen);
+  if (debugMenuOpen) {
+    setMenuOpen(false);
+    setFishIndexOpen(false);
+    closeCommerceModals();
+    closeNpcDialogue();
+    refreshDebugPlayerLists();
+    refreshDebugItemOptions();
+    refreshDebugWorldControls();
+  }
 }
 
 setAuthModalOpen(true, 'Login or create an account to continue.');
@@ -6903,6 +6988,7 @@ function addPlayer(data) {
   paintPlayer(player, appearance);
   applyHeldGearVisual(player);
   updateHud();
+  refreshDebugPlayerLists();
 }
 
 function removePlayer(id) {
@@ -6921,6 +7007,7 @@ function removePlayer(id) {
   player.bubble?.remove();
   players.delete(id);
   updateHud();
+  refreshDebugPlayerLists();
 }
 
 function showChatBubble(id, text) {
@@ -10987,6 +11074,19 @@ async function submitAuth(mode) {
 }
 
 menuToggleEl?.addEventListener('click', () => setMenuOpen(!menuOpen));
+menuTitleEl?.addEventListener('click', () => {
+  if (!isCreatorAccount()) return;
+  const now = performance.now();
+  if (now - debugTapResetAt > DEBUG_TAP_RESET_MS) {
+    debugTapCount = 0;
+  }
+  debugTapResetAt = now;
+  debugTapCount += 1;
+  if (debugTapCount >= 5) {
+    debugTapCount = 0;
+    setDebugPasswordOpen(true);
+  }
+});
 chatToggleEl?.addEventListener('click', () => {
   if (!isAuthenticated) return;
   setChatPanelOpen(!chatPanelOpen);
@@ -11565,7 +11665,11 @@ const _skyColor = new THREE.Color();
 const _fogColor = new THREE.Color();
 
 function updateDayAndWeather(delta, nowSeconds) {
-  dayTime = (dayTime + delta / 240) % 1;
+  if (!worldStateLocked) {
+    dayTime = (dayTime + delta / 240) % 1;
+  } else if (WORLD_TIME_PRESETS[worldState.timeOfDay] != null) {
+    dayTime = WORLD_TIME_PRESETS[worldState.timeOfDay];
+  }
   const sunAngle = dayTime * Math.PI * 2;
   // Center daylight at noon and keep midnight consistently darkest.
   const solarCurve = Math.cos((dayTime - 0.5) * Math.PI * 2);
@@ -11598,7 +11702,9 @@ function updateDayAndWeather(delta, nowSeconds) {
   }
   renderer.setClearColor(_skyColor);
 
-  if (nowSeconds > nextWeatherToggleAt) {
+  if (worldStateLocked) {
+    rainActive = worldState.weather === 'rain';
+  } else if (nowSeconds > nextWeatherToggleAt) {
     rainActive = Math.random() > 0.55;
     nextWeatherToggleAt = nowSeconds + 22 + Math.random() * 16;
   }
