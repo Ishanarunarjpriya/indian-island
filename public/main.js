@@ -2491,6 +2491,7 @@ function addFishingIsland() {
   });
   vendor.position.set(0, VENDOR_STAND_Y, -3);
   const fishingHouseYaw = Math.atan2(-FISHING_VENDOR_POS.x, -FISHING_VENDOR_POS.z);
+  addStoreBuilding(FISHING_VENDOR_POS.x, FISHING_VENDOR_POS.z, fishingHouseYaw, { collisions: false });
   stall.position.set(FISHING_VENDOR_POS.x, 0, FISHING_VENDOR_POS.z);
   stall.rotation.y = fishingHouseYaw;
   scene.add(stall);
@@ -2563,7 +2564,7 @@ function addMarketIsland() {
   });
   vendor.position.set(0, VENDOR_STAND_Y, -3);
   const marketHouseYaw = Math.atan2(-MARKET_VENDOR_POS.x, -MARKET_VENDOR_POS.z);
-  addWoodHouse(MARKET_VENDOR_POS.x, MARKET_VENDOR_POS.z, marketHouseYaw, { collisions: false });
+  addStoreBuilding(MARKET_VENDOR_POS.x, MARKET_VENDOR_POS.z, marketHouseYaw, { collisions: false });
   stall.position.set(MARKET_VENDOR_POS.x, 0, MARKET_VENDOR_POS.z);
   stall.rotation.y = marketHouseYaw;
   scene.add(stall);
@@ -2645,7 +2646,7 @@ function addFurnitureIsland() {
   });
   vendor.position.set(0, VENDOR_STAND_Y, -3);
   const furnitureHouseYaw = Math.atan2(-FURNITURE_VENDOR_POS.x, -FURNITURE_VENDOR_POS.z);
-  addWoodHouse(FURNITURE_VENDOR_POS.x, FURNITURE_VENDOR_POS.z, furnitureHouseYaw, { collisions: false });
+  addStoreBuilding(FURNITURE_VENDOR_POS.x, FURNITURE_VENDOR_POS.z, furnitureHouseYaw, { collisions: false });
   stall.position.set(FURNITURE_VENDOR_POS.x, 0, FURNITURE_VENDOR_POS.z);
   stall.rotation.y = furnitureHouseYaw;
   scene.add(stall);
@@ -3594,6 +3595,156 @@ function addWoodHouse(x, z, yaw = 0, options = {}) {
     addWallCollisionFromMesh(frontLeft, 'house');
     addWallCollisionFromMesh(frontRight, 'house');
     addWallCollisionFromMesh(frontTop, 'house');
+  }
+}
+
+function addStoreBuilding(x, z, yaw = 0, options = {}) {
+  const collisions = options?.collisions !== false;
+  const store = new THREE.Group();
+  store.position.set(x, 1.35, z);
+  store.rotation.y = yaw;
+
+  const wallMat = new THREE.MeshStandardMaterial({ color: 0xf5f0e6, roughness: 0.85 });
+  const trimMat = new THREE.MeshStandardMaterial({ color: 0x8b7355, roughness: 0.88 });
+  const roofMat = new THREE.MeshStandardMaterial({ color: 0x3d2b1f, roughness: 0.9 });
+  const awningMat = new THREE.MeshStandardMaterial({ color: 0xdc2626, roughness: 0.8 });
+  const windowMat = new THREE.MeshStandardMaterial({ color: 0x93c5fd, roughness: 0.2, metalness: 0.1 });
+  const signMat = new THREE.MeshStandardMaterial({ color: 0x1e3a5a, roughness: 0.7 });
+
+  const storeScale = 1.5;
+  const storeW = 7.2 * storeScale;
+  const storeD = 5.8 * storeScale;
+  const wallH = 4.2 * storeScale;
+  const wallT = 0.28;
+
+  const floor = new THREE.Mesh(new THREE.BoxGeometry(storeW, 0.15, storeD), trimMat);
+  floor.position.y = 0.08;
+  floor.receiveShadow = true;
+  store.add(floor);
+
+  const back = new THREE.Mesh(new THREE.BoxGeometry(storeW, wallH, wallT), wallMat);
+  back.position.set(0, wallH * 0.5 + 0.1, -storeD * 0.5 + wallT * 0.5);
+  store.add(back);
+
+  const left = new THREE.Mesh(new THREE.BoxGeometry(wallT, wallH, storeD), wallMat);
+  left.position.set(-storeW * 0.5 + wallT * 0.5, wallH * 0.5 + 0.1, 0);
+  store.add(left);
+
+  const right = left.clone();
+  right.position.x = storeW * 0.5 - wallT * 0.5;
+  store.add(right);
+
+  const frontWallH = wallH * 0.7;
+  const frontWall = new THREE.Mesh(new THREE.BoxGeometry(storeW, frontWallH, wallT), wallMat);
+  frontWall.position.set(0, frontWallH * 0.5 + 0.1, storeD * 0.5 - wallT * 0.5);
+  store.add(frontWall);
+
+  const upperFrontWallH = wallH * 0.35;
+  const upperFrontWall = new THREE.Mesh(new THREE.BoxGeometry(storeW, upperFrontWallH, wallT), wallMat);
+  upperFrontWall.position.set(0, frontWallH + upperFrontWallH * 0.5 + 0.1, storeD * 0.5 - wallT * 0.5);
+  store.add(upperFrontWall);
+
+  const windowW = 3.2;
+  const windowH = 2.6;
+  const windowY = wallH * 0.42;
+  const window1 = new THREE.Mesh(new THREE.BoxGeometry(windowW, windowH, 0.1), windowMat);
+  window1.position.set(-storeW * 0.28, windowY, storeD * 0.5 + 0.04);
+  store.add(window1);
+  const window2 = window1.clone();
+  window2.position.x = storeW * 0.28;
+  store.add(window2);
+
+  const windowFrameMat = new THREE.MeshStandardMaterial({ color: 0x5c4a38, roughness: 0.85 });
+  const winFrameT = 0.08;
+  for (const wx of [-storeW * 0.28, storeW * 0.28]) {
+    const frameL = new THREE.Mesh(new THREE.BoxGeometry(winFrameT, windowH + 0.2, 0.14), windowFrameMat);
+    frameL.position.set(wx - windowW * 0.5 - winFrameT * 0.5, windowY, storeD * 0.5 + 0.1);
+    store.add(frameL);
+    const frameR = frameL.clone();
+    frameR.position.x = wx + windowW * 0.5 + winFrameT * 0.5;
+    store.add(frameR);
+    const frameT = new THREE.Mesh(new THREE.BoxGeometry(windowW + winFrameT * 2, winFrameT, 0.14), windowFrameMat);
+    frameT.position.set(wx, windowY + windowH * 0.5 + winFrameT * 0.5, storeD * 0.5 + 0.1);
+    store.add(frameT);
+    const frameB = frameT.clone();
+    frameB.position.y = windowY - windowH * 0.5 - winFrameT * 0.5;
+    store.add(frameB);
+  }
+
+  const awningW = storeW * 0.85;
+  const awningD = 2.2;
+  const awningH = 0.18;
+  const awningY = wallH * 0.58;
+  const awning = new THREE.Mesh(new THREE.BoxGeometry(awningW, awningH, awningD), awningMat);
+  awning.position.set(0, awningY, storeD * 0.5 - awningD * 0.5);
+  awning.castShadow = true;
+  store.add(awning);
+
+  for (let i = 0; i < 6; i++) {
+    const stripe = new THREE.Mesh(new THREE.BoxGeometry(awningW * 0.16, awningH + 0.04, awningD + 0.04), i % 2 === 0 ? awningMat : new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.8 }));
+    stripe.position.set(-awningW * 0.45 + i * awningW * 0.18, awningY, storeD * 0.5 - awningD * 0.5);
+    store.add(stripe);
+  }
+
+  const awningSupportW = 0.16;
+  const awningSupportD = 0.16;
+  const awningSupportH = awningY;
+  const supportL = new THREE.Mesh(new THREE.BoxGeometry(awningSupportW, awningSupportH, awningSupportD), trimMat);
+  supportL.position.set(-awningW * 0.4, awningSupportH * 0.5 + 0.1, storeD * 0.5 - awningD * 0.5);
+  supportL.castShadow = true;
+  store.add(supportL);
+  const supportR = supportL.clone();
+  supportR.position.x = awningW * 0.4;
+  store.add(supportR);
+
+  const signW = 4.8;
+  const signH = 1.8;
+  const sign = new THREE.Mesh(new THREE.BoxGeometry(signW, signH, 0.12), signMat);
+  sign.position.set(0, wallH * 0.88, storeD * 0.5 + 0.05);
+  sign.castShadow = true;
+  store.add(sign);
+
+  const postSize = 0.22;
+  const postH = wallH + 0.15;
+  const corners = [
+    [-storeW * 0.5, -storeD * 0.5],
+    [storeW * 0.5, -storeD * 0.5]
+  ];
+  for (const [cx, cz] of corners) {
+    const post = new THREE.Mesh(new THREE.BoxGeometry(postSize, postH, postSize), trimMat);
+    post.position.set(cx, postH * 0.5 + 0.1, cz);
+    post.castShadow = true;
+    store.add(post);
+  }
+
+  const foundationH = 0.35;
+  const foundation = new THREE.Mesh(
+    new THREE.BoxGeometry(storeW + 0.32, foundationH, storeD + 0.32),
+    trimMat
+  );
+  foundation.position.y = 0.11 - foundationH * 0.5 + 0.1;
+  foundation.receiveShadow = true;
+  store.add(foundation);
+
+  const roof = new THREE.Mesh(
+    new THREE.BoxGeometry(storeW + 0.14, 0.22, storeD + 0.14),
+    roofMat
+  );
+  roof.position.set(0, wallH + 0.07, 0);
+  roof.castShadow = true;
+  roof.receiveShadow = true;
+  store.add(roof);
+
+  store.children.forEach((m) => {
+    m.castShadow = true;
+    m.receiveShadow = true;
+  });
+  scene.add(store);
+  if (collisions) {
+    addWallCollisionFromMesh(back, 'store');
+    addWallCollisionFromMesh(left, 'store');
+    addWallCollisionFromMesh(right, 'store');
+    addWallCollisionFromMesh(frontWall, 'store');
   }
 }
 
@@ -6047,7 +6198,7 @@ function isWaterAt(x, z) {
   if (Math.hypot(x - LEADERBOARD_DOCK_POS.x, z - LEADERBOARD_DOCK_POS.z) <= 14) return false;
 
   const angle = Math.atan2(z, x);
-  const shorelineRadius = mainIslandRadiusAtAngle(angle) + 7.4;
+  const shorelineRadius = mainIslandRadiusAtAngle(angle) + 9.5;
   if (radius <= shorelineRadius) return false;
 
   // The dock-side beach uses custom blended geometry that can extend beyond radialShape.
