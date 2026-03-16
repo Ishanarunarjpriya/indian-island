@@ -4251,19 +4251,21 @@ function addMineArea() {
     hairColor: 0x1f2937,
     hatColor: 0x111827
   });
-  const mineShopShop = createVendorShop(
+  const mineShopStall = createVendorStall({
+    label: 'Pickaxes',
+    signColor: '#2f2417',
+    canopyA: 0xf59e0b,
+    canopyB: 0xfef3c7,
+    vendor: mineShopVendor
+  });
+  mineShopVendor.position.set(0, VENDOR_STAND_Y, -0.9);
+  mineShopStall.position.set(
     MINE_SHOP_NPC_POS.x - MINE_POS.x,
-    MINE_SHOP_NPC_POS.z - MINE_POS.z,
     0,
-    { vendor: mineShopVendor }
-  );
-  mineShopShop.position.set(
-    MINE_SHOP_NPC_POS.x - MINE_POS.x,
-    1.35,
     MINE_SHOP_NPC_POS.z - MINE_POS.z
   );
-  mineShopShop.rotation.y = Math.PI;
-  mine.add(mineShopShop);
+  mineShopStall.rotation.y = Math.PI;
+  mine.add(mineShopStall);
   mineShopNpcMesh = mineShopVendor;
   addWorldCollider(MINE_SHOP_NPC_POS.x, MINE_SHOP_NPC_POS.z, 1.04, 'npc');
 
@@ -4295,19 +4297,21 @@ function addMineArea() {
     hairColor: 0x0f172a,
     hatColor: 0x1e293b
   });
-  const questShop = createVendorShop(
+  const questStall = createVendorStall({
+    label: 'Quests',
+    signColor: '#2f2a3b',
+    canopyA: 0x8b5cf6,
+    canopyB: 0xf5f3ff,
+    vendor: questVendor
+  });
+  questVendor.position.set(0, VENDOR_STAND_Y, -0.9);
+  questStall.position.set(
     QUEST_NPC_POS.x - MINE_POS.x,
-    QUEST_NPC_POS.z - MINE_POS.z,
     0,
-    { vendor: questVendor }
-  );
-  questShop.position.set(
-    QUEST_NPC_POS.x - MINE_POS.x,
-    1.35,
     QUEST_NPC_POS.z - MINE_POS.z
   );
-  questShop.rotation.y = Math.PI;
-  mine.add(questShop);
+  questStall.rotation.y = Math.PI;
+  mine.add(questStall);
   questNpcMesh = questVendor;
   addWorldCollider(QUEST_NPC_POS.x, QUEST_NPC_POS.z, 1.04, 'npc');
 }
