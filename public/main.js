@@ -4252,12 +4252,16 @@ function addMineArea() {
     hatColor: 0x111827
   });
   const mineShopShop = createVendorShop(
-    MINE_SHOP_NPC_POS.x,
-    MINE_SHOP_NPC_POS.z,
+    MINE_SHOP_NPC_POS.x - MINE_POS.x,
+    MINE_SHOP_NPC_POS.z - MINE_POS.z,
     0,
     { vendor: mineShopVendor }
   );
-  mineShopShop.position.set(MINE_SHOP_NPC_POS.x, 1.35, MINE_SHOP_NPC_POS.z);
+  mineShopShop.position.set(
+    MINE_SHOP_NPC_POS.x - MINE_POS.x,
+    1.35,
+    MINE_SHOP_NPC_POS.z - MINE_POS.z
+  );
   mineShopShop.rotation.y = Math.PI;
   mine.add(mineShopShop);
   mineShopNpcMesh = mineShopVendor;
@@ -4270,12 +4274,16 @@ function addMineArea() {
     hatColor: 0x334155
   });
   const oreTraderShop = createVendorShop(
-    MINE_ORE_TRADER_POS.x,
-    MINE_ORE_TRADER_POS.z,
+    MINE_ORE_TRADER_POS.x - MINE_POS.x,
+    MINE_ORE_TRADER_POS.z - MINE_POS.z,
     0,
     { vendor: oreTraderVendor }
   );
-  oreTraderShop.position.set(MINE_ORE_TRADER_POS.x, 1.35, MINE_ORE_TRADER_POS.z);
+  oreTraderShop.position.set(
+    MINE_ORE_TRADER_POS.x - MINE_POS.x,
+    1.35,
+    MINE_ORE_TRADER_POS.z - MINE_POS.z
+  );
   oreTraderShop.rotation.y = Math.PI;
   mine.add(oreTraderShop);
   mineOreTraderNpcMesh = oreTraderVendor;
@@ -4288,12 +4296,16 @@ function addMineArea() {
     hatColor: 0x1e293b
   });
   const questShop = createVendorShop(
-    QUEST_NPC_POS.x,
-    QUEST_NPC_POS.z,
+    QUEST_NPC_POS.x - MINE_POS.x,
+    QUEST_NPC_POS.z - MINE_POS.z,
     0,
     { vendor: questVendor }
   );
-  questShop.position.set(QUEST_NPC_POS.x, 1.35, QUEST_NPC_POS.z);
+  questShop.position.set(
+    QUEST_NPC_POS.x - MINE_POS.x,
+    1.35,
+    QUEST_NPC_POS.z - MINE_POS.z
+  );
   questShop.rotation.y = Math.PI;
   mine.add(questShop);
   questNpcMesh = questVendor;
