@@ -10636,6 +10636,25 @@ chatFormEl.addEventListener('submit', (event) => {
   const text = chatInputEl.value.trim();
   if (!text) return;
 
+  if (/^\/where\b/i.test(text)) {
+    const local = players.get(localPlayerId);
+    if (!local) {
+      appendChatLine({ text: 'Location unavailable.', isSystem: true });
+    } else {
+      const worldPos = `World: x=${local.x.toFixed(2)}, y=${local.y.toFixed(2)}, z=${local.z.toFixed(2)}`;
+      if (inMine) {
+        const localX = (local.x - MINE_POS.x).toFixed(2);
+        const localZ = (local.z - MINE_POS.z).toFixed(2);
+        appendChatLine({ text: `${worldPos} | Mine local: x=${localX}, z=${localZ}`, isSystem: true });
+      } else {
+        appendChatLine({ text: worldPos, isSystem: true });
+      }
+    }
+    chatInputEl.value = '';
+    chatInputEl.focus();
+    return;
+  }
+
   const privateCommand = parsePrivateChatCommand(text);
   if (privateCommand) {
     if (privateCommand.error) {
