@@ -1206,15 +1206,43 @@ renderer.shadowMap.enabled = graphicsPreset !== 'performance';
 document.body.appendChild(renderer.domElement);
 renderer.domElement.style.touchAction = 'none';
 
+function getFullscreenElement() {
+  return document.fullscreenElement
+    || document.webkitFullscreenElement
+    || document.mozFullScreenElement
+    || document.msFullscreenElement
+    || null;
+}
+
+function requestFullscreenFor(elem) {
+  if (!elem) return null;
+  const request =
+    elem.requestFullscreen
+    || elem.webkitRequestFullscreen
+    || elem.webkitRequestFullScreen
+    || elem.mozRequestFullScreen
+    || elem.msRequestFullscreen;
+  return request ? request.call(elem) : null;
+}
+
+function exitFullscreenForDocument() {
+  const exit =
+    document.exitFullscreen
+    || document.webkitExitFullscreen
+    || document.mozCancelFullScreen
+    || document.msExitFullscreen;
+  return exit ? exit.call(document) : null;
+}
+
 function updateFullscreenButtonLabel() {
   if (!fullscreenToggleEl) return;
-  const active = Boolean(document.fullscreenElement);
+  const active = Boolean(getFullscreenElement());
   fullscreenToggleEl.textContent = active ? '🡼' : '⛶';
   fullscreenToggleEl.title = active ? 'Exit fullscreen' : 'Enter fullscreen';
 }
 
 async function requestPointerLockForGameplay() {
-  if (!isAuthenticated || document.pointerLockElement === renderer.domElement) return;
+  if (!isAuthenticated || isMobileLayout() || document.pointerLockElement === renderer.domElement) return;
   try {
     const result = renderer.domElement.requestPointerLock?.();
     if (result?.catch) await result;
@@ -1223,9 +1251,10 @@ async function requestPointerLockForGameplay() {
 
 async function toggleFullscreenPointerLock() {
   if (!isAuthenticated) return;
-  if (!document.fullscreenElement) {
+  if (!getFullscreenElement()) {
     try {
-      const fsResult = document.documentElement.requestFullscreen?.();
+      const target = isMobileLayout() ? document.documentElement : renderer.domElement;
+      const fsResult = requestFullscreenFor(target) || requestFullscreenFor(document.documentElement);
       if (fsResult?.catch) await fsResult;
     } catch {
       return;
@@ -1234,11 +1263,11 @@ async function toggleFullscreenPointerLock() {
     await requestPointerLockForGameplay();
     return;
   }
-  if (document.pointerLockElement === renderer.domElement) {
+  if (!isMobileLayout() && document.pointerLockElement === renderer.domElement) {
     document.exitPointerLock?.();
   }
   try {
-    const exitResult = document.exitFullscreen?.();
+    const exitResult = exitFullscreenForDocument();
     if (exitResult?.catch) await exitResult;
   } catch {}
   updateFullscreenButtonLabel();
@@ -1246,7 +1275,16 @@ async function toggleFullscreenPointerLock() {
 
 document.addEventListener('fullscreenchange', async () => {
   updateFullscreenButtonLabel();
-  if (document.fullscreenElement && isAuthenticated) {
+  if (getFullscreenElement() && isAuthenticated) {
+    await requestPointerLockForGameplay();
+  } else if (document.pointerLockElement === renderer.domElement) {
+    document.exitPointerLock?.();
+  }
+});
+
+document.addEventListener('webkitfullscreenchange', async () => {
+  updateFullscreenButtonLabel();
+  if (getFullscreenElement() && isAuthenticated) {
     await requestPointerLockForGameplay();
   } else if (document.pointerLockElement === renderer.domElement) {
     document.exitPointerLock?.();
