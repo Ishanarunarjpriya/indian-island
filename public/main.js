@@ -4392,11 +4392,12 @@ function addMainHouseRoomInterior() {
     room.add(beam);
   }
 
-  const doorFrameDepth = wallThickness + 0.12;
+  const interiorFrontFaceZ = HOUSE_ROOM_BASE.z + halfDepth - wallThickness;
+  const doorFrameDepth = 0.12;
   const doorFrameThick = 0.18;
   const doorFrameH = wallHeight * 0.82;
   const doorFrameY = floorY + doorFrameH * 0.5;
-  const doorFrameZ = HOUSE_ROOM_BASE.z + halfDepth - wallThickness * 0.5 + 0.06;
+  const doorFrameZ = interiorFrontFaceZ + doorFrameDepth * 0.5 + 0.01;
 
   const dfLeft = new THREE.Mesh(new THREE.BoxGeometry(doorFrameThick, doorFrameH, doorFrameDepth), doorFrameMat);
   dfLeft.position.set(HOUSE_ROOM_BASE.x - doorWidth * 0.5 - doorFrameThick * 0.5, doorFrameY, doorFrameZ);
@@ -4418,10 +4419,12 @@ function addMainHouseRoomInterior() {
   const doorLeafW = doorWidth * 0.5 - 0.14;
   const doorLeafH = doorFrameH - 0.18;
   const doorLeafT = 0.08;
-  const doorPanelZ = doorFrameZ - 0.08;
+  const doorPanelZ = interiorFrontFaceZ + doorLeafT * 0.5 + 0.012;
 
   function createInteriorDoorLeaf(side = -1) {
     const leaf = new THREE.Group();
+    const panel = new THREE.Group();
+    panel.position.x = (side === -1 ? 1 : -1) * doorLeafW * 0.5;
     const slab = new THREE.Mesh(new THREE.BoxGeometry(doorLeafW, doorLeafH, doorLeafT), doorLeafMat);
     slab.position.y = doorLeafH * 0.5;
     const railTop = new THREE.Mesh(new THREE.BoxGeometry(doorLeafW - 0.16, 0.12, 0.02), trimMat);
@@ -4439,23 +4442,24 @@ function addMainHouseRoomInterior() {
     const lowerPanel = new THREE.Mesh(new THREE.BoxGeometry(doorLeafW - 0.42, doorLeafH * 0.24, 0.02), trimMat);
     lowerPanel.position.set(0, doorLeafH * 0.27, doorLeafT * 0.5 + 0.03);
     const handle = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 10), doorHandleMat);
-    handle.position.set(side * (doorLeafW * 0.5 - 0.18), doorLeafH * 0.48, doorLeafT * 0.5 + 0.05);
-    leaf.add(slab, railTop, railMid, railBot, stileL, stileR, glass, lowerPanel, handle);
+    handle.position.set((side === -1 ? 1 : -1) * (doorLeafW * 0.5 - 0.18), doorLeafH * 0.48, doorLeafT * 0.5 + 0.05);
+    panel.add(slab, railTop, railMid, railBot, stileL, stileR, glass, lowerPanel, handle);
+    leaf.add(panel);
     return leaf;
   }
 
   const leftDoorLeaf = createInteriorDoorLeaf(-1);
-  leftDoorLeaf.position.set(HOUSE_ROOM_BASE.x - doorWidth * 0.5 + doorLeafW * 0.5 + 0.02, floorY, doorPanelZ);
-  leftDoorLeaf.rotation.y = Math.PI * 0.16;
+  leftDoorLeaf.position.set(HOUSE_ROOM_BASE.x - doorWidth * 0.5 + 0.02, floorY, doorPanelZ);
+  leftDoorLeaf.rotation.y = Math.PI * 0.09;
   const rightDoorLeaf = createInteriorDoorLeaf(1);
-  rightDoorLeaf.position.set(HOUSE_ROOM_BASE.x + doorWidth * 0.5 - doorLeafW * 0.5 - 0.02, floorY, doorPanelZ);
-  rightDoorLeaf.rotation.y = -Math.PI * 0.16;
+  rightDoorLeaf.position.set(HOUSE_ROOM_BASE.x + doorWidth * 0.5 - 0.02, floorY, doorPanelZ);
+  rightDoorLeaf.rotation.y = -Math.PI * 0.09;
 
   const transom = new THREE.Mesh(
     new THREE.BoxGeometry(doorWidth - 0.2, 0.46, 0.05),
     doorGlassMat
   );
-  transom.position.set(HOUSE_ROOM_BASE.x, floorY + doorFrameH - 0.34, doorFrameZ - 0.03);
+  transom.position.set(HOUSE_ROOM_BASE.x, floorY + doorFrameH - 0.34, interiorFrontFaceZ + 0.04);
   const transomBar = new THREE.Mesh(
     new THREE.BoxGeometry(0.08, 0.46, 0.06),
     trimMat
@@ -4465,7 +4469,7 @@ function addMainHouseRoomInterior() {
     new THREE.BoxGeometry(doorWidth + 0.12, 0.04, 0.22),
     new THREE.MeshStandardMaterial({ color: 0x4b5563, roughness: 0.88 })
   );
-  threshold.position.set(HOUSE_ROOM_BASE.x, floorY + 0.03, HOUSE_ROOM_BASE.z + halfDepth - 0.09);
+  threshold.position.set(HOUSE_ROOM_BASE.x, floorY + 0.03, interiorFrontFaceZ + 0.08);
   room.add(leftDoorLeaf, rightDoorLeaf, transom, transomBar, threshold);
 
   const doorStep = new THREE.Mesh(

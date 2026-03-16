@@ -344,17 +344,17 @@
       "faceStyle": "smile",
       "accessories": []
     },
-    "x": -15.45602119020499,
+    "x": -215.6818767293207,
     "y": 1.35,
-    "z": -20.199404852010904,
+    "z": -213.88759885961113,
     "progress": {
       "coins": 0,
       "xp": 0,
       "level": 1,
       "pickaxe": "wood",
       "inventory": {
-        "stone": 10,
-        "iron": 0,
+        "stone": 16,
+        "iron": 4,
         "gold": 0,
         "diamond": 0,
         "torch": 1,
@@ -409,7 +409,7 @@
         }
       },
       "furnitureTrader": {
-        "cycleId": 985371,
+        "cycleId": 985372,
         "purchasedThisCycle": {}
       }
     }
