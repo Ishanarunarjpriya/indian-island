@@ -1248,6 +1248,166 @@ function setDebugMenuOpen(open) {
   }
 }
 
+function refreshDebugWorldControls() {
+  if (debugWeatherSelectEl) debugWeatherSelectEl.value = worldState.weather;
+  if (debugTimeSelectEl) debugTimeSelectEl.value = worldState.timeOfDay;
+}
+
+function refreshDebugPlayerLists() {
+  if (!debugPlayerSelectEl && !debugKickPlayerEl) return;
+  const options = [...players.values()]
+    .map((player) => ({
+      id: player.id,
+      label: displayNameWithTag(player.name || `Player-${String(player.id).slice(0, 4)}`, player.accountTag)
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+  const fillSelect = (selectEl) => {
+    if (!selectEl) return;
+    const previous = selectEl.value;
+    selectEl.innerHTML = '';
+    options.forEach((entry) => {
+      const option = document.createElement('option');
+      option.value = entry.id;
+      option.textContent = entry.label;
+      selectEl.appendChild(option);
+    });
+    if (previous && options.some((entry) => entry.id === previous)) {
+      selectEl.value = previous;
+    }
+  };
+  fillSelect(debugPlayerSelectEl);
+  fillSelect(debugKickPlayerEl);
+}
+
+function refreshDebugItemOptions() {
+  if (!debugItemTypeEl || !debugItemSelectEl) return;
+  const type = debugItemTypeEl.value === 'fish' ? 'fish' : 'inventory';
+  debugItemSelectEl.innerHTML = '';
+  if (type === 'fish') {
+    FISH_CATALOG_SORTED.forEach((fish) => {
+      const option = document.createElement('option');
+      option.value = fish.id;
+      option.textContent = `${fish.name} (${capitalizeWord(fish.rarity)})`;
+      debugItemSelectEl.appendChild(option);
+    });
+  } else {
+    const items = [
+      { id: 'stone', label: 'Stone' },
+      { id: 'iron', label: 'Iron' },
+      { id: 'gold', label: 'Gold' },
+      { id: 'diamond', label: 'Diamond' },
+      { id: 'torch', label: 'Torch' }
+    ];
+    items.forEach((item) => {
+      const option = document.createElement('option');
+      option.value = item.id;
+      option.textContent = item.label;
+      debugItemSelectEl.appendChild(option);
+    });
+  }
+}
+
+function applyWorldState(nextState = {}) {
+  const weather = nextState?.weather === 'rain' ? 'rain' : 'clear';
+  const timeOfDay = WORLD_TIME_PRESETS[nextState?.timeOfDay] != null ? nextState.timeOfDay : 'day';
+  worldState = { weather, timeOfDay };
+  worldStateLocked = true;
+  rainActive = weather === 'rain';
+  dayTime = WORLD_TIME_PRESETS[timeOfDay] ?? dayTime;
+  refreshDebugWorldControls();
+}
+
+function setDebugStatus(message = '', isError = false) {
+  if (!debugStatusEl) return;
+  debugStatusEl.textContent = message;
+  debugStatusEl.style.color = isError ? '#fca5a5' : '#86efac';
+}
+
+function handleDebugPasswordSubmit() {
+  if (!debugPasswordInputEl) return;
+  const entered = debugPasswordInputEl.value.trim();
+  if (entered !== DEBUG_MENU_PASSWORD) {
+    if (debugPasswordStatusEl) {
+      debugPasswordStatusEl.textContent = 'Incorrect password.';
+    }
+    return;
+  }
+  debugUnlocked = true;
+  debugSessionPassword = entered;
+  setDebugPasswordOpen(false);
+  setDebugMenuOpen(true);
+  setDebugStatus('');
+}
+
+function sendDebugWorldUpdate() {
+  if (!debugSessionPassword) {
+    setDebugStatus('Unlock the debug menu first.', true);
+    return;
+  }
+  const weather = debugWeatherSelectEl?.value === 'rain' ? 'rain' : 'clear';
+  const timeOfDay = ['day', 'evening', 'night'].includes(debugTimeSelectEl?.value)
+    ? debugTimeSelectEl.value
+    : 'day';
+  socket.emit('debug:world', { password: debugSessionPassword, weather, timeOfDay }, (resp) => {
+    if (!resp?.ok) {
+      setDebugStatus(resp?.error || 'World update failed.', true);
+      return;
+    }
+    if (resp?.worldState) applyWorldState(resp.worldState);
+    setDebugStatus('World updated.');
+  });
+}
+
+function sendDebugInventoryUpdate(deltaSign = 1) {
+  if (!debugSessionPassword) {
+    setDebugStatus('Unlock the debug menu first.', true);
+    return;
+  }
+  const targetId = String(debugPlayerSelectEl?.value || '').trim();
+  if (!targetId) {
+    setDebugStatus('Select a player.', true);
+    return;
+  }
+  const amount = Math.max(1, Math.floor(Number(debugAmountEl?.value) || 0));
+  if (!amount) {
+    setDebugStatus('Enter an amount.', true);
+    return;
+  }
+  const itemType = debugItemTypeEl?.value === 'fish' ? 'fish' : 'inventory';
+  const itemId = String(debugItemSelectEl?.value || '').trim();
+  if (!itemId) {
+    setDebugStatus('Select an item.', true);
+    return;
+  }
+  const delta = deltaSign > 0 ? amount : -amount;
+  socket.emit('debug:inventory', { password: debugSessionPassword, targetId, itemType, itemId, delta }, (resp) => {
+    if (!resp?.ok) {
+      setDebugStatus(resp?.error || 'Inventory update failed.', true);
+      return;
+    }
+    setDebugStatus('Inventory updated.');
+  });
+}
+
+function sendDebugKick() {
+  if (!debugSessionPassword) {
+    setDebugStatus('Unlock the debug menu first.', true);
+    return;
+  }
+  const targetId = String(debugKickPlayerEl?.value || '').trim();
+  if (!targetId) {
+    setDebugStatus('Select a player to kick.', true);
+    return;
+  }
+  socket.emit('debug:kick', { password: debugSessionPassword, targetId }, (resp) => {
+    if (!resp?.ok) {
+      setDebugStatus(resp?.error || 'Kick failed.', true);
+      return;
+    }
+    setDebugStatus('Player kicked.');
+  });
+}
+
 setAuthModalOpen(true, 'Login or create an account to continue.');
 setChatPanelOpen(chatPanelOpen);
 updateVoiceButtonLabels();
@@ -10304,6 +10464,9 @@ socket.on('init', (payload) => {
     if (houseRoomGroup) houseRoomGroup.visible = false;
   }
   applyProgressState(payload.progress || null);
+  if (payload.worldState) {
+    applyWorldState(payload.worldState);
+  }
 
   statusEl.textContent = 'Connected';
   appendChatLine({
@@ -10317,6 +10480,18 @@ socket.on('init', (payload) => {
 
 socket.on('progress:update', (payload) => {
   applyProgressState(payload || null);
+});
+
+socket.on('world:update', (payload) => {
+  applyWorldState(payload || null);
+});
+
+socket.on('debug:kicked', (payload) => {
+  const reason = payload?.reason || 'You were kicked by a creator.';
+  appendChatLine({ text: reason, isSystem: true });
+  clearSessionWorld();
+  setAuthModalOpen(true, reason);
+  setTimeout(() => window.location.reload(), 800);
 });
 
 socket.on('playerJoined', (payload) => {
@@ -11087,6 +11262,26 @@ menuTitleEl?.addEventListener('click', () => {
     setDebugPasswordOpen(true);
   }
 });
+debugPasswordSubmitEl?.addEventListener('click', handleDebugPasswordSubmit);
+debugPasswordCancelEl?.addEventListener('click', () => setDebugPasswordOpen(false));
+debugPasswordInputEl?.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    handleDebugPasswordSubmit();
+  }
+});
+debugPasswordOverlayEl?.addEventListener('click', (event) => {
+  if (event.target === debugPasswordOverlayEl) setDebugPasswordOpen(false);
+});
+debugCloseEl?.addEventListener('click', () => setDebugMenuOpen(false));
+debugOverlayEl?.addEventListener('click', (event) => {
+  if (event.target === debugOverlayEl) setDebugMenuOpen(false);
+});
+debugItemTypeEl?.addEventListener('change', refreshDebugItemOptions);
+debugWorldApplyEl?.addEventListener('click', sendDebugWorldUpdate);
+debugAddEl?.addEventListener('click', () => sendDebugInventoryUpdate(1));
+debugRemoveEl?.addEventListener('click', () => sendDebugInventoryUpdate(-1));
+debugKickEl?.addEventListener('click', sendDebugKick);
 chatToggleEl?.addEventListener('click', () => {
   if (!isAuthenticated) return;
   setChatPanelOpen(!chatPanelOpen);
