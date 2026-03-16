@@ -201,6 +201,8 @@ const HOME_ROOM_FURNITURE_PRICE = Object.fromEntries(
 const HOME_ROOM_FURNITURE_IDS = Object.keys(HOME_ROOM_FURNITURE_PRICE);
 const HOME_ROOM_WALL_PAINTS = new Set(['sand', 'sky', 'mint', 'slate', 'rose']);
 const HOME_ROOM_FLOOR_PAINTS = new Set(['oak', 'walnut', 'slate', 'pine']);
+const HOME_ROOM_SLOT_COUNT = 6;
+const HOME_ROOM_IDS = Array.from({ length: HOME_ROOM_SLOT_COUNT }, (_, i) => `room-${i + 1}`);
 const FISH_ROD_TIERS = ['basic', 'reinforced', 'expert', 'master', 'mythic'];
 const FISH_ROD_DATA = {
   basic: {
@@ -717,6 +719,7 @@ function defaultQuest(seed = 1) {
 
 function defaultHomeRoom() {
   return {
+    roomId: null,
     wallPaint: 'sand',
     floorPaint: 'oak',
     ownedFurniture: {
@@ -734,9 +737,16 @@ function defaultHomeRoom() {
   };
 }
 
+function normalizeHomeRoomId(value) {
+  const candidate = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  return HOME_ROOM_IDS.includes(candidate) ? candidate : null;
+}
+
 function sanitizeHomeRoom(value) {
   const base = defaultHomeRoom();
   if (!value || typeof value !== 'object') return base;
+  const roomId = normalizeHomeRoomId(value.roomId);
+  if (roomId) base.roomId = roomId;
   const wallPaintRaw = typeof value.wallPaint === 'string' ? value.wallPaint.trim().toLowerCase() : '';
   const floorPaintRaw = typeof value.floorPaint === 'string' ? value.floorPaint.trim().toLowerCase() : '';
   if (HOME_ROOM_WALL_PAINTS.has(wallPaintRaw)) base.wallPaint = wallPaintRaw;
@@ -1817,6 +1827,19 @@ function findProfileIdByDisplayName(name, excludeProfileId = null) {
   return null;
 }
 
+function findProfileIdByRoomId(roomId, excludeProfileId = null) {
+  const target = normalizeHomeRoomId(roomId);
+  if (!target) return null;
+  for (const [profileId, profile] of profiles.entries()) {
+    if (excludeProfileId && profileId === excludeProfileId) continue;
+    const claimed = sanitizeHomeRoom(profile?.progress?.homeRoom).roomId;
+    if (claimed === target) {
+      return profileId;
+    }
+  }
+  return null;
+}
+
 function findAccountByUsernameLikeName(name, excludeProfileId = null) {
   const key = normalizeNameKey(name);
   if (!key) return null;
@@ -2424,6 +2447,41 @@ io.on('connection', (socket) => {
         furnitureTrader: result.furnitureTrader,
         progress: progressSnapshot(progress)
       });
+    }
+  });
+
+  socket.on('home:claimRoom', (payload, ack) => {
+    const actor = players.get(socket.id);
+    const progress = actor?.progress;
+    if (!actor || !progress) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Not authenticated.' });
+      return;
+    }
+    const roomId = normalizeHomeRoomId(payload?.roomId);
+    if (!roomId) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'That room does not exist.' });
+      return;
+    }
+    progress.homeRoom = sanitizeHomeRoom(progress.homeRoom);
+    const room = progress.homeRoom;
+    if (room.roomId === roomId) {
+      if (typeof ack === 'function') ack({ ok: true, roomId, progress: progressSnapshot(progress) });
+      return;
+    }
+    if (room.roomId) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'You already claimed a room.' });
+      return;
+    }
+    const claimedBy = findProfileIdByRoomId(roomId, actor.profileId);
+    if (claimedBy) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'That room is already claimed.' });
+      return;
+    }
+    room.roomId = roomId;
+    persistPlayerProgress(actor, { immediate: true });
+    emitProgress(socket, actor);
+    if (typeof ack === 'function') {
+      ack({ ok: true, roomId, progress: progressSnapshot(progress) });
     }
   });
 

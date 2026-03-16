@@ -1172,8 +1172,10 @@ function clearSessionWorld() {
   inMine = false;
   inLighthouseInterior = false;
   inHouseRoom = false;
+  inHouseHall = false;
   if (lighthouseInteriorGroup) lighthouseInteriorGroup.visible = false;
   if (houseRoomGroup) houseRoomGroup.visible = false;
+  if (houseHallGroup) houseHallGroup.visible = false;
   torchEquipped = false;
   inventoryViewTab = 'ores';
   rodShopSnapshot = null;
@@ -5745,6 +5747,15 @@ function addHouseHallInterior() {
   ceiling.position.set(baseX, floorY + wallH, baseZ);
   hall.add(ceiling);
 
+  const ambientLight = new THREE.AmbientLight(0xcbd5e1, 0.34);
+  const hallLightA = new THREE.PointLight(0xfef3c7, 0.6, 16, 2);
+  hallLightA.position.set(baseX, floorY + 3.35, baseZ - 7);
+  const hallLightB = hallLightA.clone();
+  hallLightB.position.z = baseZ;
+  const hallLightC = hallLightA.clone();
+  hallLightC.position.z = baseZ + 7;
+  hall.add(ambientLight, hallLightA, hallLightB, hallLightC);
+
   const backWall = new THREE.Mesh(new THREE.BoxGeometry(hallW, wallH, wallT), wallMat);
   backWall.position.set(baseX, floorY + wallH * 0.5, baseZ - hallD * 0.5 + wallT * 0.5);
   hall.add(backWall);
@@ -5961,7 +5972,7 @@ function setTeleportTheme(type) {
   if (type === 'enter-home') {
     teleportOverlay.style.background = 'radial-gradient(circle at 50% 35%, rgba(34, 211, 238, 0.28) 0%, rgba(2, 8, 20, 0.95) 72%)';
     teleportTitle.textContent = 'Entering House';
-    teleportSubtitle.textContent = 'Stepping into your room...';
+    teleportSubtitle.textContent = 'Stepping into the hall...';
     teleportSweep.style.filter = 'hue-rotate(6deg)';
     return;
   }
@@ -6264,6 +6275,7 @@ function clampToPlayableGround(x, z, allowMine = false) {
   const LEADERBOARD_RADIUS = LEADERBOARD_ISLAND_RADIUS;
   const INTERIOR_RADIUS = INTERIOR_PLAY_RADIUS;
   const HOUSE_ROOM_RADIUS = HOUSE_ROOM_PLAY_RADIUS;
+  const HOUSE_HALL_RADIUS = HOUSE_HALL_PLAY_RADIUS;
   const HOUSE_HALL_RADIUS = HOUSE_HALL_PLAY_RADIUS;
   const mineSwimBlocked = allowMine && blocksMineEscapeSwim(x, z);
   const inSwim = isSwimZone(x, z) && !mineSwimBlocked;
@@ -6674,7 +6686,7 @@ function swimHintText() {
 }
 
 function canBoardBoat(local) {
-  if (inHouseRoom) return false;
+  if (inHouseRoom || inHouseHall) return false;
   const nearDock = (
     distance2D(local, ISLAND_DOCK_POS) < 5
     || distance2D(local, LIGHTHOUSE_DOCK_POS) < 5
@@ -10149,6 +10161,7 @@ function updateFishingMinigame(local, nowMs, delta) {
     || inMine
     || inLighthouseInterior
     || inHouseRoom
+    || inHouseHall
     || local.onBoat
     || menuOpen
     || mineWarningOpen
@@ -13222,6 +13235,8 @@ function animate(nowMs) {
         let activeCameraTarget = cameraDistanceTarget;
         if (inLighthouseInterior) {
           activeCameraTarget = Math.min(activeCameraTarget, 10.5);
+        } else if (inHouseHall) {
+          activeCameraTarget = Math.min(activeCameraTarget, 11.8);
         } else if (inHouseRoom) {
           activeCameraTarget = Math.min(activeCameraTarget, 9.8);
         } else if (inMine) {
@@ -13230,6 +13245,9 @@ function animate(nowMs) {
         cameraDistance += (activeCameraTarget - cameraDistance) * Math.min(1, delta * 10);
         if (inLighthouseInterior) {
           cameraDistance = Math.min(cameraDistance, 10.5);
+          cameraDistanceTarget = activeCameraTarget;
+        } else if (inHouseHall) {
+          cameraDistance = Math.min(cameraDistance, 11.8);
           cameraDistanceTarget = activeCameraTarget;
         } else if (inHouseRoom) {
           cameraDistance = Math.min(cameraDistance, 9.8);
@@ -13256,6 +13274,17 @@ function animate(nowMs) {
             desiredX = LIGHTHOUSE_INTERIOR_BASE.x + cdx * scale;
             desiredZ = LIGHTHOUSE_INTERIOR_BASE.z + cdz * scale;
           }
+        } else if (inHouseHall) {
+          const camRadius = HOUSE_HALL_PLAY_RADIUS - 1.35;
+          const cdx = desiredX - HOUSE_HALL_BASE.x;
+          const cdz = desiredZ - HOUSE_HALL_BASE.z;
+          const clen = Math.hypot(cdx, cdz);
+          if (clen > camRadius) {
+            const scale = camRadius / (clen || 1);
+            desiredX = HOUSE_HALL_BASE.x + cdx * scale;
+            desiredZ = HOUSE_HALL_BASE.z + cdz * scale;
+          }
+          desiredY = Math.min(desiredY, GROUND_Y + 4.4);
         } else if (inHouseRoom) {
           const camRadius = HOUSE_ROOM_PLAY_RADIUS - 1.25;
           const cdx = desiredX - HOUSE_ROOM_BASE.x;
