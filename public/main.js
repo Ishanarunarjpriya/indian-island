@@ -4251,6 +4251,7 @@ function addMineArea() {
     hairColor: 0x1f2937,
     hatColor: 0x111827
   });
+  mineShopVendor.scale.setScalar(0.78);
   const mineShopStall = createVendorStall({
     label: 'Pickaxes',
     signColor: '#2f2417',
@@ -4297,6 +4298,7 @@ function addMineArea() {
     hairColor: 0x0f172a,
     hatColor: 0x1e293b
   });
+  questVendor.scale.setScalar(0.78);
   const questStall = createVendorStall({
     label: 'Quests',
     signColor: '#2f2a3b',
