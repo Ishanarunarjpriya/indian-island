@@ -210,8 +210,7 @@ const HOME_ROOM_FURNITURE_PRICE = Object.fromEntries(
 const HOME_ROOM_FURNITURE_IDS = Object.keys(HOME_ROOM_FURNITURE_PRICE);
 const HOME_ROOM_WALL_PAINTS = new Set(['sand', 'sky', 'mint', 'slate', 'rose']);
 const HOME_ROOM_FLOOR_PAINTS = new Set(['oak', 'walnut', 'slate', 'pine']);
-const HOME_ROOM_SLOT_COUNT = 6;
-const HOME_ROOM_IDS = Array.from({ length: HOME_ROOM_SLOT_COUNT }, (_, i) => `room-${i + 1}`);
+const HOME_ROOM_MIN_COUNT = 6;
 const FISH_ROD_TIERS = ['basic', 'reinforced', 'expert', 'master', 'mythic'];
 const FISH_ROD_DATA = {
   basic: {
@@ -303,6 +302,22 @@ const ACCOUNT_FILE = path.join(__dirname, 'accounts.json');
 const players = new Map();
 const profiles = new Map();
 const accounts = new Map();
+
+function getHomeRoomSlotCount() {
+  return Math.max(HOME_ROOM_MIN_COUNT, accounts.size);
+}
+function getHomeRoomIds() {
+  return Array.from({ length: getHomeRoomSlotCount() }, (_, i) => `room-${i + 1}`);
+}
+let HOME_ROOM_IDS = getHomeRoomIds();
+
+function getRoomConfig() {
+  return { roomIds: getHomeRoomIds(), slotCount: getHomeRoomSlotCount() };
+}
+
+function broadcastRoomConfig() {
+  io.emit('home:roomConfig', getRoomConfig());
+}
 const voiceParticipants = new Set();
 const interactables = new Map([
   [
@@ -779,7 +794,7 @@ function defaultHomeRoom() {
 
 function normalizeHomeRoomId(value) {
   const candidate = typeof value === 'string' ? value.trim().toLowerCase() : '';
-  return HOME_ROOM_IDS.includes(candidate) ? candidate : null;
+  return getHomeRoomIds().includes(candidate) ? candidate : null;
 }
 
 function sanitizeHomeRoom(value) {
@@ -1985,7 +2000,8 @@ function spawnPlayer(socket, profileId, username) {
     worldLimit: WORLD_LIMIT,
     interactables: [...interactables.values()],
     progress: progressSnapshot(spawn.progress),
-    worldState
+    worldState,
+    roomConfig: getRoomConfig()
   });
   socket.to(roomName).emit('playerJoined', spawn);
 }
@@ -2068,6 +2084,7 @@ io.on('connection', (socket) => {
       return;
     }
     spawnPlayer(socket, profileId, username);
+    broadcastRoomConfig();
     if (typeof ack === 'function') ack({ ok: true, username });
   });
 

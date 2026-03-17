@@ -267,11 +267,24 @@ const HOUSE_ROOM_EXIT_POS = new THREE.Vector3(HOUSE_ROOM_BASE.x, 1.36, HOUSE_ROO
 const HOUSE_ROOM_WORKSHOP_POS = new THREE.Vector3(HOUSE_ROOM_BASE.x - 3.2, 1.36, HOUSE_ROOM_BASE.z - 6.2);
 const HOUSE_HALL_BASE = new THREE.Vector3(HOUSE_ROOM_BASE.x + 60, 0, HOUSE_ROOM_BASE.z);
 const HOUSE_HALL_PLAY_RADIUS = 14.5;
+
+function getHallPlayRadius() {
+  const rowCount = Math.ceil(Math.max(1, HOUSE_ROOM_SLOT_COUNT) / 2);
+  const hallD = Math.max(24.0, rowCount * 7.0 + 10.0);
+  return Math.max(HOUSE_HALL_PLAY_RADIUS, hallD * 0.5 + 2);
+}
 const HOUSE_HALL_ENTRY_POS = new THREE.Vector3(HOUSE_HALL_BASE.x, 1.36, HOUSE_HALL_BASE.z + 5.8);
 const HOUSE_HALL_EXIT_POS = new THREE.Vector3(HOUSE_HALL_BASE.x, 1.36, HOUSE_HALL_BASE.z + 7.8);
+
+function getHallExitPos() {
+  const rowCount = Math.ceil(Math.max(1, HOUSE_ROOM_SLOT_COUNT) / 2);
+  const hallD = Math.max(24.0, rowCount * 7.0 + 10.0);
+  const exitZ = HOUSE_HALL_BASE.z + hallD * 0.5 - 1.5;
+  return new THREE.Vector3(HOUSE_HALL_BASE.x, 1.36, exitZ);
+}
 const HOUSE_HALL_EXIT_INTERACT_RADIUS = 3.05;
-const HOUSE_ROOM_SLOT_COUNT = 6;
-const HOUSE_ROOM_IDS = Array.from({ length: HOUSE_ROOM_SLOT_COUNT }, (_, i) => `room-${i + 1}`);
+let HOUSE_ROOM_SLOT_COUNT = 6;
+let HOUSE_ROOM_IDS = Array.from({ length: HOUSE_ROOM_SLOT_COUNT }, (_, i) => `room-${i + 1}`);
 const HOUSE_DOOR_INTERACT_RADIUS = 2.25;
 const HOUSE_ROOM_EXIT_INTERACT_RADIUS = 3.05;
 const HOUSE_ROOM_WORKSHOP_INTERACT_RADIUS = 3.25;
@@ -2014,6 +2027,14 @@ function createWaterfallMistTexture() {
 
 function addWorldCollider(x, z, radius, tag = 'solid') {
   worldColliders.push({ x, z, radius, tag });
+}
+
+function clearWorldCollidersByTag(tag) {
+  for (let i = worldColliders.length - 1; i >= 0; i -= 1) {
+    if (worldColliders[i].tag === tag) {
+      worldColliders.splice(i, 1);
+    }
+  }
 }
 
 function addWallCollisionFromMesh(mesh, tag = 'house') {
@@ -6588,15 +6609,51 @@ function addFurnitureShopInterior() {
    addWorldCollider(FURNITURE_SHOP_COUNTER_POS.x, FURNITURE_SHOP_COUNTER_POS.z, 2.4, 'furniture-shop');
 }
 
+function applyRoomConfig(config) {
+  if (!config || !Array.isArray(config.roomIds)) return;
+  const newSlotCount = Math.max(1, Math.floor(Number(config.slotCount) || config.roomIds.length));
+  const newRoomIds = config.roomIds.filter((id) => typeof id === 'string' && id.trim());
+  if (!newRoomIds.length) return;
+  HOUSE_ROOM_SLOT_COUNT = newSlotCount;
+  HOUSE_ROOM_IDS = newRoomIds;
+  rebuildHouseHall();
+}
+
+function rebuildHouseHall() {
+  if (houseHallGroup) {
+    houseHallGroup.traverse((obj) => {
+      if (obj.geometry) obj.geometry.dispose();
+      if (obj.material) {
+        if (Array.isArray(obj.material)) obj.material.forEach((m) => m.dispose());
+        else obj.material.dispose();
+      }
+    });
+    scene.remove(houseHallGroup);
+    houseHallGroup = null;
+  }
+  clearWorldCollidersByTag('house-hall');
+  houseHallRoomDoors.length = 0;
+  houseHallExitMarker = null;
+  addHouseHallInterior();
+}
+
+socket.on('home:roomConfig', (payload) => {
+  applyRoomConfig(payload || null);
+});
+
 function addHouseHallInterior() {
   const hall = new THREE.Group();
   const floorY = GROUND_Y;
   const hallW = 13.4;
-  const hallD = 24.0;
   const wallH = 4.6;
   const wallT = 0.25;
   const baseX = HOUSE_HALL_BASE.x;
   const baseZ = HOUSE_HALL_BASE.z;
+  const roomCount = Math.max(1, HOUSE_ROOM_SLOT_COUNT);
+  const rowCount = Math.ceil(roomCount / 2);
+  const rowSpacing = 7.0;
+  const hallDepthMargin = 10.0;
+  const hallD = Math.max(24.0, rowCount * rowSpacing + hallDepthMargin);
 
   const wallMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.86 });
   const floorMat = new THREE.MeshStandardMaterial({ color: 0x5b4a3a, roughness: 0.92 });
@@ -6614,11 +6671,11 @@ function addHouseHallInterior() {
 
   const ambientLight = new THREE.AmbientLight(0xcbd5e1, 0.34);
   const hallLightA = new THREE.PointLight(0xfef3c7, 0.6, 16, 2);
-  hallLightA.position.set(baseX, floorY + 3.35, baseZ - 7);
+  hallLightA.position.set(baseX, floorY + 3.35, baseZ - hallD * 0.3);
   const hallLightB = hallLightA.clone();
   hallLightB.position.z = baseZ;
   const hallLightC = hallLightA.clone();
-  hallLightC.position.z = baseZ + 7;
+  hallLightC.position.z = baseZ + hallD * 0.3;
   hall.add(ambientLight, hallLightA, hallLightB, hallLightC);
 
   const backWall = new THREE.Mesh(new THREE.BoxGeometry(hallW, wallH, wallT), wallMat);
@@ -6649,7 +6706,9 @@ function addHouseHallInterior() {
   addWallCollisionFromMesh(frontRight, 'house-hall');
   addWallCollisionFromMesh(frontTop, 'house-hall');
 
-  const doorOffsets = [-7, 0, 7];
+  const doorOffsets = Array.from({ length: rowCount }, (_, row) => {
+    return rowCount <= 1 ? 0 : (row - (rowCount - 1) / 2) * rowSpacing;
+  });
   const doorX = hallW * 0.5 - 0.7;
   const ringMat = new THREE.MeshStandardMaterial({
     color: 0x7dd3fc,
@@ -6698,7 +6757,8 @@ function addHouseHallInterior() {
 
   const exitRing = new THREE.Mesh(new THREE.TorusGeometry(0.9, 0.08, 12, 28), ringMat);
   exitRing.rotation.x = Math.PI * 0.5;
-  exitRing.position.set(HOUSE_HALL_EXIT_POS.x, floorY + 0.05, HOUSE_HALL_EXIT_POS.z);
+  const exitZ = baseZ + hallD * 0.5 - 1.5;
+  exitRing.position.set(baseX, floorY + 0.05, exitZ);
   hall.add(exitRing);
   houseHallExitMarker = exitRing;
 
@@ -7143,7 +7203,7 @@ function clampToPlayableGround(x, z, allowMine = false) {
   const LEADERBOARD_RADIUS = LEADERBOARD_ISLAND_RADIUS;
   const INTERIOR_RADIUS = INTERIOR_PLAY_RADIUS;
   const HOUSE_ROOM_RADIUS = HOUSE_ROOM_PLAY_RADIUS;
-  const HOUSE_HALL_RADIUS = HOUSE_HALL_PLAY_RADIUS;
+  const HOUSE_HALL_RADIUS = getHallPlayRadius();
   const SHOP_RADIUS = SHOP_INTERIOR_RADIUS;
   const mineSwimBlocked = allowMine && blocksMineEscapeSwim(x, z);
   const inSwim = isSwimZone(x, z) && !mineSwimBlocked;
@@ -7343,7 +7403,7 @@ function isWaterAt(x, z) {
   if (onHouseRoomLand) return false;
   const dxHH = x - HOUSE_HALL_BASE.x;
   const dzHH = z - HOUSE_HALL_BASE.z;
-  const onHouseHallLand = Math.hypot(dxHH, dzHH) <= HOUSE_HALL_PLAY_RADIUS + 1.4;
+  const onHouseHallLand = Math.hypot(dxHH, dzHH) <= getHallPlayRadius() + 1.4;
   if (onHouseHallLand) return false;
 
   if (isInDockWalkZone(x, z, 3.0, 2.5)) return false;
@@ -7788,7 +7848,7 @@ function isWithinPlayableWorld(x, z, allowMine = false) {
   const onLeaderboardIsland = Math.hypot(x - LEADERBOARD_ISLAND_POS.x, z - LEADERBOARD_ISLAND_POS.z) <= LEADERBOARD_RADIUS;
   const inInterior = Math.hypot(x - LIGHTHOUSE_INTERIOR_BASE.x, z - LIGHTHOUSE_INTERIOR_BASE.z) <= INTERIOR_RADIUS;
   const inHouseRoomZone = Math.hypot(x - HOUSE_ROOM_BASE.x, z - HOUSE_ROOM_BASE.z) <= HOUSE_ROOM_RADIUS;
-  const inHouseHallZone = Math.hypot(x - HOUSE_HALL_BASE.x, z - HOUSE_HALL_BASE.z) <= HOUSE_HALL_PLAY_RADIUS;
+  const inHouseHallZone = Math.hypot(x - HOUSE_HALL_BASE.x, z - HOUSE_HALL_BASE.z) <= getHallPlayRadius();
   const inMine = allowMine && mineDistance(x, z) <= MINE_PLAY_RADIUS;
   const inSwim = isSwimZone(x, z) && !mineSwimBlocked;
   return onMain || onLighthouse || onMineEntryIsland || onFishingIsland || onMarketIsland || onLeaderboardIsland || inInterior || inHouseRoomZone || inHouseHallZone || inMine || inSwim;
@@ -10920,7 +10980,7 @@ function isNearHouseRoomExit(local) {
 }
 
 function isNearHouseHallExit(local) {
-  return Boolean(local) && inHouseHall && distance2D(local, HOUSE_HALL_EXIT_POS) <= HOUSE_HALL_EXIT_INTERACT_RADIUS;
+  return Boolean(local) && inHouseHall && distance2D(local, getHallExitPos()) <= HOUSE_HALL_EXIT_INTERACT_RADIUS;
 }
 
 function isNearHouseWorkshop(local) {
@@ -11703,7 +11763,7 @@ function getManualInteractTarget(local) {
     return { mode: 'world', label: 'Hall', caption: 'Tap', worldPos: HOUSE_ROOM_EXIT_POS, offsetY: 0.95 };
   }
   if (isNearHouseHallExit(local)) {
-    return { mode: 'world', label: 'Exit', caption: 'Tap', worldPos: HOUSE_HALL_EXIT_POS, offsetY: 0.95 };
+    return { mode: 'world', label: 'Exit', caption: 'Tap', worldPos: getHallExitPos(), offsetY: 0.95 };
   }
   const hallDoor = getNearbyHouseHallDoor(local);
   if (hallDoor) {
@@ -12057,7 +12117,7 @@ socket.on('init', (payload) => {
     inMine = local.inMine === true || mineDistance(local.x, local.z) <= MINE_PLAY_RADIUS;
      inLighthouseInterior = Math.hypot(local.x - LIGHTHOUSE_INTERIOR_BASE.x, local.z - LIGHTHOUSE_INTERIOR_BASE.z) <= INTERIOR_PLAY_RADIUS;
      inHouseRoom = Math.hypot(local.x - HOUSE_ROOM_BASE.x, local.z - HOUSE_ROOM_BASE.z) <= HOUSE_ROOM_PLAY_RADIUS;
-     inHouseHall = Math.hypot(local.x - HOUSE_HALL_BASE.x, local.z - HOUSE_HALL_BASE.z) <= HOUSE_HALL_PLAY_RADIUS;
+     inHouseHall = Math.hypot(local.x - HOUSE_HALL_BASE.x, local.z - HOUSE_HALL_BASE.z) <= getHallPlayRadius();
      inFishingShop = Math.hypot(local.x - FISHING_SHOP_BASE.x, local.z - FISHING_SHOP_BASE.z) <= SHOP_INTERIOR_RADIUS;
      inMarketShop = Math.hypot(local.x - MARKET_SHOP_BASE.x, local.z - MARKET_SHOP_BASE.z) <= SHOP_INTERIOR_RADIUS;
      inFurnitureShop = Math.hypot(local.x - FURNITURE_SHOP_BASE.x, local.z - FURNITURE_SHOP_BASE.z) <= SHOP_INTERIOR_RADIUS;
@@ -12088,6 +12148,9 @@ socket.on('init', (payload) => {
   applyProgressState(payload.progress || null);
   if (payload.worldState) {
     applyWorldState(payload.worldState);
+  }
+  if (payload.roomConfig) {
+    applyRoomConfig(payload.roomConfig);
   }
 
   statusEl.textContent = 'Connected';
@@ -14504,7 +14567,7 @@ function animate(nowMs) {
             desiredZ = LIGHTHOUSE_INTERIOR_BASE.z + cdz * scale;
           }
         } else if (inHouseHall) {
-          const camRadius = HOUSE_HALL_PLAY_RADIUS - 1.35;
+          const camRadius = getHallPlayRadius() - 1.35;
           const cdx = desiredX - HOUSE_HALL_BASE.x;
           const cdz = desiredZ - HOUSE_HALL_BASE.z;
           const clen = Math.hypot(cdx, cdz);
