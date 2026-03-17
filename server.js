@@ -198,9 +198,12 @@ const HOME_ROOM_FURNITURE_SHOP = {
   'coffee-table': { label: 'Coffee Table', price: 260, stock: 1, occasionallyAvailable: false },
   bookshelf: { label: 'Bookshelf', price: 620, stock: 1, occasionallyAvailable: true, availabilityChance: 0.55 },
   dresser: { label: 'Dresser', price: 520, stock: 1, occasionallyAvailable: true, availabilityChance: 0.58 },
+  wardrobe: { label: 'Wardrobe', price: 780, stock: 1, occasionallyAvailable: true, availabilityChance: 0.52 },
+  mirror: { label: 'Standing Mirror', price: 260, stock: 1, occasionallyAvailable: false },
   rug: { label: 'Bedroom Rug', price: 240, stock: 1, occasionallyAvailable: false },
   wallart: { label: 'Wall Art', price: 200, stock: 1, occasionallyAvailable: true, availabilityChance: 0.65 }
 };
+const HOME_ROOM_STARTER_FURNITURE = new Set(['bed', 'table', 'lamp', 'plant', 'rug']);
 const HOME_ROOM_FURNITURE_PRICE = Object.fromEntries(
   Object.entries(HOME_ROOM_FURNITURE_SHOP).map(([itemId, item]) => [itemId, item.price])
 );
@@ -328,6 +331,11 @@ app.get('/voice-config', (req, res) => {
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
+}
+
+function effectiveRoomName(player) {
+  const roomId = player?.currentRoomId;
+  return roomId ? `home:${roomId}` : 'world';
 }
 
 function normalizeBanUntil(value) {
@@ -755,8 +763,9 @@ function defaultHomeRoom() {
   const ownedFurniture = {};
   const placedFurniture = {};
   for (const itemId of HOME_ROOM_FURNITURE_IDS) {
-    ownedFurniture[itemId] = false;
-    placedFurniture[itemId] = false;
+    const isStarter = HOME_ROOM_STARTER_FURNITURE.has(itemId);
+    ownedFurniture[itemId] = isStarter;
+    placedFurniture[itemId] = isStarter;
   }
   return {
     roomId: null,
@@ -1967,15 +1976,18 @@ function spawnPlayer(socket, profileId, username) {
   spawn.color = spawn.appearance.shirt;
   spawn.pickaxe = sanitizePickaxe(spawn.progress?.pickaxe, 'wood');
   players.set(socket.id, spawn);
+  const roomName = effectiveRoomName(spawn);
+  socket.join(roomName);
+  const roomPlayers = [...players.values()].filter((p) => effectiveRoomName(p) === roomName);
   socket.emit('init', {
     id: socket.id,
-    players: [...players.values()],
+    players: roomPlayers,
     worldLimit: WORLD_LIMIT,
     interactables: [...interactables.values()],
     progress: progressSnapshot(spawn.progress),
     worldState
   });
-  socket.broadcast.emit('playerJoined', spawn);
+  socket.to(roomName).emit('playerJoined', spawn);
 }
 
 function persistPlayerProgress(player, options = {}) {
@@ -2005,10 +2017,11 @@ function removeAuthenticatedPlayer(socket) {
   const existing = players.get(socket.id);
   if (!existing) return;
   persistPlayerProgress(existing);
+  const roomName = effectiveRoomName(existing);
   players.delete(socket.id);
   voiceParticipants.delete(socket.id);
   socket.broadcast.emit('voice:user-left', socket.id);
-  io.emit('playerLeft', socket.id);
+  io.to(roomName).emit('playerLeft', socket.id);
 }
 
 io.on('connection', (socket) => {
@@ -2118,7 +2131,7 @@ io.on('connection', (socket) => {
     players.set(socket.id, current);
     persistPlayerProgress(current);
 
-    socket.broadcast.emit('playerMoved', {
+    socket.to(effectiveRoomName(current)).emit('playerMoved', {
       id: socket.id,
       x: current.x,
       y: current.y,
@@ -2220,7 +2233,7 @@ io.on('connection', (socket) => {
     }
     persistPlayerProgress(actor);
     emitProgress(socket, actor);
-    io.emit('player:mined', { id: socket.id, sentAt: Date.now() });
+    io.to(effectiveRoomName(actor)).emit('player:mined', { id: socket.id, sentAt: Date.now() });
     if (typeof ack === 'function') ack({ ok: true, progress: progressSnapshot(progress), questProgressed });
   });
 
@@ -2260,7 +2273,7 @@ io.on('connection', (socket) => {
     actor.pickaxe = requested;
     persistPlayerProgress(actor, { immediate: true });
     emitProgress(socket, actor);
-    io.emit('playerGear', {
+    io.to(effectiveRoomName(actor)).emit('playerGear', {
       id: socket.id,
       pickaxe: progress.pickaxe,
       torchEquipped: actor.torchEquipped === true,
@@ -2321,7 +2334,7 @@ io.on('connection', (socket) => {
     progress.fishingRodTier = 'basic';
     persistPlayerProgress(actor, { immediate: true });
     emitProgress(socket, actor);
-    io.emit('playerGear', {
+    io.to(effectiveRoomName(actor)).emit('playerGear', {
       id: socket.id,
       pickaxe: sanitizePickaxe(progress.pickaxe, 'wood'),
       torchEquipped: actor.torchEquipped === true,
@@ -2398,7 +2411,7 @@ io.on('connection', (socket) => {
     progress.fishingRodTier = sanitizeFishingRodTier(tier.next.tier, progress.fishingRodTier);
     persistPlayerProgress(actor, { immediate: true });
     emitProgress(socket, actor);
-    io.emit('playerGear', {
+    io.to(effectiveRoomName(actor)).emit('playerGear', {
       id: socket.id,
       pickaxe: sanitizePickaxe(progress.pickaxe, 'wood'),
       torchEquipped: actor.torchEquipped === true,
@@ -2516,9 +2529,17 @@ io.on('connection', (socket) => {
       if (typeof ack === 'function') ack({ ok: false, error: 'The room owner has the door closed.' });
       return;
     }
+    const oldRoomName = effectiveRoomName(actor);
     actor.currentRoomId = roomId;
+    const newRoomName = effectiveRoomName(actor);
     players.set(socket.id, actor);
-    io.emit('playerRoom', { id: socket.id, roomId });
+    if (oldRoomName !== newRoomName) {
+      socket.leave(oldRoomName);
+      socket.join(newRoomName);
+      socket.to(oldRoomName).emit('playerLeft', socket.id);
+      socket.to(newRoomName).emit('playerJoined', actor);
+    }
+    io.to(oldRoomName).to(newRoomName).emit('playerRoom', { id: socket.id, roomId });
     if (typeof ack === 'function') {
       ack({ ok: true, roomId, roomState });
     }
@@ -2531,9 +2552,15 @@ io.on('connection', (socket) => {
       return;
     }
     if (actor.currentRoomId) {
+      const oldRoomName = effectiveRoomName(actor);
       actor.currentRoomId = null;
+      const newRoomName = effectiveRoomName(actor);
       players.set(socket.id, actor);
-      io.emit('playerRoom', { id: socket.id, roomId: null });
+      socket.leave(oldRoomName);
+      socket.join(newRoomName);
+      socket.to(oldRoomName).emit('playerLeft', socket.id);
+      socket.to(newRoomName).emit('playerJoined', actor);
+      io.to(oldRoomName).to(newRoomName).emit('playerRoom', { id: socket.id, roomId: null });
     }
     if (typeof ack === 'function') ack({ ok: true });
   });
@@ -3110,7 +3137,7 @@ io.on('connection', (socket) => {
     actor.torchEquipped = wantsTorch && Number.isFinite(torchCount) && torchCount > 0;
     actor.isFishing = wantsFishing && hasRod;
     players.set(socket.id, actor);
-    io.emit('playerGear', {
+    io.to(effectiveRoomName(actor)).emit('playerGear', {
       id: socket.id,
       pickaxe: sanitizePickaxe(actor?.progress?.pickaxe, 'wood'),
       torchEquipped: actor.torchEquipped,
@@ -3150,7 +3177,7 @@ io.on('connection', (socket) => {
     const text = filterChatText(rawText.trim().slice(0, CHAT_MAX_LEN));
     if (!text) return;
 
-    io.emit('chat', {
+    io.to(effectiveRoomName(sender)).emit('chat', {
       fromId: socket.id,
       fromTag: accountRoleTagForProfileId(sender.profileId),
       fromName: sender.name,
@@ -3232,7 +3259,7 @@ io.on('connection', (socket) => {
     players.set(socket.id, current);
     persistPlayerProgress(current);
 
-    io.emit('playerCustomized', {
+    io.to(effectiveRoomName(current)).emit('playerCustomized', {
       id: current.id,
       name: current.name,
       color: current.color,
@@ -3540,7 +3567,7 @@ io.on('connection', (socket) => {
     const type = payload?.type;
     if (!actor || !['wave', 'dance', 'cheer'].includes(type)) return;
 
-    io.emit('playerEmote', {
+    io.to(effectiveRoomName(actor)).emit('playerEmote', {
       id: socket.id,
       type,
       sentAt: Date.now()

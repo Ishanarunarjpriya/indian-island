@@ -1289,6 +1289,41 @@
         grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
       }
 
+      .home-summary {
+        display: grid;
+        gap: 10px;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      }
+
+      .home-summary-card {
+        padding: 10px 12px;
+        border-radius: 12px;
+        border: 1px solid rgba(148, 163, 184, 0.24);
+        background: rgba(3, 11, 24, 0.55);
+        display: grid;
+        gap: 4px;
+      }
+
+      .home-summary-label {
+        font-size: 10px;
+        letter-spacing: 0.6px;
+        text-transform: uppercase;
+        color: rgba(226, 232, 240, 0.65);
+      }
+
+      .home-summary-value {
+        font-size: 18px;
+        font-weight: 700;
+        color: #f8fafc;
+      }
+
+      #home-summary-tip {
+        margin: 0;
+        font-size: 12px;
+        color: #cbd5e1;
+        line-height: 1.4;
+      }
+
       #home-paint-grid {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3013,6 +3048,24 @@
           <button id="home-close" class="modal-close" type="button">✕</button>
         </div>
         <div id="home-grid">
+          <section id="home-summary-section" class="market-section">
+            <h3>Room Overview</h3>
+            <div class="home-summary">
+              <div class="home-summary-card">
+                <span class="home-summary-label">Owned</span>
+                <span id="home-summary-owned" class="home-summary-value">0</span>
+              </div>
+              <div class="home-summary-card">
+                <span class="home-summary-label">Placed</span>
+                <span id="home-summary-placed" class="home-summary-value">0</span>
+              </div>
+              <div class="home-summary-card">
+                <span class="home-summary-label">Furniture</span>
+                <span id="home-summary-total" class="home-summary-value">0</span>
+              </div>
+            </div>
+            <p id="home-summary-tip">Visit the Furniture Trader to unlock new pieces.</p>
+          </section>
           <section class="market-section">
             <h3>Paint Shop</h3>
             <div id="home-paint-grid">
