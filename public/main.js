@@ -17,6 +17,9 @@ let menuOpen = false;
 let debugMenuOpen = false;
 let debugBannedAccounts = [];
 let isAuthenticated = false;
+let localRoomTransitioning = false;
+const pendingLeaveMessages = new Map();
+const pendingJoinMessages = new Map();
 const CHAT_BUBBLE_MS = 4500;
 let lastMineAt = 0;
 const MINE_SWING_MS = 340;
@@ -11480,6 +11483,7 @@ function exitHouseToMain(local) {
   const outX = HOUSE_DOOR_POS.x;
   const outZ = HOUSE_DOOR_POS.z + 2.45;
   teleportLocal(local, { x: outX, y: GROUND_Y, z: outZ }, Math.PI);
+  localRoomTransitioning = true;
   socket.emit('home:leaveRoom');
   const localPlayer = players.get(localPlayerId);
   if (localPlayer) localPlayer.currentRoomId = null;
@@ -11493,6 +11497,7 @@ function exitHouseRoomToHall(local) {
   if (houseHallGroup) houseHallGroup.visible = true;
   setHomeModalOpen(false);
   teleportLocal(local, { x: HOUSE_HALL_ENTRY_POS.x, y: GROUND_Y, z: HOUSE_HALL_ENTRY_POS.z }, Math.PI);
+  localRoomTransitioning = true;
   socket.emit('home:leaveRoom');
   const localPlayer = players.get(localPlayerId);
   if (localPlayer) localPlayer.currentRoomId = null;
@@ -11506,6 +11511,7 @@ function enterHouseRoom(local, roomId) {
    if (houseRoomGroup) houseRoomGroup.visible = true;
    teleportLocal(local, { x: HOUSE_ROOM_ENTRY_POS.x, y: GROUND_Y, z: HOUSE_ROOM_ENTRY_POS.z }, Math.PI);
    if (roomId) {
+     localRoomTransitioning = true;
      socket.emit('home:enterRoom', { roomId });
      const localPlayer = players.get(localPlayerId);
      if (localPlayer) localPlayer.currentRoomId = roomId;
@@ -11522,6 +11528,7 @@ function exitHouseRoomToMain(local) {
    const outX = HOUSE_DOOR_POS.x;
    const outZ = HOUSE_DOOR_POS.z + 2.45;
    teleportLocal(local, { x: outX, y: GROUND_Y, z: outZ }, Math.PI);
+   localRoomTransitioning = true;
    socket.emit('home:leaveRoom');
    const localPlayer = players.get(localPlayerId);
    if (localPlayer) localPlayer.currentRoomId = null;
@@ -12112,20 +12119,30 @@ socket.on('debug:kicked', (payload) => {
 socket.on('playerJoined', (payload) => {
   if (!isAuthenticated) return;
   addPlayer(payload);
-  appendChatLine({
-    text: `${displayNameWithTag(payload.name || 'A player', payload?.accountTag)} joined the island.`,
-    isSystem: true
-  });
+  if (localRoomTransitioning) return;
+  const id = payload.id;
+  const name = displayNameWithTag(payload.name || 'A player', payload?.accountTag);
+  const timer = setTimeout(() => {
+    pendingJoinMessages.delete(id);
+    appendChatLine({
+      text: `${name} joined the island.`,
+      isSystem: true
+    });
+  }, 200);
+  pendingJoinMessages.set(id, timer);
 });
 
 socket.on('playerLeft', (id) => {
   if (!isAuthenticated) return;
   const player = players.get(id);
   removePlayer(id);
-  appendChatLine({
-    text: `${displayNameWithTag(player?.name || `Player-${id.slice(0, 4)}`, player?.accountTag)} left the island.`,
-    isSystem: true
-  });
+  if (localRoomTransitioning) return;
+  const name = displayNameWithTag(player?.name || `Player-${id.slice(0, 4)}`, player?.accountTag);
+  const timer = setTimeout(() => {
+    pendingLeaveMessages.delete(id);
+    appendChatLine({ text: `${name} left the island.`, isSystem: true });
+  }, 200);
+  pendingLeaveMessages.set(id, timer);
 });
 
 socket.on('playerMoved', ({
@@ -12183,8 +12200,40 @@ socket.on('playerMoved', ({
 socket.on('playerRoom', ({ id, roomId }) => {
   const player = players.get(id);
   if (!player) return;
-  player.currentRoomId = roomId || null;
+  const wasInRoom = player.currentRoomId || null;
+  const nowInRoom = roomId || null;
+  player.currentRoomId = nowInRoom;
   updatePlayerVisibility(player);
+  if (id === localPlayerId) {
+    localRoomTransitioning = false;
+    return;
+  }
+  // Cancel any pending join/leave messages for room transitions
+  const pendingJoin = pendingJoinMessages.get(id);
+  if (pendingJoin) {
+    clearTimeout(pendingJoin);
+    pendingJoinMessages.delete(id);
+  }
+  const pendingLeave = pendingLeaveMessages.get(id);
+  if (pendingLeave) {
+    clearTimeout(pendingLeave);
+    pendingLeaveMessages.delete(id);
+  }
+  const localRoom = localEffectiveRoomId();
+  const name = displayNameWithTag(player.name || 'A player', player.accountTag);
+  if (!wasInRoom && nowInRoom) {
+    if (localRoom) {
+      appendChatLine({ text: `${name} entered the room.`, isSystem: true });
+    } else {
+      appendChatLine({ text: `${name} entered a room.`, isSystem: true });
+    }
+  } else if (wasInRoom && !nowInRoom) {
+    if (localRoom) {
+      appendChatLine({ text: `${name} left the room.`, isSystem: true });
+    } else {
+      appendChatLine({ text: `${name} returned to the island.`, isSystem: true });
+    }
+  }
 });
 
 socket.on('playerGear', ({ id, pickaxe, torchEquipped: nextTorchEquipped, hasFishingRod, fishingRodTier, isFishing }) => {
@@ -13080,8 +13129,10 @@ homeUnclaimEl?.addEventListener('click', () => {
     primaryLabel: 'Sell Room',
     secondaryLabel: 'Cancel',
     onPrimary: () => {
+      localRoomTransitioning = true;
       socket.emit('home:unclaimRoom', {}, (resp) => {
         if (!resp?.ok) {
+          localRoomTransitioning = false;
           setHomeStatus(resp?.error || 'Could not unclaim room.', '#fecaca');
           return;
         }
