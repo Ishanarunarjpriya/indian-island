@@ -348,9 +348,9 @@
       "faceStyle": "smile",
       "accessories": []
     },
-    "x": 87.71290211887651,
+    "x": 16.031382309228285,
     "y": 1.35,
-    "z": 75.78246381630603,
+    "z": -4.546680740925399,
     "progress": {
       "coins": 0,
       "xp": 0,
@@ -414,7 +414,91 @@
         }
       },
       "furnitureTrader": {
-        "cycleId": 985431,
+        "cycleId": 985433,
+        "purchasedThisCycle": {}
+      }
+    }
+  },
+  "acct-guest_l483w1m3": {
+    "name": "guest_l483w1m3",
+    "color": "#f1172b",
+    "appearance": {
+      "skin": "#f3cfb3",
+      "shirt": "#f1172b",
+      "pants": "#334155",
+      "shoes": "#111827",
+      "hairStyle": "short",
+      "hairColor": "#2b211c",
+      "faceStyle": "smile",
+      "accessories": []
+    },
+    "x": 4.420483518370172,
+    "y": 1.35,
+    "z": -14.758850695040003,
+    "progress": {
+      "coins": 0,
+      "xp": 0,
+      "level": 1,
+      "pickaxe": "wood",
+      "inventory": {
+        "stone": 0,
+        "iron": 0,
+        "gold": 0,
+        "diamond": 0,
+        "torch": 1,
+        "fish": 0
+      },
+      "fishBag": {},
+      "fishIndex": {},
+      "hasFishingRod": false,
+      "fishingRodTier": "basic",
+      "maxStaminaBonusPct": 0,
+      "questSeed": 1,
+      "quest": {
+        "id": "q-1773779543343-1",
+        "type": "mine",
+        "resource": "iron",
+        "targetCount": 15,
+        "progress": 0,
+        "rewardXp": 177,
+        "rewardDiamonds": 0,
+        "title": "Mine 15 ore",
+        "description": "Collect 15 ore chunks in the mine.",
+        "status": "available"
+      },
+      "fishingQuestSeed": 1,
+      "fishingQuestCompletions": 0,
+      "fishingQuest": {
+        "id": "fq-1773779543343-1",
+        "type": "fishing",
+        "status": "available",
+        "targetRarity": "common",
+        "targetFishId": null,
+        "targetCount": 5,
+        "progress": 0,
+        "rewardXp": 107,
+        "title": "Turn in 5 common fish",
+        "description": "Bring 5 common fish to the Market Trader."
+      },
+      "homeRoom": {
+        "roomId": null,
+        "wallPaint": "sand",
+        "floorPaint": "oak",
+        "ownedFurniture": {
+          "bed": false,
+          "table": false,
+          "lamp": false,
+          "plant": false
+        },
+        "placedFurniture": {
+          "bed": false,
+          "table": false,
+          "lamp": false,
+          "plant": false
+        }
+      },
+      "furnitureTrader": {
+        "cycleId": 985433,
         "purchasedThisCycle": {}
       }
     }

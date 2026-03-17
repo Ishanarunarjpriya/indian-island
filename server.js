@@ -191,9 +191,15 @@ const ORE_SELL_PRICE = {
 const HOME_ROOM_PAINT_PRICE = 90;
 const HOME_ROOM_FURNITURE_SHOP = {
   bed: { label: 'Bed', price: 520, stock: 1, occasionallyAvailable: false },
-  table: { label: 'Table', price: 320, stock: 1, occasionallyAvailable: false },
-  lamp: { label: 'Lamp', price: 220, stock: 1, occasionallyAvailable: true, availabilityChance: 0.62 },
-  plant: { label: 'Plant', price: 180, stock: 1, occasionallyAvailable: true, availabilityChance: 0.48 }
+  table: { label: 'Desk', price: 320, stock: 1, occasionallyAvailable: false },
+  lamp: { label: 'Reading Lamp', price: 220, stock: 1, occasionallyAvailable: true, availabilityChance: 0.62 },
+  plant: { label: 'Plant', price: 180, stock: 1, occasionallyAvailable: true, availabilityChance: 0.48 },
+  sofa: { label: 'Sofa', price: 900, stock: 1, occasionallyAvailable: false },
+  'coffee-table': { label: 'Coffee Table', price: 260, stock: 1, occasionallyAvailable: false },
+  bookshelf: { label: 'Bookshelf', price: 620, stock: 1, occasionallyAvailable: true, availabilityChance: 0.55 },
+  dresser: { label: 'Dresser', price: 520, stock: 1, occasionallyAvailable: true, availabilityChance: 0.58 },
+  rug: { label: 'Bedroom Rug', price: 240, stock: 1, occasionallyAvailable: false },
+  wallart: { label: 'Wall Art', price: 200, stock: 1, occasionallyAvailable: true, availabilityChance: 0.65 }
 };
 const HOME_ROOM_FURNITURE_PRICE = Object.fromEntries(
   Object.entries(HOME_ROOM_FURNITURE_SHOP).map(([itemId, item]) => [itemId, item.price])
@@ -353,6 +359,34 @@ function formatDurationMs(ms) {
 
 function isBanActive(banUntil) {
   return normalizeBanUntil(banUntil) > Date.now();
+}
+
+function getActiveBannedAccounts() {
+  const now = Date.now();
+  let dirty = false;
+  const bannedAccounts = [];
+  for (const [usernameKey, account] of accounts.entries()) {
+    const username = sanitizeUsername(account?.username || usernameKey);
+    if (!username) continue;
+    const bannedUntil = normalizeBanUntil(account?.bannedUntil);
+    if (!bannedUntil) continue;
+    if (bannedUntil <= now) {
+      account.bannedUntil = 0;
+      dirty = true;
+      continue;
+    }
+    const profileId = sanitizeProfileId(account?.profileId) || `acct-${username}`;
+    bannedAccounts.push({ username, profileId, bannedUntil });
+  }
+  if (dirty) {
+    scheduleAccountSave();
+  }
+  bannedAccounts.sort((a, b) => {
+    const usernameCmp = a.username.localeCompare(b.username);
+    if (usernameCmp !== 0) return usernameCmp;
+    return a.bannedUntil - b.bannedUntil;
+  });
+  return bannedAccounts;
 }
 
 function xpNeededForLevel(level) {
@@ -718,23 +752,19 @@ function defaultQuest(seed = 1) {
 }
 
 function defaultHomeRoom() {
+  const ownedFurniture = {};
+  const placedFurniture = {};
+  for (const itemId of HOME_ROOM_FURNITURE_IDS) {
+    ownedFurniture[itemId] = false;
+    placedFurniture[itemId] = false;
+  }
   return {
     roomId: null,
     doorOpen: true,
     wallPaint: 'sand',
     floorPaint: 'oak',
-    ownedFurniture: {
-      bed: false,
-      table: false,
-      lamp: false,
-      plant: false
-    },
-    placedFurniture: {
-      bed: false,
-      table: false,
-      lamp: false,
-      plant: false
-    }
+    ownedFurniture,
+    placedFurniture
   };
 }
 
@@ -3358,6 +3388,17 @@ io.on('connection', (socket) => {
       emitProgress(targetSocket, target);
     }
     if (typeof ack === 'function') ack({ ok: true });
+  });
+
+  socket.on('debug:listBans', (payload, ack) => {
+    const actor = players.get(socket.id);
+    if (!actor || !isCreatorPlayer(actor)) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Creator access required.' });
+      return;
+    }
+    if (typeof ack === 'function') {
+      ack({ ok: true, accounts: getActiveBannedAccounts() });
+    }
   });
 
   socket.on('debug:kick', (payload, ack) => {

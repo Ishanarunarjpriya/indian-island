@@ -2,31 +2,43 @@
   "devansh": {
     "salt": "8256e5ad8d510ae216a78de5a081143d",
     "hash": "753bd659d4c44f9ac5d382425ed61faa73b99c5a2dbd2958c6df3d693b0905a42e7eaf159799bf57e017988b5074ca995af24955e1ae7629ea2992a1d42b61c3",
-    "profileId": "acct-devansh"
+    "profileId": "acct-devansh",
+    "bannedUntil": 0
   },
   "devansh_testing": {
     "salt": "ff838cbfe6590a5570e1c583309d2b4a",
     "hash": "ff1ab6cb620937e8705a2667a6c16ba43807c5a55d90093b6b8e17fe37791feecf6b9ada13ac49b8f241f3b5a0680b55b7652b199ef52130db45e99d40eb421b",
-    "profileId": "acct-devansh_testing"
+    "profileId": "acct-devansh_testing",
+    "bannedUntil": 0
   },
   "guest_62532r69": {
     "salt": "bb1a51416ac7f2a5173cca924b221c6b",
     "hash": "09e63accd75b9d5e1dc86db4460e63b49d7c2e6685956357db0009df56899d0fa885fb39afb13ca6e93b0d79547c922bac349994d9881b32b4d870ff3d450aff",
-    "profileId": "acct-guest_62532r69"
+    "profileId": "acct-guest_62532r69",
+    "bannedUntil": 0
   },
   "guest_l483w1m4": {
     "salt": "3c54597ac0121e6da1245d58dc51cb81",
     "hash": "06472dc1702f780174b976a1f87dfd8d8c3681fbc9d7bab409aac0667f5b3aab85468304fbf7b79c5d7df0607fc3b18b5040d11d3ad005f97643720399fa95fb",
-    "profileId": "acct-guest_l483w1m4"
+    "profileId": "acct-guest_l483w1m4",
+    "bannedUntil": 0
   },
   "ishy": {
     "salt": "76bb6eb39f54b594486a92242a58f2c3",
     "hash": "b1a52c18301a6ca8aef9e0d0ba6ac455cecc35b1bcd8acce2a1705f278455db50e8de259b1a29548f2af552edfb11c79111aa1fff35e41c65127f91b9f8f9228",
-    "profileId": "acct-ishy"
+    "profileId": "acct-ishy",
+    "bannedUntil": 0
   },
   "codexdebug23404845": {
     "salt": "d6865dd9dc1ec8cb388aafe651385cc7",
     "hash": "8465d9bd69ce6ed2be45feb0ac608999caf512b87038b1146f8c75c349e6a1402777c8e41f600343b90fe4754df8dc79e3575973a1846d20964cda4879165dd3",
-    "profileId": "acct-codexdebug23404845"
+    "profileId": "acct-codexdebug23404845",
+    "bannedUntil": 0
+  },
+  "guest_l483w1m3": {
+    "salt": "4afd175a7b5613a014fad52e2d076b59",
+    "hash": "4d275c817ff223252d4d3344fb808f3be3d43d0dd22ca4e405dd8b91d4ad876d26ec29003727b10b226c51da7a648d944b7720c94f90de9fed4725239727bfdd",
+    "profileId": "acct-guest_l483w1m3",
+    "bannedUntil": 0
   }
 }

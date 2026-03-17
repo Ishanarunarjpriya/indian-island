@@ -15,6 +15,7 @@ let pendingJump = false;
 let emoteWheelOpen = false;
 let menuOpen = false;
 let debugMenuOpen = false;
+let debugBannedAccounts = [];
 let isAuthenticated = false;
 const CHAT_BUBBLE_MS = 4500;
 let lastMineAt = 0;
@@ -66,9 +67,15 @@ const HOME_ROOM_FLOOR_OPTIONS = {
 };
 const HOME_ROOM_FURNITURE_SHOP = {
   bed: { label: 'Bed', price: 520, occasionallyAvailable: false },
-  table: { label: 'Table', price: 320, occasionallyAvailable: false },
-  lamp: { label: 'Lamp', price: 220, occasionallyAvailable: true },
-  plant: { label: 'Plant', price: 180, occasionallyAvailable: true }
+  table: { label: 'Desk', price: 320, occasionallyAvailable: false },
+  lamp: { label: 'Reading Lamp', price: 220, occasionallyAvailable: true },
+  plant: { label: 'Plant', price: 180, occasionallyAvailable: true },
+  sofa: { label: 'Sofa', price: 900, occasionallyAvailable: false },
+  'coffee-table': { label: 'Coffee Table', price: 260, occasionallyAvailable: false },
+  bookshelf: { label: 'Bookshelf', price: 620, occasionallyAvailable: true },
+  dresser: { label: 'Dresser', price: 520, occasionallyAvailable: true },
+  rug: { label: 'Bedroom Rug', price: 240, occasionallyAvailable: false },
+  wallart: { label: 'Wall Art', price: 200, occasionallyAvailable: true }
 };
 const HOME_ROOM_FURNITURE_ORDER = Object.keys(HOME_ROOM_FURNITURE_SHOP);
 
@@ -143,22 +150,19 @@ function normalizeFurnitureTraderState(value) {
 }
 
 function defaultHomeRoomState() {
+  const ownedFurniture = {};
+  const placedFurniture = {};
+  for (const itemId of HOME_ROOM_FURNITURE_ORDER) {
+    ownedFurniture[itemId] = false;
+    placedFurniture[itemId] = false;
+  }
   return {
     roomId: null,
+    doorOpen: true,
     wallPaint: 'sand',
     floorPaint: 'oak',
-    ownedFurniture: {
-      bed: false,
-      table: false,
-      lamp: false,
-      plant: false
-    },
-    placedFurniture: {
-      bed: false,
-      table: false,
-      lamp: false,
-      plant: false
-    }
+    ownedFurniture,
+    placedFurniture
   };
 }
 
@@ -168,6 +172,9 @@ function normalizeHomeRoomState(value) {
   const roomIdRaw = typeof value.roomId === 'string' ? value.roomId.trim() : '';
   if (HOUSE_ROOM_IDS.includes(roomIdRaw)) {
     base.roomId = roomIdRaw;
+  }
+  if (typeof value.doorOpen === 'boolean') {
+    base.doorOpen = value.doorOpen;
   }
   const wallPaintRaw = typeof value.wallPaint === 'string' ? value.wallPaint.trim().toLowerCase() : '';
   const floorPaintRaw = typeof value.floorPaint === 'string' ? value.floorPaint.trim().toLowerCase() : '';
@@ -613,6 +620,9 @@ const debugBanDurationEl = document.getElementById('debug-ban-duration');
 const debugBanUnitEl = document.getElementById('debug-ban-unit');
 const debugBanEl = document.getElementById('debug-ban');
 const debugUnbanEl = document.getElementById('debug-unban');
+const debugBannedPlayerEl = document.getElementById('debug-banned-player');
+const debugBansRefreshEl = document.getElementById('debug-bans-refresh');
+const debugBannedUnbanEl = document.getElementById('debug-banned-unban');
 const debugStatusEl = document.getElementById('debug-status');
 const saveQuitEl = document.getElementById('save-quit');
 const authModalEl = document.getElementById('auth-modal');
@@ -707,6 +717,8 @@ const homeFloorSelectEl = document.getElementById('home-floor-select');
 const homeWallApplyEl = document.getElementById('home-wall-apply');
 const homeFloorApplyEl = document.getElementById('home-floor-apply');
 const homeFurnitureListEl = document.getElementById('home-furniture-list');
+const homeDoorToggleEl = document.getElementById('home-door-toggle');
+const homeDoorNoteEl = document.getElementById('home-door-note');
 const homeStatusEl = document.getElementById('home-status');
 const gameplayPanels = [
   'hud', 'mini-panel', 'chat-panel', 'world-state', 'top-left-toolbar',
@@ -1301,6 +1313,7 @@ function setDebugMenuOpen(open) {
     closeCommerceModals();
     closeNpcDialogue();
     refreshDebugPlayerLists();
+    requestDebugBannedAccounts({ silent: true });
     refreshDebugItemOptions();
     refreshDebugWorldControls();
   }
@@ -1342,6 +1355,59 @@ function refreshDebugPlayerLists() {
   fillSelect(debugPlayerSelectEl);
   fillSelect(debugProgressPlayerEl);
   fillSelect(debugKickPlayerEl);
+}
+
+function renderDebugBannedAccounts() {
+  if (!debugBannedPlayerEl) return;
+  const previous = String(debugBannedPlayerEl.value || '').trim();
+  debugBannedPlayerEl.innerHTML = '';
+  if (!debugBannedAccounts.length) {
+    const option = document.createElement('option');
+    option.value = '';
+    option.textContent = 'No active bans';
+    option.disabled = true;
+    option.selected = true;
+    debugBannedPlayerEl.appendChild(option);
+    debugBannedPlayerEl.disabled = true;
+    return;
+  }
+  debugBannedPlayerEl.disabled = false;
+  debugBannedAccounts.forEach((entry) => {
+    const option = document.createElement('option');
+    option.value = entry.profileId || `acct-${entry.username}`;
+    const untilLabel = Number.isFinite(Number(entry.bannedUntil))
+      ? new Date(Number(entry.bannedUntil)).toLocaleString()
+      : 'unknown';
+    option.textContent = `@${entry.username} - until ${untilLabel}`;
+    debugBannedPlayerEl.appendChild(option);
+  });
+  if ([...debugBannedPlayerEl.options].some((option) => option.value === previous)) {
+    debugBannedPlayerEl.value = previous;
+  }
+}
+
+function requestDebugBannedAccounts({ silent = false } = {}) {
+  if (!isCreatorAccount() || !socket.connected) return;
+  socket.emit('debug:listBans', {}, (resp) => {
+    if (!resp?.ok) {
+      if (!silent) {
+        setDebugStatus(resp?.error || 'Could not load banned accounts.', true);
+      }
+      return;
+    }
+    debugBannedAccounts = Array.isArray(resp.accounts)
+      ? resp.accounts.map((entry) => ({
+        username: String(entry?.username || '').trim().toLowerCase(),
+        profileId: String(entry?.profileId || '').trim().toLowerCase(),
+        bannedUntil: Math.floor(Number(entry?.bannedUntil) || 0)
+      })).filter((entry) => entry.username && entry.bannedUntil > 0)
+      : [];
+    renderDebugBannedAccounts();
+    if (!silent) {
+      const count = debugBannedAccounts.length;
+      setDebugStatus(count ? `Loaded ${count} banned account${count === 1 ? '' : 's'}.` : 'No active bans.');
+    }
+  });
 }
 
 function refreshDebugItemOptions() {
@@ -1457,7 +1523,7 @@ function sendDebugKick() {
 function sendDebugBan(action) {
   const targetId = String(debugKickPlayerEl?.value || '').trim();
   if (!targetId) {
-    setDebugStatus('Select a player to ban.', true);
+    setDebugStatus(action === 'unban' ? 'Select a player to unban.' : 'Select a player to ban.', true);
     return;
   }
   const target = players.get(targetId);
@@ -1488,6 +1554,34 @@ function sendDebugBan(action) {
       return;
     }
     setDebugStatus(resp?.message || (action === 'unban' ? 'Account unbanned.' : 'Account banned.'));
+    requestDebugBannedAccounts({ silent: true });
+  });
+}
+
+function sendDebugBannedUnban() {
+  const selectedKey = String(debugBannedPlayerEl?.value || '').trim();
+  if (!selectedKey) {
+    setDebugStatus('Select a banned account to unban.', true);
+    return;
+  }
+  const target = debugBannedAccounts.find((entry) => (entry.profileId || `acct-${entry.username}`) === selectedKey);
+  if (!target) {
+    setDebugStatus('Selected banned account is no longer available.', true);
+    requestDebugBannedAccounts({ silent: true });
+    return;
+  }
+  socket.emit('debug:ban', {
+    targetUsername: target.username,
+    targetProfileId: target.profileId,
+    action: 'unban',
+    durationMs: 0
+  }, (resp) => {
+    if (!resp?.ok) {
+      setDebugStatus(resp?.error || 'Unban failed.', true);
+      return;
+    }
+    setDebugStatus(resp?.message || `@${target.username} unbanned.`);
+    requestDebugBannedAccounts({ silent: true });
   });
 }
 
@@ -4896,6 +4990,9 @@ function addMainHouseRoomInterior() {
   const chainMat = new THREE.MeshStandardMaterial({ color: 0x71717a, roughness: 0.4, metalness: 0.6 });
   const brassMat = new THREE.MeshStandardMaterial({ color: 0xc69332, roughness: 0.28, metalness: 0.82 });
   const linenMat = new THREE.MeshStandardMaterial({ color: 0xf4ead0, roughness: 0.72, side: THREE.DoubleSide });
+  const sofaMat = new THREE.MeshStandardMaterial({ color: 0xd4c7b5, roughness: 0.84 });
+  const sofaAccentMat = new THREE.MeshStandardMaterial({ color: 0xb98b66, roughness: 0.82 });
+  const artCanvasMat = new THREE.MeshStandardMaterial({ color: 0x60a5fa, roughness: 0.72 });
   const curtainMat = new THREE.MeshStandardMaterial({ color: 0x9f6f48, roughness: 0.9 });
   const accentPanelMat = new THREE.MeshStandardMaterial({ color: 0x8b5a3c, roughness: 0.88 });
   const deskTopMat = new THREE.MeshStandardMaterial({ color: 0x6f4a2f, roughness: 0.84 });
@@ -5686,6 +5783,108 @@ function addMainHouseRoomInterior() {
   plant.position.set(roomCenterX - halfWidth + 2.45, floorY, roomCenterZ + 2.1);
   addFurniture('plant', plant);
 
+  const sofa = new THREE.Group();
+  const sofaBase = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.36, 1.1), sofaMat);
+  sofaBase.position.y = 0.42;
+  const sofaBack = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.78, 0.18), sofaMat);
+  sofaBack.position.set(0, 0.86, -0.46);
+  const sofaArmL = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.6, 1.02), sofaAccentMat);
+  sofaArmL.position.set(-1.2, 0.6, 0);
+  const sofaArmR = sofaArmL.clone();
+  sofaArmR.position.x = 1.2;
+  const sofaCushion = new THREE.Mesh(new THREE.BoxGeometry(2.3, 0.14, 0.92), linenMat);
+  sofaCushion.position.y = 0.6;
+  for (const sx of [-1, 1]) {
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.26, 0.08), deskBaseMat);
+    leg.position.set(sx * 1.1, 0.13, -0.36);
+    sofa.add(leg);
+    const legBack = leg.clone();
+    legBack.position.z = 0.36;
+    sofa.add(legBack);
+  }
+  sofa.add(sofaBase, sofaBack, sofaArmL, sofaArmR, sofaCushion);
+  sofa.position.set(loungeCenterX - 2.2, floorY, loungeCenterZ + 0.75);
+  sofa.rotation.y = Math.PI * 0.5;
+  addFurniture('sofa', sofa);
+
+  const coffeeTable = new THREE.Group();
+  const coffeeTop = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.08, 0.76), deskTopMat);
+  coffeeTop.position.y = 0.46;
+  coffeeTable.add(coffeeTop);
+  for (const sx of [-1, 1]) {
+    for (const sz of [-1, 1]) {
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.4, 0.08), deskBaseMat);
+      leg.position.set(sx * 0.52, 0.2, sz * 0.26);
+      coffeeTable.add(leg);
+    }
+  }
+  coffeeTable.position.set(loungeCenterX - 0.6, floorY, loungeCenterZ + 0.45);
+  addFurniture('coffee-table', coffeeTable);
+
+  const bookshelf = new THREE.Group();
+  const shelfBody = new THREE.Mesh(new THREE.BoxGeometry(1.5, 2.3, 0.34), shelfMat);
+  shelfBody.position.y = 1.15;
+  bookshelf.add(shelfBody);
+  const shelfSlots = [-0.65, 0, 0.65];
+  shelfSlots.forEach((offsetY) => {
+    const shelf = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.08, 0.3), deskBaseMat);
+    shelf.position.set(0, 1.15 + offsetY, 0.02);
+    bookshelf.add(shelf);
+  });
+  const bookPalette = [0x2563eb, 0x16a34a, 0xdc2626, 0xf59e0b];
+  bookPalette.forEach((color, i) => {
+    const book = new THREE.Mesh(
+      new THREE.BoxGeometry(0.16, 0.3, 0.22),
+      new THREE.MeshStandardMaterial({ color, roughness: 0.75 })
+    );
+    book.position.set(-0.5 + i * 0.32, 1.62, 0.08);
+    bookshelf.add(book);
+  });
+  bookshelf.position.set(roomCenterX - halfWidth + 1.05, floorY, roomCenterZ - 1.6);
+  bookshelf.rotation.y = Math.PI * 0.5;
+  addFurniture('bookshelf', bookshelf);
+
+  const dresser = new THREE.Group();
+  const dresserBody = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.9, 0.62), deskBaseMat);
+  dresserBody.position.y = 0.55;
+  const dresserTop = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.08, 0.7), deskTopMat);
+  dresserTop.position.y = 1.02;
+  dresser.add(dresserBody, dresserTop);
+  for (let i = 0; i < 3; i += 1) {
+    const drawer = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.18, 0.04), accentPanelMat);
+    drawer.position.set(0, 0.3 + i * 0.24, 0.34);
+    dresser.add(drawer);
+  }
+  dresser.position.set(roomCenterX + halfWidth - 1.4, floorY, roomCenterZ + 1.45);
+  dresser.rotation.y = -Math.PI * 0.5;
+  addFurniture('dresser', dresser);
+
+  const bedroomRug = new THREE.Group();
+  const rugBase = new THREE.Mesh(
+    new THREE.BoxGeometry(3.1, 0.035, 2.1),
+    new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.82 })
+  );
+  rugBase.position.y = 0.02;
+  const rugInset = new THREE.Mesh(
+    new THREE.BoxGeometry(2.4, 0.03, 1.5),
+    new THREE.MeshStandardMaterial({ color: 0xcbd5f5, roughness: 0.8 })
+  );
+  rugInset.position.y = 0.035;
+  bedroomRug.add(rugBase, rugInset);
+  bedroomRug.position.set(bedroomCenterX, floorY, bedroomCenterZ);
+  addFurniture('rug', bedroomRug);
+
+  const wallArt = new THREE.Group();
+  const artFrame = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.05, 0.08), accentPanelMat);
+  artFrame.position.y = 2.55;
+  const artCanvas = new THREE.Mesh(new THREE.BoxGeometry(1.36, 0.8, 0.04), artCanvasMat);
+  artCanvas.position.y = 2.55;
+  artCanvas.position.z = 0.04;
+  wallArt.add(artFrame, artCanvas);
+  wallArt.position.set(roomCenterX - halfWidth + 0.12, floorY, roomCenterZ + 1.2);
+  wallArt.rotation.y = Math.PI * 0.5;
+  addFurniture('wallart', wallArt);
+
   const readingChair = new THREE.Group();
   const readingSeat = new THREE.Mesh(
     new THREE.BoxGeometry(1.0, 0.2, 1.04),
@@ -5783,6 +5982,7 @@ function addFishingShopInterior() {
    const halfDepth = SHOP_INTERIOR_HALF_DEPTH;
    const halfWidth = SHOP_INTERIOR_HALF_WIDTH;
    const doorWidth = 3.6;
+   const doorHeight = 3.9;
    const wallCenterY = floorY + wallHeight * 0.5;
    const wallPaint = '#0ea5e9';
    const floorPaint = '#5b4a3a';
@@ -5826,13 +6026,14 @@ function addFishingShopInterior() {
    frontRightWall.position.x = FISHING_SHOP_BASE.x + (doorWidth * 0.5 + frontSideWidth * 0.5);
    shop.add(frontRightWall);
 
-  const frontTopWall = new THREE.Mesh(new THREE.BoxGeometry(doorWidth, wallHeight * 0.4, wallThickness), wallMat);
-  frontTopWall.position.set(
-    FISHING_SHOP_BASE.x,
-    floorY + wallHeight - (wallHeight * 0.4) * 0.5,
-    FISHING_SHOP_BASE.z + halfDepth - wallThickness * 0.5
-  );
-  shop.add(frontTopWall);
+   const frontTopHeight = wallHeight - doorHeight;
+   const frontTopWall = new THREE.Mesh(new THREE.BoxGeometry(doorWidth, frontTopHeight, wallThickness), wallMat);
+   frontTopWall.position.set(
+     FISHING_SHOP_BASE.x,
+     floorY + doorHeight + frontTopHeight * 0.5,
+     FISHING_SHOP_BASE.z + halfDepth - wallThickness * 0.5
+   );
+   shop.add(frontTopWall);
 
    const counterMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.82 });
    const shelfMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.78 });
@@ -5841,6 +6042,16 @@ function addFishingShopInterior() {
    const rugMat = new THREE.MeshStandardMaterial({ color: 0x0ea5e9, roughness: 0.85 });
    const barrelMat = new THREE.MeshStandardMaterial({ color: 0x6b4a2e, roughness: 0.86 });
    const netMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.7, transparent: true, opacity: 0.5, side: THREE.DoubleSide });
+
+   const frameLeft = new THREE.Mesh(new THREE.BoxGeometry(0.18, doorHeight + 0.12, 0.16), trimMat);
+   frameLeft.position.set(FISHING_SHOP_BASE.x - doorWidth * 0.5 + 0.09, floorY + (doorHeight + 0.12) * 0.5, FISHING_SHOP_BASE.z + halfDepth - wallThickness);
+   shop.add(frameLeft);
+   const frameRight = frameLeft.clone();
+   frameRight.position.x = FISHING_SHOP_BASE.x + doorWidth * 0.5 - 0.09;
+   shop.add(frameRight);
+   const frameTop = new THREE.Mesh(new THREE.BoxGeometry(doorWidth + 0.18, 0.18, 0.16), trimMat);
+   frameTop.position.set(FISHING_SHOP_BASE.x, floorY + doorHeight + 0.08, FISHING_SHOP_BASE.z + halfDepth - wallThickness);
+   shop.add(frameTop);
 
    const counter = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.8, 1.1), counterMat);
    counter.position.set(FISHING_SHOP_COUNTER_POS.x, floorY + 0.4, FISHING_SHOP_COUNTER_POS.z);
@@ -5881,9 +6092,18 @@ function addFishingShopInterior() {
    shop.add(buySign);
 
    const doorMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.82 });
-   const exitDoor = new THREE.Mesh(new THREE.BoxGeometry(3.2, 3.1, 0.12), doorMat);
-   exitDoor.position.set(FISHING_SHOP_BASE.x, floorY + 1.55, FISHING_SHOP_BASE.z + halfDepth - 0.2);
+   const exitDoor = new THREE.Mesh(new THREE.BoxGeometry(doorWidth - 0.28, doorHeight - 0.12, 0.16), doorMat);
+   exitDoor.position.set(FISHING_SHOP_BASE.x, floorY + (doorHeight - 0.12) * 0.5, FISHING_SHOP_BASE.z + halfDepth - wallThickness);
    shop.add(exitDoor);
+   const exitDoorWindow = new THREE.Mesh(
+     new THREE.BoxGeometry(1.2, 0.72, 0.06),
+     new THREE.MeshStandardMaterial({ color: 0x93c5fd, roughness: 0.28, metalness: 0.08, transparent: true, opacity: 0.68 })
+   );
+   exitDoorWindow.position.set(FISHING_SHOP_BASE.x, floorY + 2.55, FISHING_SHOP_BASE.z + halfDepth - wallThickness - 0.06);
+   shop.add(exitDoorWindow);
+   const exitHandle = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 10), new THREE.MeshStandardMaterial({ color: 0xf8d17a, roughness: 0.25, metalness: 0.55 }));
+   exitHandle.position.set(FISHING_SHOP_BASE.x + 1.22, floorY + 1.55, FISHING_SHOP_BASE.z + halfDepth - wallThickness - 0.1);
+   shop.add(exitHandle);
    const exitRing = new THREE.Mesh(
      new THREE.TorusGeometry(0.9, 0.08, 12, 28),
      new THREE.MeshStandardMaterial({ color: 0x7dd3fc, emissive: 0x0ea5e9, emissiveIntensity: 0.7, roughness: 0.3 })
@@ -5896,16 +6116,6 @@ function addFishingShopInterior() {
    const rug = new THREE.Mesh(new THREE.BoxGeometry(4.6, 0.03, 2.6), rugMat);
    rug.position.set(FISHING_SHOP_BASE.x, floorY + 0.02, FISHING_SHOP_BASE.z - 0.4);
    shop.add(rug);
-
-   for (let i = 0; i < 3; i += 1) {
-     const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.6, 12), barrelMat);
-     barrel.position.set(FISHING_SHOP_BASE.x - 3.6 + i * 0.9, floorY + 0.3, FISHING_SHOP_BASE.z + halfDepth - 1.2);
-     shop.add(barrel);
-   }
-
-   const baitBucket = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.36, 0.42, 10), barrelMat);
-   baitBucket.position.set(FISHING_SHOP_BASE.x + 3.1, floorY + 0.21, FISHING_SHOP_BASE.z + 1.4);
-   shop.add(baitBucket);
 
    const tackleShelf = new THREE.Mesh(new THREE.BoxGeometry(0.25, 1.4, 3.6), shelfMat);
    tackleShelf.position.set(FISHING_SHOP_BASE.x + halfWidth - 0.5, floorY + 1.0, FISHING_SHOP_BASE.z + 0.6);
@@ -5921,11 +6131,13 @@ function addFishingShopInterior() {
    net.rotation.y = -Math.PI * 0.5;
    shop.add(net);
 
-   for (let i = 0; i < 2; i += 1) {
-     const paddle = new THREE.Mesh(new THREE.BoxGeometry(0.08, 2.4, 0.08), accentMat);
-     paddle.position.set(FISHING_SHOP_BASE.x - halfWidth + 0.6 + i * 0.4, floorY + 1.8, FISHING_SHOP_BASE.z - 0.6);
-     paddle.rotation.z = i === 0 ? 0.2 : -0.2;
-     shop.add(paddle);
+   const baitBench = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.42, 0.9), shelfMat);
+   baitBench.position.set(FISHING_SHOP_BASE.x - halfWidth + 1.7, floorY + 0.21, FISHING_SHOP_BASE.z + 1.5);
+   shop.add(baitBench);
+   for (let i = 0; i < 3; i += 1) {
+     const tackleBox = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.24, 0.38), accentMat);
+     tackleBox.position.set(FISHING_SHOP_BASE.x - halfWidth + 1.0 + i * 0.68, floorY + 0.56, FISHING_SHOP_BASE.z + 1.5);
+     shop.add(tackleBox);
    }
 
    const ceilingLight = new THREE.PointLight(0xfff4cc, 0.9, 9);
@@ -5935,15 +6147,13 @@ function addFishingShopInterior() {
    rope.position.set(FISHING_SHOP_BASE.x, floorY + wallHeight - 0.75, FISHING_SHOP_BASE.z);
    shop.add(rope);
 
-   const lampBase = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, 0.16, 10), shelfMat);
-   lampBase.position.set(FISHING_SHOP_BASE.x + 1.4, floorY + 0.88, FISHING_SHOP_COUNTER_POS.z + 0.5);
-   shop.add(lampBase);
-   const lampShade = new THREE.Mesh(new THREE.ConeGeometry(0.26, 0.3, 10), new THREE.MeshStandardMaterial({ color: 0xfef3c7, roughness: 0.5 }));
-   lampShade.position.set(FISHING_SHOP_BASE.x + 1.4, floorY + 1.12, FISHING_SHOP_COUNTER_POS.z + 0.5);
-   shop.add(lampShade);
-   const lampLight = new THREE.PointLight(0xfff3c4, 0.8, 6.5);
-   lampLight.position.set(FISHING_SHOP_BASE.x + 1.4, floorY + 1.2, FISHING_SHOP_COUNTER_POS.z + 0.5);
-   shop.add(lampLight);
+   const wallLamp = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.2, 10), shelfMat);
+   wallLamp.rotation.z = Math.PI * 0.5;
+   wallLamp.position.set(FISHING_SHOP_BASE.x - halfWidth + 0.18, floorY + 2.5, FISHING_SHOP_BASE.z - 0.8);
+   shop.add(wallLamp);
+   const wallLampGlow = new THREE.PointLight(0xfff3c4, 0.6, 4.5);
+   wallLampGlow.position.set(FISHING_SHOP_BASE.x - halfWidth + 0.4, floorY + 2.5, FISHING_SHOP_BASE.z - 0.8);
+   shop.add(wallLampGlow);
 
    shop.traverse((obj) => {
      if (!obj?.isMesh) return;
@@ -5971,6 +6181,7 @@ function addMarketShopInterior() {
    const halfDepth = SHOP_INTERIOR_HALF_DEPTH;
    const halfWidth = SHOP_INTERIOR_HALF_WIDTH;
    const doorWidth = 3.6;
+   const doorHeight = 3.9;
    const wallCenterY = floorY + wallHeight * 0.5;
    const wallPaint = '#f59e0b';
    const floorPaint = '#5b4a3a';
@@ -6014,10 +6225,11 @@ function addMarketShopInterior() {
    frontRightWall.position.x = MARKET_SHOP_BASE.x + (doorWidth * 0.5 + frontSideWidth * 0.5);
    shop.add(frontRightWall);
 
-   const frontTopWall = new THREE.Mesh(new THREE.BoxGeometry(doorWidth, wallHeight * 0.4, wallThickness), wallMat);
+   const frontTopHeight = wallHeight - doorHeight;
+   const frontTopWall = new THREE.Mesh(new THREE.BoxGeometry(doorWidth, frontTopHeight, wallThickness), wallMat);
    frontTopWall.position.set(
      MARKET_SHOP_BASE.x,
-     floorY + wallHeight - (wallHeight * 0.4) * 0.5,
+     floorY + doorHeight + frontTopHeight * 0.5,
      MARKET_SHOP_BASE.z + halfDepth - wallThickness * 0.5
    );
    shop.add(frontTopWall);
@@ -6028,6 +6240,16 @@ function addMarketShopInterior() {
    const ropeMat = new THREE.MeshStandardMaterial({ color: 0x8b6b4f, roughness: 0.9 });
    const rugMat = new THREE.MeshStandardMaterial({ color: 0xfbbf24, roughness: 0.85 });
    const netMat = new THREE.MeshStandardMaterial({ color: 0xd1d5db, roughness: 0.7, transparent: true, opacity: 0.55, side: THREE.DoubleSide });
+
+   const frameLeft = new THREE.Mesh(new THREE.BoxGeometry(0.18, doorHeight + 0.12, 0.16), trimMat);
+   frameLeft.position.set(MARKET_SHOP_BASE.x - doorWidth * 0.5 + 0.09, floorY + (doorHeight + 0.12) * 0.5, MARKET_SHOP_BASE.z + halfDepth - wallThickness);
+   shop.add(frameLeft);
+   const frameRight = frameLeft.clone();
+   frameRight.position.x = MARKET_SHOP_BASE.x + doorWidth * 0.5 - 0.09;
+   shop.add(frameRight);
+   const frameTop = new THREE.Mesh(new THREE.BoxGeometry(doorWidth + 0.18, 0.18, 0.16), trimMat);
+   frameTop.position.set(MARKET_SHOP_BASE.x, floorY + doorHeight + 0.08, MARKET_SHOP_BASE.z + halfDepth - wallThickness);
+   shop.add(frameTop);
 
    const counter = new THREE.Mesh(new THREE.BoxGeometry(4.4, 0.84, 1.2), counterMat);
    counter.position.set(MARKET_SHOP_COUNTER_POS.x, floorY + 0.42, MARKET_SHOP_COUNTER_POS.z);
@@ -6065,9 +6287,18 @@ function addMarketShopInterior() {
    shop.add(sign);
 
    const doorMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.82 });
-   const exitDoor = new THREE.Mesh(new THREE.BoxGeometry(3.2, 3.1, 0.12), doorMat);
-   exitDoor.position.set(MARKET_SHOP_BASE.x, floorY + 1.55, MARKET_SHOP_BASE.z + halfDepth - 0.2);
+   const exitDoor = new THREE.Mesh(new THREE.BoxGeometry(doorWidth - 0.28, doorHeight - 0.12, 0.16), doorMat);
+   exitDoor.position.set(MARKET_SHOP_BASE.x, floorY + (doorHeight - 0.12) * 0.5, MARKET_SHOP_BASE.z + halfDepth - wallThickness);
    shop.add(exitDoor);
+   const exitDoorWindow = new THREE.Mesh(
+     new THREE.BoxGeometry(1.2, 0.72, 0.06),
+     new THREE.MeshStandardMaterial({ color: 0xbfdbfe, roughness: 0.28, metalness: 0.08, transparent: true, opacity: 0.68 })
+   );
+   exitDoorWindow.position.set(MARKET_SHOP_BASE.x, floorY + 2.55, MARKET_SHOP_BASE.z + halfDepth - wallThickness - 0.06);
+   shop.add(exitDoorWindow);
+   const exitHandle = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 10), new THREE.MeshStandardMaterial({ color: 0xf8d17a, roughness: 0.25, metalness: 0.55 }));
+   exitHandle.position.set(MARKET_SHOP_BASE.x + 1.22, floorY + 1.55, MARKET_SHOP_BASE.z + halfDepth - wallThickness - 0.1);
+   shop.add(exitHandle);
    const exitRing = new THREE.Mesh(
      new THREE.TorusGeometry(0.9, 0.08, 12, 28),
      new THREE.MeshStandardMaterial({ color: 0x86efac, emissive: 0x22c55e, emissiveIntensity: 0.7, roughness: 0.3 })
@@ -6150,6 +6381,7 @@ function addFurnitureShopInterior() {
    const halfDepth = SHOP_INTERIOR_HALF_DEPTH;
    const halfWidth = SHOP_INTERIOR_HALF_WIDTH;
    const doorWidth = 3.6;
+   const doorHeight = 3.9;
    const wallCenterY = floorY + wallHeight * 0.5;
    const wallPaint = '#8b5cf6';
    const floorPaint = '#5b4a3a';
@@ -6193,19 +6425,30 @@ function addFurnitureShopInterior() {
    frontRightWall.position.x = FURNITURE_SHOP_BASE.x + (doorWidth * 0.5 + frontSideWidth * 0.5);
    shop.add(frontRightWall);
 
-  const frontTopWall = new THREE.Mesh(new THREE.BoxGeometry(doorWidth, wallHeight * 0.4, wallThickness), wallMat);
-  frontTopWall.position.set(
-    FURNITURE_SHOP_BASE.x,
-    floorY + wallHeight - (wallHeight * 0.4) * 0.5,
-    FURNITURE_SHOP_BASE.z + halfDepth - wallThickness * 0.5
-  );
-  shop.add(frontTopWall);
+   const frontTopHeight = wallHeight - doorHeight;
+   const frontTopWall = new THREE.Mesh(new THREE.BoxGeometry(doorWidth, frontTopHeight, wallThickness), wallMat);
+   frontTopWall.position.set(
+     FURNITURE_SHOP_BASE.x,
+     floorY + doorHeight + frontTopHeight * 0.5,
+     FURNITURE_SHOP_BASE.z + halfDepth - wallThickness * 0.5
+   );
+   shop.add(frontTopWall);
 
    const counterMat = new THREE.MeshStandardMaterial({ color: 0x2f1e14, roughness: 0.84 });
    const displayMat = new THREE.MeshStandardMaterial({ color: 0x6b4a2e, roughness: 0.86 });
    const accentMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.38, metalness: 0.2 });
    const rugMat = new THREE.MeshStandardMaterial({ color: 0x93c5fd, roughness: 0.85 });
    const ropeMat = new THREE.MeshStandardMaterial({ color: 0x8b6b4f, roughness: 0.9 });
+
+   const frameLeft = new THREE.Mesh(new THREE.BoxGeometry(0.18, doorHeight + 0.12, 0.16), trimMat);
+   frameLeft.position.set(FURNITURE_SHOP_BASE.x - doorWidth * 0.5 + 0.09, floorY + (doorHeight + 0.12) * 0.5, FURNITURE_SHOP_BASE.z + halfDepth - wallThickness);
+   shop.add(frameLeft);
+   const frameRight = frameLeft.clone();
+   frameRight.position.x = FURNITURE_SHOP_BASE.x + doorWidth * 0.5 - 0.09;
+   shop.add(frameRight);
+   const frameTop = new THREE.Mesh(new THREE.BoxGeometry(doorWidth + 0.18, 0.18, 0.16), trimMat);
+   frameTop.position.set(FURNITURE_SHOP_BASE.x, floorY + doorHeight + 0.08, FURNITURE_SHOP_BASE.z + halfDepth - wallThickness);
+   shop.add(frameTop);
 
    const counter = new THREE.Mesh(new THREE.BoxGeometry(4.6, 0.86, 1.2), counterMat);
    counter.position.set(FURNITURE_SHOP_COUNTER_POS.x, floorY + 0.43, FURNITURE_SHOP_COUNTER_POS.z);
@@ -6224,14 +6467,17 @@ function addFurnitureShopInterior() {
    sofaBack.position.set(FURNITURE_SHOP_BASE.x - 2.6, floorY + 0.8, FURNITURE_SHOP_BASE.z - 1.0);
    shop.add(sofaBack);
 
-   const lampBase = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.24, 0.18, 10), counterMat);
-   lampBase.position.set(FURNITURE_SHOP_BASE.x + 2.2, floorY + 0.78, FURNITURE_SHOP_BASE.z - 0.6);
-   shop.add(lampBase);
+   const sideTable = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.42, 0.72), displayMat);
+   sideTable.position.set(FURNITURE_SHOP_BASE.x + 2.3, floorY + 0.21, FURNITURE_SHOP_BASE.z - 0.55);
+   shop.add(sideTable);
+   const lampPole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.15, 8), counterMat);
+   lampPole.position.set(FURNITURE_SHOP_BASE.x + 2.3, floorY + 0.99, FURNITURE_SHOP_BASE.z - 0.55);
+   shop.add(lampPole);
    const lampShade = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.34, 10), new THREE.MeshStandardMaterial({ color: 0xfef3c7, roughness: 0.5 }));
-   lampShade.position.set(FURNITURE_SHOP_BASE.x + 2.2, floorY + 1.03, FURNITURE_SHOP_BASE.z - 0.6);
+   lampShade.position.set(FURNITURE_SHOP_BASE.x + 2.3, floorY + 1.72, FURNITURE_SHOP_BASE.z - 0.55);
    shop.add(lampShade);
    const lampLight = new THREE.PointLight(0xfff1c2, 0.75, 6);
-   lampLight.position.set(FURNITURE_SHOP_BASE.x + 2.2, floorY + 1.12, FURNITURE_SHOP_BASE.z - 0.6);
+   lampLight.position.set(FURNITURE_SHOP_BASE.x + 2.3, floorY + 1.8, FURNITURE_SHOP_BASE.z - 0.55);
    shop.add(lampLight);
 
    const vendor = createVendorNpc({
@@ -6250,9 +6496,18 @@ function addFurnitureShopInterior() {
    shop.add(sign);
 
    const doorMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.82 });
-   const exitDoor = new THREE.Mesh(new THREE.BoxGeometry(3.2, 3.1, 0.12), doorMat);
-   exitDoor.position.set(FURNITURE_SHOP_BASE.x, floorY + 1.55, FURNITURE_SHOP_BASE.z + halfDepth - 0.2);
+   const exitDoor = new THREE.Mesh(new THREE.BoxGeometry(doorWidth - 0.28, doorHeight - 0.12, 0.16), doorMat);
+   exitDoor.position.set(FURNITURE_SHOP_BASE.x, floorY + (doorHeight - 0.12) * 0.5, FURNITURE_SHOP_BASE.z + halfDepth - wallThickness);
    shop.add(exitDoor);
+   const exitDoorWindow = new THREE.Mesh(
+     new THREE.BoxGeometry(1.2, 0.72, 0.06),
+     new THREE.MeshStandardMaterial({ color: 0xbfdbfe, roughness: 0.28, metalness: 0.08, transparent: true, opacity: 0.68 })
+   );
+   exitDoorWindow.position.set(FURNITURE_SHOP_BASE.x, floorY + 2.55, FURNITURE_SHOP_BASE.z + halfDepth - wallThickness - 0.06);
+   shop.add(exitDoorWindow);
+   const exitHandle = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 10), new THREE.MeshStandardMaterial({ color: 0xf8d17a, roughness: 0.25, metalness: 0.55 }));
+   exitHandle.position.set(FURNITURE_SHOP_BASE.x + 1.22, floorY + 1.55, FURNITURE_SHOP_BASE.z + halfDepth - wallThickness - 0.1);
+   shop.add(exitHandle);
    const exitRing = new THREE.Mesh(
      new THREE.TorusGeometry(0.9, 0.08, 12, 28),
      new THREE.MeshStandardMaterial({ color: 0xfda4af, emissive: 0xfb7185, emissiveIntensity: 0.7, roughness: 0.3 })
@@ -8920,19 +9175,36 @@ function renderHomeModal() {
       const owned = room.ownedFurniture?.[itemId] === true;
       const placed = room.placedFurniture?.[itemId] === true;
       const card = document.createElement('article');
-      card.className = 'market-section';
-      card.style.margin = '0';
-      card.style.padding = '10px';
+      card.className = 'home-furniture-card';
+
+      const header = document.createElement('div');
+      header.className = 'home-furniture-header';
+
       const title = document.createElement('h3');
       title.textContent = item.label;
-      title.style.margin = '0';
-      title.style.fontSize = '15px';
+
+      const tag = document.createElement('span');
+      tag.className = 'home-furniture-tag';
+      if (owned) {
+        tag.textContent = placed ? 'Placed' : 'Stored';
+        tag.dataset.state = placed ? 'placed' : 'stored';
+      } else {
+        tag.textContent = item.occasionallyAvailable ? 'Occasional' : 'Standard';
+        tag.dataset.state = item.occasionallyAvailable ? 'occasional' : 'standard';
+      }
+
+      header.append(title, tag);
+
       const meta = document.createElement('div');
-      meta.style.fontSize = '12px';
-      meta.style.color = '#cbd5e1';
-      meta.textContent = owned
-        ? (placed ? 'Status: placed in room' : 'Status: owned (stored)')
-        : `${item.occasionallyAvailable ? 'Occasional stock item' : 'Regular stock item'}: buy at the Furniture Trader island.`;
+      meta.className = 'home-furniture-meta';
+      if (owned) {
+        meta.textContent = placed
+          ? 'Status: placed in your room.'
+          : 'Status: owned and stored.';
+      } else {
+        const priceText = item.price ? `${item.price.toLocaleString()} coins` : 'Market price';
+        meta.textContent = `Buy at the Furniture Trader island (${priceText}).`;
+      }
       const action = document.createElement('button');
       if (owned) {
         action.textContent = placed ? 'Store Item' : 'Place Item';
@@ -8953,7 +9225,10 @@ function renderHomeModal() {
         action.textContent = 'Buy At Trader';
         action.disabled = true;
       }
-      card.append(title, meta, action);
+      const actions = document.createElement('div');
+      actions.className = 'home-furniture-actions';
+      actions.append(action);
+      card.append(header, meta, actions);
       homeFurnitureListEl.appendChild(card);
     }
   }
@@ -12574,6 +12849,8 @@ debugRemoveEl?.addEventListener('click', () => sendDebugInventoryUpdate(-1));
 debugKickEl?.addEventListener('click', sendDebugKick);
 debugBanEl?.addEventListener('click', () => sendDebugBan('ban'));
 debugUnbanEl?.addEventListener('click', () => sendDebugBan('unban'));
+debugBansRefreshEl?.addEventListener('click', () => requestDebugBannedAccounts());
+debugBannedUnbanEl?.addEventListener('click', sendDebugBannedUnban);
 debugCoinsAddEl?.addEventListener('click', () => sendDebugProgressUpdate('coins', 'add'));
 debugCoinsRemoveEl?.addEventListener('click', () => sendDebugProgressUpdate('coins', 'remove'));
 debugXpAddEl?.addEventListener('click', () => sendDebugProgressUpdate('xp', 'add'));

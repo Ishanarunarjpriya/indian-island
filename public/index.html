@@ -1285,7 +1285,8 @@
 
       #home-grid {
         display: grid;
-        gap: 12px;
+        gap: 14px;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
       }
 
       #home-paint-grid {
@@ -1354,7 +1355,8 @@
 
       #home-furniture-list {
         display: grid;
-        gap: 10px;
+        gap: 12px;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
         max-height: 42vh;
         overflow: auto;
         padding-right: 2px;
@@ -1362,6 +1364,67 @@
 
       #home-furniture-list button {
         width: 100%;
+      }
+
+      .home-furniture-card {
+        border-radius: 14px;
+        border: 1px solid rgba(148, 163, 184, 0.24);
+        background: linear-gradient(150deg, rgba(15, 23, 42, 0.92), rgba(3, 12, 24, 0.72));
+        padding: 12px;
+        display: grid;
+        gap: 8px;
+      }
+
+      .home-furniture-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+
+      .home-furniture-header h3 {
+        margin: 0;
+        font-size: 15px;
+      }
+
+      .home-furniture-tag {
+        font-size: 10px;
+        letter-spacing: 0.4px;
+        text-transform: uppercase;
+        padding: 3px 8px;
+        border-radius: 999px;
+        border: 1px solid rgba(148, 163, 184, 0.3);
+        color: #e2e8f0;
+        background: rgba(15, 23, 42, 0.7);
+      }
+
+      .home-furniture-tag[data-state="placed"] {
+        border-color: rgba(34, 197, 94, 0.45);
+        color: #dcfce7;
+        background: rgba(22, 163, 74, 0.22);
+      }
+
+      .home-furniture-tag[data-state="stored"] {
+        border-color: rgba(59, 130, 246, 0.35);
+        color: #dbeafe;
+        background: rgba(37, 99, 235, 0.2);
+      }
+
+      .home-furniture-tag[data-state="occasional"] {
+        border-color: rgba(245, 158, 11, 0.4);
+        color: #fef3c7;
+        background: rgba(217, 119, 6, 0.18);
+      }
+
+      .home-furniture-meta {
+        font-size: 12px;
+        color: #cbd5e1;
+        line-height: 1.4;
+      }
+
+      .home-furniture-actions {
+        display: flex;
+        gap: 8px;
       }
 
       body.mining-focus #hud,
@@ -1504,6 +1567,15 @@
         padding: 0 10px;
         font-size: 12px;
         outline: none;
+      }
+
+      #debug-banned-player {
+        height: 148px;
+        padding: 8px 10px;
+      }
+
+      #debug-banned-player option {
+        padding: 4px 0;
       }
 
       .menu-actions.debug-row {
@@ -2654,7 +2726,18 @@
           </div>
           <div class="menu-actions">
             <button id="debug-ban" type="button">Ban Account</button>
-            <button id="debug-unban" type="button">Unban</button>
+            <button id="debug-unban" type="button">Unban Selected</button>
+          </div>
+        </section>
+        <section class="menu-section">
+          <h3>Banned Accounts</h3>
+          <div class="menu-actions debug-row">
+            <label class="debug-label" for="debug-banned-player">Banned List</label>
+            <select id="debug-banned-player" size="6"></select>
+          </div>
+          <div class="menu-actions">
+            <button id="debug-bans-refresh" type="button">Refresh List</button>
+            <button id="debug-banned-unban" type="button">Unban Account</button>
           </div>
         </section>
         <p id="debug-status"></p>
