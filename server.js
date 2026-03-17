@@ -2713,6 +2713,48 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('home:unclaimRoom', (payload, ack) => {
+    const actor = players.get(socket.id);
+    const progress = actor?.progress;
+    if (!actor || !progress) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Not authenticated.' });
+      return;
+    }
+    progress.homeRoom = sanitizeHomeRoom(progress.homeRoom);
+    const room = progress.homeRoom;
+    if (!room.roomId) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'You do not have a claimed room.' });
+      return;
+    }
+    const oldRoomId = room.roomId;
+    const sellPrice = 400;
+    progress.coins = clamp((progress.coins || 0) + sellPrice, 0, 100_000_000);
+    room.roomId = null;
+    room.doorOpen = true;
+    room.wallPaint = 'sand';
+    room.floorPaint = 'oak';
+    for (const itemId of HOME_ROOM_FURNITURE_IDS) {
+      const isStarter = HOME_ROOM_STARTER_FURNITURE.has(itemId);
+      room.ownedFurniture[itemId] = isStarter;
+      room.placedFurniture[itemId] = isStarter;
+    }
+    if (actor.currentRoomId === oldRoomId) {
+      actor.currentRoomId = null;
+      const newRoomName = effectiveRoomName(actor);
+      socket.leave(`home:${oldRoomId}`);
+      socket.join(newRoomName);
+      socket.to(`home:${oldRoomId}`).emit('playerLeft', socket.id);
+      socket.to(newRoomName).emit('playerJoined', actor);
+    }
+    players.set(socket.id, actor);
+    persistPlayerProgress(actor, { immediate: true });
+    emitProgress(socket, actor);
+    io.emit('home:roomUpdate', { roomId: oldRoomId, state: sanitizeHomeRoom(room) });
+    if (typeof ack === 'function') {
+      ack({ ok: true, roomId: oldRoomId, sellPrice, progress: progressSnapshot(progress) });
+    }
+  });
+
   socket.on('fish:start', (payload, ack) => {
     const actor = players.get(socket.id);
     const progress = actor?.progress;

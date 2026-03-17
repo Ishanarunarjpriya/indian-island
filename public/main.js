@@ -719,6 +719,7 @@ const homeFloorApplyEl = document.getElementById('home-floor-apply');
 const homeFurnitureListEl = document.getElementById('home-furniture-list');
 const homeDoorToggleEl = document.getElementById('home-door-toggle');
 const homeDoorNoteEl = document.getElementById('home-door-note');
+const homeUnclaimEl = document.getElementById('home-unclaim-btn');
 const homeStatusEl = document.getElementById('home-status');
 const gameplayPanels = [
   'hud', 'mini-panel', 'chat-panel', 'world-state', 'top-left-toolbar',
@@ -8430,6 +8431,7 @@ function addPlayer(data) {
     heldFishingRodTier: normalizeRodTier(data?.progress?.fishingRodTier || data?.fishingRodTier, 'basic'),
     isFishing: data?.isFishing === true,
     torchEquipped: Boolean(data.torchEquipped),
+    currentRoomId: data.currentRoomId || null,
     mineSwingStartedAt: 0,
     mineSwingUntil: 0,
     label: tag,
@@ -8440,6 +8442,7 @@ function addPlayer(data) {
   const player = players.get(data.id);
   paintPlayer(player, appearance);
   applyHeldGearVisual(player);
+  updatePlayerVisibility(player);
   updateHud();
   refreshDebugPlayerLists();
 }
@@ -8461,6 +8464,21 @@ function removePlayer(id) {
   players.delete(id);
   updateHud();
   refreshDebugPlayerLists();
+}
+
+function localEffectiveRoomId() {
+  const claimedId = normalizeHomeRoomState(questState.homeRoom).roomId;
+  return inHouseRoom && claimedId ? claimedId : null;
+}
+
+function updatePlayerVisibility(player) {
+  if (!player || player.isLocal) return;
+  const localRoom = localEffectiveRoomId();
+  const otherRoom = player.currentRoomId || null;
+  const sameRoom = localRoom === otherRoom;
+  player.mesh.visible = sameRoom;
+  if (player.label) player.label.style.display = sameRoom ? '' : 'none';
+  if (player.bubble) player.bubble.style.display = sameRoom ? player.bubble.style.display : 'none';
 }
 
 function showChatBubble(id, text) {
@@ -9231,6 +9249,9 @@ function renderHomeModal() {
       card.append(header, meta, actions);
       homeFurnitureListEl.appendChild(card);
     }
+  }
+  if (homeDoorToggleEl) {
+    homeDoorToggleEl.textContent = room.doorOpen === false ? 'Door: Closed' : 'Door: Open';
   }
   applyHomeRoomVisuals();
   if (homeStatusEl && !homeStatusEl.textContent.trim()) {
@@ -11210,7 +11231,7 @@ function houseHallDoorInteract(local) {
   if (!door) return false;
   const roomState = normalizeHomeRoomState(questState.homeRoom);
   if (roomState.roomId === door.id) {
-    enterHouseRoom(local);
+    enterHouseRoom(local, door.id);
     return true;
   }
   if (roomState.roomId) {
@@ -11230,7 +11251,7 @@ function houseHallDoorInteract(local) {
     secondaryLabel: 'Cancel',
     onPrimary: () => {
       claimHouseRoom(door.id, () => {
-        enterHouseRoom(local);
+        enterHouseRoom(local, door.id);
       });
     }
   });
@@ -11459,6 +11480,10 @@ function exitHouseToMain(local) {
   const outX = HOUSE_DOOR_POS.x;
   const outZ = HOUSE_DOOR_POS.z + 2.45;
   teleportLocal(local, { x: outX, y: GROUND_Y, z: outZ }, Math.PI);
+  socket.emit('home:leaveRoom');
+  const localPlayer = players.get(localPlayerId);
+  if (localPlayer) localPlayer.currentRoomId = null;
+  players.forEach((p) => updatePlayerVisibility(p));
 }
 
 function exitHouseRoomToHall(local) {
@@ -11468,14 +11493,24 @@ function exitHouseRoomToHall(local) {
   if (houseHallGroup) houseHallGroup.visible = true;
   setHomeModalOpen(false);
   teleportLocal(local, { x: HOUSE_HALL_ENTRY_POS.x, y: GROUND_Y, z: HOUSE_HALL_ENTRY_POS.z }, Math.PI);
+  socket.emit('home:leaveRoom');
+  const localPlayer = players.get(localPlayerId);
+  if (localPlayer) localPlayer.currentRoomId = null;
+  players.forEach((p) => updatePlayerVisibility(p));
 }
 
-function enterHouseRoom(local) {
+function enterHouseRoom(local, roomId) {
    inHouseHall = false;
    inHouseRoom = true;
    if (houseHallGroup) houseHallGroup.visible = false;
    if (houseRoomGroup) houseRoomGroup.visible = true;
    teleportLocal(local, { x: HOUSE_ROOM_ENTRY_POS.x, y: GROUND_Y, z: HOUSE_ROOM_ENTRY_POS.z }, Math.PI);
+   if (roomId) {
+     socket.emit('home:enterRoom', { roomId });
+     const localPlayer = players.get(localPlayerId);
+     if (localPlayer) localPlayer.currentRoomId = roomId;
+   }
+   players.forEach((p) => updatePlayerVisibility(p));
 }
 
 function exitHouseRoomToMain(local) {
@@ -11487,6 +11522,10 @@ function exitHouseRoomToMain(local) {
    const outX = HOUSE_DOOR_POS.x;
    const outZ = HOUSE_DOOR_POS.z + 2.45;
    teleportLocal(local, { x: outX, y: GROUND_Y, z: outZ }, Math.PI);
+   socket.emit('home:leaveRoom');
+   const localPlayer = players.get(localPlayerId);
+   if (localPlayer) localPlayer.currentRoomId = null;
+   players.forEach((p) => updatePlayerVisibility(p));
 }
 
 function enterFishingShop(local) {
@@ -12102,13 +12141,18 @@ socket.on('playerMoved', ({
   torchEquipped: movedTorchEquipped,
   hasFishingRod,
   fishingRodTier,
-  isFishing
+  isFishing,
+  currentRoomId: movedRoomId
 }) => {
   const player = players.get(id);
   if (!player) return;
   player.x = x;
   player.y = Number.isFinite(y) ? y : player.y;
   player.z = z;
+  if (movedRoomId !== undefined) {
+    player.currentRoomId = movedRoomId || null;
+    updatePlayerVisibility(player);
+  }
   if (typeof pickaxe === 'string') {
     player.heldPickaxe = normalizePickaxeTier(pickaxe, player.heldPickaxe || 'wood');
   }
@@ -12134,6 +12178,13 @@ socket.on('playerMoved', ({
   if (typeof name === 'string' || typeof color === 'string' || appearance) {
     applyPlayerCustomization(id, name, color, appearance);
   }
+});
+
+socket.on('playerRoom', ({ id, roomId }) => {
+  const player = players.get(id);
+  if (!player) return;
+  player.currentRoomId = roomId || null;
+  updatePlayerVisibility(player);
 });
 
 socket.on('playerGear', ({ id, pickaxe, torchEquipped: nextTorchEquipped, hasFishingRod, fishingRodTier, isFishing }) => {
@@ -13006,6 +13057,44 @@ homeFloorApplyEl?.addEventListener('click', () => {
     const floorLabel = HOME_ROOM_FLOOR_OPTIONS[paintId]?.label || capitalizeWord(paintId);
     setHomeStatus(`Applied ${floorLabel} floor paint.`, '#86efac');
     renderHomeModal();
+  });
+});
+homeDoorToggleEl?.addEventListener('click', () => {
+  socket.emit('home:setDoor', {}, (resp) => {
+    if (!resp?.ok) {
+      setHomeStatus(resp?.error || 'Could not toggle door.', '#fecaca');
+      return;
+    }
+    if (resp.progress) {
+      applyProgressState(resp.progress);
+    }
+    const state = resp.doorOpen ? 'open' : 'closed';
+    setHomeStatus(`Door is now ${state}.`, '#86efac');
+    renderHomeModal();
+  });
+});
+homeUnclaimEl?.addEventListener('click', () => {
+  openNpcDialogue({
+    name: 'Unclaim Room',
+    text: 'Sell your room for 400 coins? All furniture will be reset to starter items and paint will reset.',
+    primaryLabel: 'Sell Room',
+    secondaryLabel: 'Cancel',
+    onPrimary: () => {
+      socket.emit('home:unclaimRoom', {}, (resp) => {
+        if (!resp?.ok) {
+          setHomeStatus(resp?.error || 'Could not unclaim room.', '#fecaca');
+          return;
+        }
+        if (resp.progress) {
+          applyProgressState(resp.progress);
+        }
+        setHomeStatus(`Room sold for ${resp.sellPrice} coins.`, '#86efac');
+        setHomeModalOpen(false);
+        const localPlayer = players.get(localPlayerId);
+        if (localPlayer) localPlayer.currentRoomId = null;
+        players.forEach((p) => updatePlayerVisibility(p));
+      });
+    }
   });
 });
 marketOpenIndexEl?.addEventListener('click', () => {
