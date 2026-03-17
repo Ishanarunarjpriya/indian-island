@@ -145,6 +145,7 @@ function normalizeFurnitureTraderState(value) {
 function defaultHomeRoomState() {
   return {
     roomId: null,
+    doorOpen: true,
     wallPaint: 'sand',
     floorPaint: 'oak',
     ownedFurniture: {
@@ -169,6 +170,9 @@ function normalizeHomeRoomState(value) {
   if (HOUSE_ROOM_IDS.includes(roomIdRaw)) {
     base.roomId = roomIdRaw;
   }
+  if (typeof value.doorOpen === 'boolean') {
+    base.doorOpen = value.doorOpen;
+  }
   const wallPaintRaw = typeof value.wallPaint === 'string' ? value.wallPaint.trim().toLowerCase() : '';
   const floorPaintRaw = typeof value.floorPaint === 'string' ? value.floorPaint.trim().toLowerCase() : '';
   if (Object.prototype.hasOwnProperty.call(HOME_ROOM_WALL_OPTIONS, wallPaintRaw)) {
@@ -189,6 +193,30 @@ function normalizeHomeRoomState(value) {
     base.placedFurniture[itemId] = isOwned && placed[itemId] === true;
   }
   return base;
+}
+
+function syncHomeRoomStates(homeRooms) {
+  if (!Array.isArray(homeRooms)) return;
+  homeRoomStates.clear();
+  for (const entry of homeRooms) {
+    if (!entry || typeof entry !== 'object') continue;
+    const roomId = typeof entry.roomId === 'string' ? entry.roomId.trim() : '';
+    if (!HOUSE_ROOM_IDS.includes(roomId)) continue;
+    const state = normalizeHomeRoomState(entry.state || entry);
+    homeRoomStates.set(roomId, state);
+  }
+  const ownedRoomId = normalizeHomeRoomState(questState.homeRoom).roomId;
+  if (ownedRoomId) {
+    homeRoomStates.set(ownedRoomId, normalizeHomeRoomState(questState.homeRoom));
+  }
+}
+
+function getHomeRoomState(roomId) {
+  if (!roomId) return null;
+  if (homeRoomStates.has(roomId)) return homeRoomStates.get(roomId);
+  const owned = normalizeHomeRoomState(questState.homeRoom);
+  if (owned.roomId === roomId) return owned;
+  return null;
 }
 let torchEquipped = false;
 
@@ -275,6 +303,11 @@ const FURNITURE_ISLAND_POS = new THREE.Vector3(worldLimit * 0.35, 0, worldLimit 
 const FURNITURE_ISLAND_RADIUS = 8.1;
 const LEADERBOARD_ISLAND_POS = new THREE.Vector3(worldLimit * 2.8, 0, -worldLimit * 0.95);
 const LEADERBOARD_ISLAND_RADIUS = 11.2;
+
+// Shop interior positions
+const FISHING_SHOP_BASE = new THREE.Vector3(-220, 0, 210);
+const MARKET_SHOP_BASE = new THREE.Vector3(-220, 0, 260);
+const FURNITURE_SHOP_BASE = new THREE.Vector3(-220, 0, 310);
 const toMainFromMineEntryX = -MINE_ENTRY_ISLAND_POS.x;
 const toMainFromMineEntryZ = -MINE_ENTRY_ISLAND_POS.z;
 const toMainFromMineEntryLen = Math.hypot(toMainFromMineEntryX, toMainFromMineEntryZ) || 1;
@@ -421,12 +454,20 @@ let houseRoomExitMarker = null;
 let houseRoomWorkshopMarker = null;
 let inHouseRoom = false;
 let inHouseHall = false;
+let activeHouseRoomId = null;
 let houseHallGroup = null;
 let houseHallExitMarker = null;
 const houseHallRoomDoors = [];
 let houseRoomWallMaterial = null;
 let houseRoomFloorMaterial = null;
 const houseRoomFurnitureMeshes = new Map();
+const homeRoomStates = new Map();
+let fishingShopGroup = null;
+let marketShopGroup = null;
+let furnitureShopGroup = null;
+let inFishingShop = false;
+let inMarketShop = false;
+let inFurnitureShop = false;
 let leaderboardBoardCanvas = null;
 let leaderboardBoardCtx = null;
 let leaderboardBoardTexture = null;
@@ -655,6 +696,8 @@ const homeFloorSelectEl = document.getElementById('home-floor-select');
 const homeWallApplyEl = document.getElementById('home-wall-apply');
 const homeFloorApplyEl = document.getElementById('home-floor-apply');
 const homeFurnitureListEl = document.getElementById('home-furniture-list');
+const homeDoorToggleEl = document.getElementById('home-door-toggle');
+const homeDoorNoteEl = document.getElementById('home-door-note');
 const homeStatusEl = document.getElementById('home-status');
 const gameplayPanels = [
   'hud', 'mini-panel', 'chat-panel', 'world-state', 'top-left-toolbar',
@@ -1173,6 +1216,8 @@ function clearSessionWorld() {
   inLighthouseInterior = false;
   inHouseRoom = false;
   inHouseHall = false;
+  activeHouseRoomId = null;
+  homeRoomStates.clear();
   if (lighthouseInteriorGroup) lighthouseInteriorGroup.visible = false;
   if (houseRoomGroup) houseRoomGroup.visible = false;
   if (houseHallGroup) houseHallGroup.visible = false;
@@ -5707,20 +5752,248 @@ function addMainHouseRoomInterior() {
     obj.receiveShadow = true;
   });
 
-  scene.add(room);
-  room.visible = false;
-  houseRoomGroup = room;
-  addWallCollisionFromMesh(backWall, 'house-room');
-  addWallCollisionFromMesh(leftWall, 'house-room');
-  addWallCollisionFromMesh(rightWall, 'house-room');
-  addWallCollisionFromMesh(frontLeftWall, 'house-room');
-  addWallCollisionFromMesh(frontRightWall, 'house-room');
-  addWallCollisionFromMesh(frontTopWall, 'house-room');
-  addWorldCollider(bedroomCenterX, bedsideZ, 0.44, 'house-room');
-  addWorldCollider(readingCornerX - 0.62, readingCornerZ + 0.04, 0.74, 'house-room');
-  addWorldCollider(readingCornerX - 1.58, readingCornerZ - 0.62, 0.34, 'house-room');
-  addWorldCollider(bedroomCenterX - 2.2, bedroomCenterZ, 0.7, 'house-room');
-  applyHomeRoomVisuals();
+   scene.add(room);
+   room.visible = false;
+   houseRoomGroup = room;
+   addWallCollisionFromMesh(backWall, 'house-room');
+   addWallCollisionFromMesh(leftWall, 'house-room');
+   addWallCollisionFromMesh(rightWall, 'house-room');
+   addWallCollisionFromMesh(frontLeftWall, 'house-room');
+   addWallCollisionFromMesh(frontRightWall, 'house-room');
+   addWallCollisionFromMesh(frontTopWall, 'house-room');
+   addWorldCollider(bedroomCenterX, bedsideZ, 0.44, 'house-room');
+   addWorldCollider(readingCornerX - 0.62, readingCornerZ + 0.04, 0.74, 'house-room');
+   addWorldCollider(readingCornerX - 1.58, readingCornerZ - 0.62, 0.34, 'house-room');
+   addWorldCollider(bedroomCenterX - 2.2, bedroomCenterZ, 0.7, 'house-room');
+   applyHomeRoomVisuals();
+}
+
+function addFishingShopInterior() {
+   const shop = new THREE.Group();
+   const floorY = GROUND_Y;
+   const wallHeight = 4.8;
+   const wallThickness = 0.28;
+   const halfDepth = 6.0;
+   const halfWidth = 8.0;
+   const doorWidth = 3.6;
+   const wallCenterY = floorY + wallHeight * 0.5;
+   const wallPaint = '#0ea5e9';
+   const floorPaint = '#5b4a3a';
+
+   const wallMat = new THREE.MeshStandardMaterial({ color: wallPaint, roughness: 0.86 });
+   const floorMat = new THREE.MeshStandardMaterial({ color: floorPaint, roughness: 0.92 });
+   const trimMat = new THREE.MeshStandardMaterial({ color: 0x3b2f24, roughness: 0.88 });
+
+   const floor = new THREE.Mesh(new THREE.BoxGeometry(halfWidth * 2, 0.22, halfDepth * 2), floorMat);
+   floor.position.set(FISHING_SHOP_BASE.x, floorY - 0.11, FISHING_SHOP_BASE.z);
+   floor.receiveShadow = true;
+   shop.add(floor);
+
+   const ceiling = new THREE.Mesh(new THREE.BoxGeometry(halfWidth * 2, 0.18, halfDepth * 2), trimMat);
+   ceiling.position.set(FISHING_SHOP_BASE.x, floorY + wallHeight + 0.1, FISHING_SHOP_BASE.z);
+   ceiling.receiveShadow = true;
+   shop.add(ceiling);
+
+   const backWall = new THREE.Mesh(new THREE.BoxGeometry(halfWidth * 2, wallHeight, wallThickness), wallMat);
+   backWall.position.set(FISHING_SHOP_BASE.x, wallCenterY, FISHING_SHOP_BASE.z - halfDepth + wallThickness * 0.5);
+   shop.add(backWall);
+
+   const leftWall = new THREE.Mesh(new THREE.BoxGeometry(wallThickness, wallHeight, halfDepth * 2), wallMat);
+   leftWall.position.set(FISHING_SHOP_BASE.x - halfWidth + wallThickness * 0.5, wallCenterY, FISHING_SHOP_BASE.z);
+   shop.add(leftWall);
+
+   const rightWall = leftWall.clone();
+   rightWall.position.x = FISHING_SHOP_BASE.x + halfWidth - wallThickness * 0.5;
+   shop.add(rightWall);
+
+   const frontSideWidth = (halfWidth * 2 - doorWidth) * 0.5;
+   const frontLeftWall = new THREE.Mesh(new THREE.BoxGeometry(frontSideWidth, wallHeight, wallThickness), wallMat);
+   frontLeftWall.position.set(
+     FISHING_SHOP_BASE.x - (doorWidth * 0.5 + frontSideWidth * 0.5),
+     wallCenterY,
+     FISHING_SHOP_BASE.z + halfDepth - wallThickness * 0.5
+   );
+   shop.add(frontLeftWall);
+
+   const frontRightWall = frontLeftWall.clone();
+   frontRightWall.position.x = FISHING_SHOP_BASE.x + (doorWidth * 0.5 + frontSideWidth * 0.5);
+   shop.add(frontRightWall);
+
+   const frontTopWall = new THREE.Mesh(new THREE.BoxGeometry(doorWidth, wallHeight * 0.4, wallThickness), wallMat);
+   frontTopWall.position.set(
+     FISHING_SHOP_BASE.x,
+     floorY + wallHeight - (wallHeight * 0.4) * 0.5,
+     FISHING_SHOP_BASE.z + halfDepth - wallThickness * 0.5
+   );
+   shop.add(frontTopWall);
+
+   shop.traverse((obj) => {
+     if (!obj?.isMesh) return;
+     obj.castShadow = true;
+     obj.receiveShadow = true;
+   });
+
+   scene.add(shop);
+   shop.visible = false;
+   fishingShopGroup = shop;
+   addWallCollisionFromMesh(backWall, 'fishing-shop');
+   addWallCollisionFromMesh(leftWall, 'fishing-shop');
+   addWallCollisionFromMesh(rightWall, 'fishing-shop');
+   addWallCollisionFromMesh(frontLeftWall, 'fishing-shop');
+   addWallCollisionFromMesh(frontRightWall, 'fishing-shop');
+   addWallCollisionFromMesh(frontTopWall, 'fishing-shop');
+}
+
+function addMarketShopInterior() {
+   const shop = new THREE.Group();
+   const floorY = GROUND_Y;
+   const wallHeight = 4.8;
+   const wallThickness = 0.28;
+   const halfDepth = 6.0;
+   const halfWidth = 8.0;
+   const doorWidth = 3.6;
+   const wallCenterY = floorY + wallHeight * 0.5;
+   const wallPaint = '#f59e0b';
+   const floorPaint = '#5b4a3a';
+
+   const wallMat = new THREE.MeshStandardMaterial({ color: wallPaint, roughness: 0.86 });
+   const floorMat = new THREE.MeshStandardMaterial({ color: floorPaint, roughness: 0.92 });
+   const trimMat = new THREE.MeshStandardMaterial({ color: 0x3b2f24, roughness: 0.88 });
+
+   const floor = new THREE.Mesh(new THREE.BoxGeometry(halfWidth * 2, 0.22, halfDepth * 2), floorMat);
+   floor.position.set(MARKET_SHOP_BASE.x, floorY - 0.11, MARKET_SHOP_BASE.z);
+   floor.receiveShadow = true;
+   shop.add(floor);
+
+   const ceiling = new THREE.Mesh(new THREE.BoxGeometry(halfWidth * 2, 0.18, halfDepth * 2), trimMat);
+   ceiling.position.set(MARKET_SHOP_BASE.x, floorY + wallHeight + 0.1, MARKET_SHOP_BASE.z);
+   ceiling.receiveShadow = true;
+   shop.add(ceiling);
+
+   const backWall = new THREE.Mesh(new THREE.BoxGeometry(halfWidth * 2, wallHeight, wallThickness), wallMat);
+   backWall.position.set(MARKET_SHOP_BASE.x, wallCenterY, MARKET_SHOP_BASE.z - halfDepth + wallThickness * 0.5);
+   shop.add(backWall);
+
+   const leftWall = new THREE.Mesh(new THREE.BoxGeometry(wallThickness, wallHeight, halfDepth * 2), wallMat);
+   leftWall.position.set(MARKET_SHOP_BASE.x - halfWidth + wallThickness * 0.5, wallCenterY, MARKET_SHOP_BASE.z);
+   shop.add(leftWall);
+
+   const rightWall = leftWall.clone();
+   rightWall.position.x = MARKET_SHOP_BASE.x + halfWidth - wallThickness * 0.5;
+   shop.add(rightWall);
+
+   const frontSideWidth = (halfWidth * 2 - doorWidth) * 0.5;
+   const frontLeftWall = new THREE.Mesh(new THREE.BoxGeometry(frontSideWidth, wallHeight, wallThickness), wallMat);
+   frontLeftWall.position.set(
+     MARKET_SHOP_BASE.x - (doorWidth * 0.5 + frontSideWidth * 0.5),
+     wallCenterY,
+     MARKET_SHOP_BASE.z + halfDepth - wallThickness * 0.5
+   );
+   shop.add(frontLeftWall);
+
+   const frontRightWall = frontLeftWall.clone();
+   frontRightWall.position.x = MARKET_SHOP_BASE.x + (doorWidth * 0.5 + frontSideWidth * 0.5);
+   shop.add(frontRightWall);
+
+   const frontTopWall = new THREE.Mesh(new THREE.BoxGeometry(doorWidth, wallHeight * 0.4, wallThickness), wallMat);
+   frontTopWall.position.set(
+     MARKET_SHOP_BASE.x,
+     floorY + wallHeight - (wallHeight * 0.4) * 0.5,
+     MARKET_SHOP_BASE.z + halfDepth - wallThickness * 0.5
+   );
+   shop.add(frontTopWall);
+
+   shop.traverse((obj) => {
+     if (!obj?.isMesh) return;
+     obj.castShadow = true;
+     obj.receiveShadow = true;
+   });
+
+   scene.add(shop);
+   shop.visible = false;
+   marketShopGroup = shop;
+   addWallCollisionFromMesh(backWall, 'market-shop');
+   addWallCollisionFromMesh(leftWall, 'market-shop');
+   addWallCollisionFromMesh(rightWall, 'market-shop');
+   addWallCollisionFromMesh(frontLeftWall, 'market-shop');
+   addWallCollisionFromMesh(frontRightWall, 'market-shop');
+   addWallCollisionFromMesh(frontTopWall, 'market-shop');
+}
+
+function addFurnitureShopInterior() {
+   const shop = new THREE.Group();
+   const floorY = GROUND_Y;
+   const wallHeight = 4.8;
+   const wallThickness = 0.28;
+   const halfDepth = 6.0;
+   const halfWidth = 8.0;
+   const doorWidth = 3.6;
+   const wallCenterY = floorY + wallHeight * 0.5;
+   const wallPaint = '#8b5cf6';
+   const floorPaint = '#5b4a3a';
+
+   const wallMat = new THREE.MeshStandardMaterial({ color: wallPaint, roughness: 0.86 });
+   const floorMat = new THREE.MeshStandardMaterial({ color: floorPaint, roughness: 0.92 });
+   const trimMat = new THREE.MeshStandardMaterial({ color: 0x3b2f24, roughness: 0.88 });
+
+   const floor = new THREE.Mesh(new THREE.BoxGeometry(halfWidth * 2, 0.22, halfDepth * 2), floorMat);
+   floor.position.set(FURNITURE_SHOP_BASE.x, floorY - 0.11, FURNITURE_SHOP_BASE.z);
+   floor.receiveShadow = true;
+   shop.add(floor);
+
+   const ceiling = new THREE.Mesh(new THREE.BoxGeometry(halfWidth * 2, 0.18, halfDepth * 2), trimMat);
+   ceiling.position.set(FURNITURE_SHOP_BASE.x, floorY + wallHeight + 0.1, FURNITURE_SHOP_BASE.z);
+   ceiling.receiveShadow = true;
+   shop.add(ceiling);
+
+   const backWall = new THREE.Mesh(new THREE.BoxGeometry(halfWidth * 2, wallHeight, wallThickness), wallMat);
+   backWall.position.set(FURNITURE_SHOP_BASE.x, wallCenterY, FURNITURE_SHOP_BASE.z - halfDepth + wallThickness * 0.5);
+   shop.add(backWall);
+
+   const leftWall = new THREE.Mesh(new THREE.BoxGeometry(wallThickness, wallHeight, halfDepth * 2), wallMat);
+   leftWall.position.set(FURNITURE_SHOP_BASE.x - halfWidth + wallThickness * 0.5, wallCenterY, FURNITURE_SHOP_BASE.z);
+   shop.add(leftWall);
+
+   const rightWall = leftWall.clone();
+   rightWall.position.x = FURNITURE_SHOP_BASE.x + halfWidth - wallThickness * 0.5;
+   shop.add(rightWall);
+
+   const frontSideWidth = (halfWidth * 2 - doorWidth) * 0.5;
+   const frontLeftWall = new THREE.Mesh(new THREE.BoxGeometry(frontSideWidth, wallHeight, wallThickness), wallMat);
+   frontLeftWall.position.set(
+     FURNITURE_SHOP_BASE.x - (doorWidth * 0.5 + frontSideWidth * 0.5),
+     wallCenterY,
+     FURNITURE_SHOP_BASE.z + halfDepth - wallThickness * 0.5
+   );
+   shop.add(frontLeftWall);
+
+   const frontRightWall = frontLeftWall.clone();
+   frontRightWall.position.x = FURNITURE_SHOP_BASE.x + (doorWidth * 0.5 + frontSideWidth * 0.5);
+   shop.add(frontRightWall);
+
+   const frontTopWall = new THREE.Mesh(new THREE.BoxGeometry(doorWidth, wallHeight * 0.4, wallThickness), wallMat);
+   frontTopWall.position.set(
+     FURNITURE_SHOP_BASE.x,
+     floorY + wallHeight - (wallHeight * 0.4) * 0.5,
+     FURNITURE_SHOP_BASE.z + halfDepth - wallThickness * 0.5
+   );
+   shop.add(frontTopWall);
+
+   shop.traverse((obj) => {
+     if (!obj?.isMesh) return;
+     obj.castShadow = true;
+     obj.receiveShadow = true;
+   });
+
+   scene.add(shop);
+   shop.visible = false;
+   furnitureShopGroup = shop;
+   addWallCollisionFromMesh(backWall, 'furniture-shop');
+   addWallCollisionFromMesh(leftWall, 'furniture-shop');
+   addWallCollisionFromMesh(rightWall, 'furniture-shop');
+   addWallCollisionFromMesh(frontLeftWall, 'furniture-shop');
+   addWallCollisionFromMesh(frontRightWall, 'furniture-shop');
+   addWallCollisionFromMesh(frontTopWall, 'furniture-shop');
 }
 
 function addHouseHallInterior() {
@@ -5733,10 +6006,10 @@ function addHouseHallInterior() {
   const baseX = HOUSE_HALL_BASE.x;
   const baseZ = HOUSE_HALL_BASE.z;
 
-  const wallMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.86 });
-  const floorMat = new THREE.MeshStandardMaterial({ color: 0x5b4a3a, roughness: 0.92 });
-  const trimMat = new THREE.MeshStandardMaterial({ color: 0x3b2f24, roughness: 0.88 });
-  const ceilingMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.9 });
+  const wallMat = new THREE.MeshStandardMaterial({ color: 0xdbeafe, roughness: 0.88 });
+  const floorMat = new THREE.MeshStandardMaterial({ color: 0xcbb38c, roughness: 0.85 });
+  const trimMat = new THREE.MeshStandardMaterial({ color: 0x8b5e3c, roughness: 0.74 });
+  const ceilingMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.92 });
 
   const floor = new THREE.Mesh(new THREE.BoxGeometry(hallW, 0.2, hallD), floorMat);
   floor.position.set(baseX, floorY, baseZ);
@@ -5747,14 +6020,16 @@ function addHouseHallInterior() {
   ceiling.position.set(baseX, floorY + wallH, baseZ);
   hall.add(ceiling);
 
-  const ambientLight = new THREE.AmbientLight(0xcbd5e1, 0.34);
-  const hallLightA = new THREE.PointLight(0xfef3c7, 0.6, 16, 2);
+  const ambientLight = new THREE.AmbientLight(0xf1f5f9, 0.7);
+  const hallLightA = new THREE.PointLight(0xfff4d6, 0.95, 20, 2);
   hallLightA.position.set(baseX, floorY + 3.35, baseZ - 7);
   const hallLightB = hallLightA.clone();
   hallLightB.position.z = baseZ;
   const hallLightC = hallLightA.clone();
   hallLightC.position.z = baseZ + 7;
-  hall.add(ambientLight, hallLightA, hallLightB, hallLightC);
+  const accentLight = new THREE.PointLight(0x93c5fd, 0.35, 14, 2);
+  accentLight.position.set(baseX - 4, floorY + 2.2, baseZ - 2);
+  hall.add(ambientLight, hallLightA, hallLightB, hallLightC, accentLight);
 
   const backWall = new THREE.Mesh(new THREE.BoxGeometry(hallW, wallH, wallT), wallMat);
   backWall.position.set(baseX, floorY + wallH * 0.5, baseZ - hallD * 0.5 + wallT * 0.5);
@@ -5776,6 +6051,45 @@ function addHouseHallInterior() {
   const frontTop = new THREE.Mesh(new THREE.BoxGeometry(doorW, wallH - doorH, wallT), wallMat);
   frontTop.position.set(baseX, floorY + doorH + (wallH - doorH) * 0.5, baseZ + hallD * 0.5 - wallT * 0.5);
   hall.add(frontLeft, frontRight, frontTop);
+
+  const rugMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.9 });
+  const rugAccentMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.88 });
+  const rugSoftMat = new THREE.MeshStandardMaterial({ color: 0x34d399, roughness: 0.88 });
+  const rugWidth = hallW - 3.4;
+  const rugDepth = 4.2;
+  const rugs = [
+    { z: baseZ - 7.2, mat: rugMat },
+    { z: baseZ, mat: rugAccentMat },
+    { z: baseZ + 7.2, mat: rugSoftMat }
+  ];
+  rugs.forEach((entry) => {
+    const rug = new THREE.Mesh(new THREE.BoxGeometry(rugWidth, 0.05, rugDepth), entry.mat);
+    rug.position.set(baseX, floorY + 0.03, entry.z);
+    rug.receiveShadow = true;
+    hall.add(rug);
+  });
+
+  const bannerMat = new THREE.MeshStandardMaterial({ color: 0x60a5fa, roughness: 0.6, side: THREE.DoubleSide });
+  const bannerMatAlt = new THREE.MeshStandardMaterial({ color: 0xf472b6, roughness: 0.6, side: THREE.DoubleSide });
+  const bannerL = new THREE.Mesh(new THREE.PlaneGeometry(1.7, 2.2), bannerMat);
+  bannerL.position.set(baseX - hallW * 0.5 + 0.06, floorY + 2.4, baseZ - 3.5);
+  bannerL.rotation.y = Math.PI * 0.5;
+  const bannerR = new THREE.Mesh(new THREE.PlaneGeometry(1.7, 2.2), bannerMatAlt);
+  bannerR.position.set(baseX + hallW * 0.5 - 0.06, floorY + 2.4, baseZ + 3.5);
+  bannerR.rotation.y = -Math.PI * 0.5;
+  hall.add(bannerL, bannerR);
+
+  function addHallPlant(px, pz) {
+    const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.34, 0.38, 10), trimMat);
+    pot.position.set(px, floorY + 0.2, pz);
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 0.5, 8), new THREE.MeshStandardMaterial({ color: 0x166534, roughness: 0.9 }));
+    stem.position.set(px, floorY + 0.55, pz);
+    const leaves = new THREE.Mesh(new THREE.SphereGeometry(0.42, 12, 12), new THREE.MeshStandardMaterial({ color: 0x22c55e, roughness: 0.85 }));
+    leaves.position.set(px, floorY + 0.95, pz);
+    hall.add(pot, stem, leaves);
+  }
+  addHallPlant(baseX - hallW * 0.35, baseZ - hallD * 0.35);
+  addHallPlant(baseX + hallW * 0.35, baseZ + hallD * 0.3);
 
   addWallCollisionFromMesh(backWall, 'house-hall');
   addWallCollisionFromMesh(leftWall, 'house-hall');
@@ -5818,7 +6132,7 @@ function addHouseHallInterior() {
     sign.rotation.y = frame.rotation.y;
     hall.add(sign);
 
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.6, 0.06, 10, 24), ringMat);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.6, 0.06, 10, 24), ringMat.clone());
     ring.rotation.x = Math.PI * 0.5;
     ring.position.set(x, floorY + 0.05, z);
     hall.add(ring);
@@ -5863,12 +6177,15 @@ function addLandmarks() {
   addDock(FURNITURE_DOCK_POS, FURNITURE_DOCK_YAW, { segments: 11, plankLength: 2.8, plankWidth: 2.2, spacing: 1.05 });
   addLeaderboardIsland();
   addDock(LEADERBOARD_DOCK_POS, LEADERBOARD_DOCK_YAW, { segments: 11, plankLength: 2.8, plankWidth: 2.2, spacing: 1.05 });
-  addLighthouseInterior();
-  populateMainIslandNature();
-  addBeaconIslandLights();
-  addWoodHouse(HOUSE_POS.x, HOUSE_POS.z, 0, { collisions: false });
-  addMainHouseRoomInterior();
-  addHouseHallInterior();
+   addLighthouseInterior();
+   populateMainIslandNature();
+   addBeaconIslandLights();
+   addWoodHouse(HOUSE_POS.x, HOUSE_POS.z, 0, { collisions: false });
+   addMainHouseRoomInterior();
+   addHouseHallInterior();
+   addFishingShopInterior();
+   addMarketShopInterior();
+   addFurnitureShopInterior();
   const cliffAngle = Math.atan2(-ISLAND_DOCK_POS.z, -ISLAND_DOCK_POS.x);
   addCliffAndWaterfall(Math.cos(cliffAngle) * worldLimit * 0.7, Math.sin(cliffAngle) * worldLimit * 0.7);
   const decorPos = findWaterSideSlot(ISLAND_DOCK_POS, ISLAND_DOCK_YAW, -1, 6.0, 3.2);
@@ -7519,6 +7836,9 @@ function addPlayer(data) {
     hasFishingRod: data?.progress?.hasFishingRod === true || data?.hasFishingRod === true,
     heldFishingRodTier: normalizeRodTier(data?.progress?.fishingRodTier || data?.fishingRodTier, 'basic'),
     isFishing: data?.isFishing === true,
+    currentRoomId: HOUSE_ROOM_IDS.includes(String(data?.currentRoomId || '').trim())
+      ? String(data.currentRoomId).trim()
+      : null,
     torchEquipped: Boolean(data.torchEquipped),
     mineSwingStartedAt: 0,
     mineSwingUntil: 0,
@@ -8200,7 +8520,8 @@ function loadFurnitureTraderModal(statusText = '') {
 }
 
 function applyHomeRoomVisuals() {
-  const roomState = normalizeHomeRoomState(questState.homeRoom);
+  const activeRoomId = activeHouseRoomId || normalizeHomeRoomState(questState.homeRoom).roomId;
+  const roomState = normalizeHomeRoomState(activeRoomId ? getHomeRoomState(activeRoomId) : questState.homeRoom);
   const wallOption = HOME_ROOM_WALL_OPTIONS[roomState.wallPaint] || HOME_ROOM_WALL_OPTIONS.sand;
   const floorOption = HOME_ROOM_FLOOR_OPTIONS[roomState.floorPaint] || HOME_ROOM_FLOOR_OPTIONS.oak;
   if (houseRoomWallMaterial?.color) {
@@ -8237,6 +8558,28 @@ function ensureHomePaintSelectOptions() {
   }
 }
 
+function updateHomeDoorToggleUI() {
+  if (!homeDoorToggleEl) return;
+  const room = normalizeHomeRoomState(questState.homeRoom);
+  const hasRoom = Boolean(room.roomId);
+  if (!hasRoom) {
+    homeDoorToggleEl.disabled = true;
+    homeDoorToggleEl.textContent = 'Door: Locked';
+    if (homeDoorNoteEl) {
+      homeDoorNoteEl.textContent = 'Claim a room to control access.';
+    }
+    return;
+  }
+  const doorOpen = room.doorOpen !== false;
+  homeDoorToggleEl.disabled = false;
+  homeDoorToggleEl.textContent = doorOpen ? 'Door: Open' : 'Door: Closed';
+  if (homeDoorNoteEl) {
+    homeDoorNoteEl.textContent = doorOpen
+      ? 'Visitors can enter when the door is open.'
+      : 'Visitors cannot enter while the door is closed.';
+  }
+}
+
 function renderHomeModal() {
   ensureHomePaintSelectOptions();
   const room = normalizeHomeRoomState(questState.homeRoom);
@@ -8257,6 +8600,7 @@ function renderHomeModal() {
   if (homeFloorApplyEl) {
     homeFloorApplyEl.textContent = `Apply Floor Paint (${HOME_ROOM_PAINT_PRICE.toLocaleString()} coins)`;
   }
+  updateHomeDoorToggleUI();
   if (homeFurnitureListEl) {
     homeFurnitureListEl.innerHTML = '';
     for (const itemId of HOME_ROOM_FURNITURE_ORDER) {
@@ -9080,6 +9424,7 @@ function applyProgressState(progress) {
   questState.fishingQuestCompletions = Math.max(0, Math.floor(Number(progress.fishingQuestCompletions) || 0));
   questState.maxStaminaBonusPct = Math.max(0, Math.min(50, Math.floor(Number(progress.maxStaminaBonusPct) || 0)));
   questState.homeRoom = normalizeHomeRoomState(progress.homeRoom);
+  syncHomeRoomStates(progress.homeRooms);
   questState.furnitureTrader = normalizeFurnitureTraderState(progress.furnitureTrader);
   applyHomeRoomVisuals();
   if (questState.inventory.torch <= 0) {
@@ -10229,6 +10574,16 @@ function updateFishingMinigame(local, nowMs, delta) {
 
 function homeWorkshopInteract(local) {
   if (!isNearHouseWorkshop(local)) return false;
+  const ownedRoomId = normalizeHomeRoomState(questState.homeRoom).roomId;
+  if (!ownedRoomId || ownedRoomId !== activeHouseRoomId) {
+    openNpcDialogue({
+      name: 'Workshop',
+      text: 'This workshop belongs to the room owner.',
+      primaryLabel: 'Okay',
+      secondaryLabel: 'Close'
+    });
+    return true;
+  }
   setHomeModalOpen(true);
   if (!homeStatusEl?.textContent?.trim()) {
     setHomeStatus('Place owned furniture here and repaint your room.', '#cbd5e1');
@@ -10250,6 +10605,7 @@ function claimHouseRoom(roomId, onSuccess) {
     if (resp.progress) {
       applyProgressState(resp.progress);
     }
+    closeNpcDialogue();
     if (typeof onSuccess === 'function') {
       onSuccess();
     }
@@ -10260,55 +10616,68 @@ function houseHallDoorInteract(local) {
   if (!inHouseHall) return false;
   const door = getNearbyHouseHallDoor(local);
   if (!door) return false;
-  const roomState = normalizeHomeRoomState(questState.homeRoom);
-  if (roomState.roomId === door.id) {
-    enterHouseRoom(local);
+  const ownedRoomId = normalizeHomeRoomState(questState.homeRoom).roomId;
+  const roomState = getHomeRoomState(door.id);
+  const isClaimed = Boolean(roomState?.roomId);
+  const isOwner = ownedRoomId === door.id;
+  const isOpen = roomState?.doorOpen !== false;
+  if (isOwner) {
+    requestHouseRoomEntry(local, door.id);
     return true;
   }
-  if (roomState.roomId) {
+  if (!isClaimed) {
+    if (ownedRoomId) {
+      openNpcDialogue({
+        name: 'Room Door',
+        text: 'You already claimed a room. This one is locked.',
+        primaryLabel: 'Okay',
+        secondaryLabel: 'Close'
+      });
+      return true;
+    }
+    const roomNumber = door.id.split('-')[1] || door.id;
     openNpcDialogue({
       name: 'Room Door',
-      text: 'You already claimed a room. This one is locked.',
-      primaryLabel: 'Okay',
-      secondaryLabel: 'Close'
+      text: `Claim Room ${roomNumber}? You can customize it after claiming.`,
+      primaryLabel: 'Claim Room',
+      secondaryLabel: 'Cancel',
+      onPrimary: () => {
+        claimHouseRoom(door.id, () => {
+          requestHouseRoomEntry(local, door.id);
+        });
+      }
     });
     return true;
   }
-  const roomNumber = door.id.split('-')[1] || door.id;
+  if (isOpen) {
+    requestHouseRoomEntry(local, door.id);
+    return true;
+  }
   openNpcDialogue({
     name: 'Room Door',
-    text: `Claim Room ${roomNumber}? You can customize it after claiming.`,
-    primaryLabel: 'Claim Room',
-    secondaryLabel: 'Cancel',
-    onPrimary: () => {
-      claimHouseRoom(door.id, () => {
-        enterHouseRoom(local);
-      });
-    }
+    text: 'This room is closed. The owner must open the door.',
+    primaryLabel: 'Okay',
+    secondaryLabel: 'Close'
   });
   return true;
 }
 
 function fishingVendorInteract(local) {
-  if (!isNearFishingVendor(local)) return false;
-  setRodShopModalOpen(true);
-  loadRodShopModal();
-  return true;
+   if (!isNearFishingVendor(local)) return false;
+   enterFishingShop(local);
+   return true;
 }
 
 function fishMarketInteract(local) {
-  if (!isNearFishMarket(local)) return false;
-  setMarketModalOpen(true);
-  renderMarketModal();
-  setMarketStatus('Sell fish, or manage your fishing quest.', '#cbd5e1');
-  return true;
+   if (!isNearFishMarket(local)) return false;
+   enterMarketShop(local);
+   return true;
 }
 
 function furnitureTraderInteract(local) {
-  if (!isNearFurnitureVendor(local)) return false;
-  setFurnitureTraderModalOpen(true);
-  loadFurnitureTraderModal();
-  return true;
+   if (!isNearFurnitureVendor(local)) return false;
+   enterFurnitureShop(local);
+   return true;
 }
 
 function oreTraderInteract(local) {
@@ -10477,6 +10846,10 @@ function exitMineToEntrance(local) {
 function exitHouseToMain(local) {
   inHouseRoom = false;
   inHouseHall = false;
+  activeHouseRoomId = null;
+  if (local) {
+    local.currentRoomId = null;
+  }
   if (houseRoomGroup) houseRoomGroup.visible = false;
   if (houseHallGroup) houseHallGroup.visible = false;
   setHomeModalOpen(false);
@@ -10488,18 +10861,109 @@ function exitHouseToMain(local) {
 function exitHouseRoomToHall(local) {
   inHouseRoom = false;
   inHouseHall = true;
+  activeHouseRoomId = null;
+  if (local) {
+    local.currentRoomId = null;
+  }
   if (houseRoomGroup) houseRoomGroup.visible = false;
   if (houseHallGroup) houseHallGroup.visible = true;
   setHomeModalOpen(false);
   teleportLocal(local, { x: HOUSE_HALL_ENTRY_POS.x, y: GROUND_Y, z: HOUSE_HALL_ENTRY_POS.z }, Math.PI);
+  socket.emit('home:leaveRoom');
 }
 
-function enterHouseRoom(local) {
-  inHouseHall = false;
-  inHouseRoom = true;
-  if (houseHallGroup) houseHallGroup.visible = false;
-  if (houseRoomGroup) houseRoomGroup.visible = true;
-  teleportLocal(local, { x: HOUSE_ROOM_ENTRY_POS.x, y: GROUND_Y, z: HOUSE_ROOM_ENTRY_POS.z }, Math.PI);
+function requestHouseRoomEntry(local, roomId) {
+  const targetRoomId = roomId || normalizeHomeRoomState(questState.homeRoom).roomId;
+  if (!targetRoomId) return false;
+  socket.emit('home:enterRoom', { roomId: targetRoomId }, (resp) => {
+    if (!resp?.ok) {
+      openNpcDialogue({
+        name: 'Room Door',
+        text: resp?.error || 'Unable to enter that room.',
+        primaryLabel: 'Okay',
+        secondaryLabel: 'Close'
+      });
+      return;
+    }
+    if (resp.roomState) {
+      homeRoomStates.set(targetRoomId, normalizeHomeRoomState(resp.roomState));
+    }
+    if (resp.progress) {
+      applyProgressState(resp.progress);
+    }
+    enterHouseRoom(local, targetRoomId);
+  });
+  return true;
+}
+
+function enterHouseRoom(local, roomId) {
+   const targetRoomId = roomId || normalizeHomeRoomState(questState.homeRoom).roomId;
+   if (!targetRoomId) return;
+   inHouseHall = false;
+   inHouseRoom = true;
+   activeHouseRoomId = targetRoomId;
+   if (local) {
+     local.currentRoomId = targetRoomId;
+   }
+   if (houseHallGroup) houseHallGroup.visible = false;
+   if (houseRoomGroup) houseRoomGroup.visible = true;
+   applyHomeRoomVisuals();
+   teleportLocal(local, { x: HOUSE_ROOM_ENTRY_POS.x, y: GROUND_Y, z: HOUSE_ROOM_ENTRY_POS.z }, Math.PI);
+}
+
+function exitHouseRoomToMain(local) {
+   inHouseRoom = false;
+   inHouseHall = false;
+   activeHouseRoomId = null;
+   if (local) {
+     local.currentRoomId = null;
+   }
+   if (houseRoomGroup) houseRoomGroup.visible = false;
+   if (houseHallGroup) houseHallGroup.visible = false;
+   setHomeModalOpen(false);
+   const outX = HOUSE_DOOR_POS.x;
+   const outZ = HOUSE_DOOR_POS.z + 2.45;
+   teleportLocal(local, { x: outX, y: GROUND_Y, z: outZ }, Math.PI);
+   socket.emit('home:leaveRoom');
+}
+
+function enterFishingShop(local) {
+   inFishingShop = true;
+   if (fishingShopGroup) fishingShopGroup.visible = true;
+   setRodShopModalOpen(false);
+   teleportLocal(local, { x: FISHING_SHOP_BASE.x, y: GROUND_Y, z: FISHING_SHOP_BASE.z }, 0);
+}
+
+function exitFishingShopToMain(local) {
+   inFishingShop = false;
+   if (fishingShopGroup) fishingShopGroup.visible = false;
+   teleportLocal(local, { x: FISHING_VENDOR_POS.x, y: GROUND_Y, z: FISHING_VENDOR_POS.z }, Math.PI);
+}
+
+function enterMarketShop(local) {
+   inMarketShop = true;
+   if (marketShopGroup) marketShopGroup.visible = true;
+   setMarketModalOpen(false);
+   teleportLocal(local, { x: MARKET_SHOP_BASE.x, y: GROUND_Y, z: MARKET_SHOP_BASE.z }, 0);
+}
+
+function exitMarketShopToMain(local) {
+   inMarketShop = false;
+   if (marketShopGroup) marketShopGroup.visible = false;
+   teleportLocal(local, { x: MARKET_VENDOR_POS.x, y: GROUND_Y, z: MARKET_VENDOR_POS.z }, Math.PI);
+}
+
+function enterFurnitureShop(local) {
+   inFurnitureShop = true;
+   if (furnitureShopGroup) furnitureShopGroup.visible = true;
+   setFurnitureTraderModalOpen(false);
+   teleportLocal(local, { x: FURNITURE_SHOP_BASE.x, y: GROUND_Y, z: FURNITURE_SHOP_BASE.z }, 0);
+}
+
+function exitFurnitureShopToMain(local) {
+   inFurnitureShop = false;
+   if (furnitureShopGroup) furnitureShopGroup.visible = false;
+   teleportLocal(local, { x: FURNITURE_VENDOR_POS.x, y: GROUND_Y, z: FURNITURE_VENDOR_POS.z }, Math.PI);
 }
 
 function startMineSwing(id, nowMs = Date.now()) {
@@ -10604,9 +11068,11 @@ function tryAutoTeleport(local, now = performance.now()) {
       if (lighthouseInteriorGroup) lighthouseInteriorGroup.visible = false;
       inHouseHall = true;
       inHouseRoom = false;
+      activeHouseRoomId = null;
       if (houseHallGroup) houseHallGroup.visible = true;
       if (houseRoomGroup) houseRoomGroup.visible = false;
       teleportLocal(local, { x: HOUSE_HALL_ENTRY_POS.x, y: GROUND_Y, z: HOUSE_HALL_ENTRY_POS.z }, Math.PI);
+      socket.emit('home:leaveRoom');
     });
     lastInteractAt = now;
     return true;
@@ -10635,12 +11101,22 @@ function getManualInteractTarget(local) {
   }
   const hallDoor = getNearbyHouseHallDoor(local);
   if (hallDoor) {
-    const claimedId = normalizeHomeRoomState(questState.homeRoom).roomId;
-    const label = claimedId === hallDoor.id ? 'Enter' : (claimedId ? 'Locked' : 'Claim');
+    const ownedRoomId = normalizeHomeRoomState(questState.homeRoom).roomId;
+    const roomState = getHomeRoomState(hallDoor.id);
+    const isClaimed = Boolean(roomState?.roomId);
+    const isOwner = ownedRoomId === hallDoor.id;
+    const isOpen = roomState?.doorOpen !== false;
+    const hasRoom = Boolean(ownedRoomId);
+    const label = isOwner
+      ? 'Enter'
+      : (isClaimed ? (isOpen ? 'Enter' : 'Closed') : (hasRoom ? 'Locked' : 'Claim'));
     return { mode: 'world', label, caption: 'Tap', worldPos: hallDoor.position, offsetY: 0.95 };
   }
   if (isNearHouseWorkshop(local)) {
-    return { mode: 'world', label: 'Build', caption: 'Tap', worldPos: HOUSE_ROOM_WORKSHOP_POS, offsetY: 1.0 };
+    const ownedRoomId = normalizeHomeRoomState(questState.homeRoom).roomId;
+    if (ownedRoomId && ownedRoomId === activeHouseRoomId) {
+      return { mode: 'world', label: 'Build', caption: 'Tap', worldPos: HOUSE_ROOM_WORKSHOP_POS, offsetY: 1.0 };
+    }
   }
   if (inHouseRoom) return null;
   if (inMine && distance2D(local, MINE_EXIT_POS) < 3.1) {
@@ -10978,28 +11454,44 @@ socket.on('init', (payload) => {
   const local = payload.players.find((player) => player.id === localPlayerId);
   if (local) {
     inMine = local.inMine === true || mineDistance(local.x, local.z) <= MINE_PLAY_RADIUS;
-    inLighthouseInterior = Math.hypot(local.x - LIGHTHOUSE_INTERIOR_BASE.x, local.z - LIGHTHOUSE_INTERIOR_BASE.z) <= INTERIOR_PLAY_RADIUS;
-    inHouseRoom = Math.hypot(local.x - HOUSE_ROOM_BASE.x, local.z - HOUSE_ROOM_BASE.z) <= HOUSE_ROOM_PLAY_RADIUS;
-    inHouseHall = Math.hypot(local.x - HOUSE_HALL_BASE.x, local.z - HOUSE_HALL_BASE.z) <= HOUSE_HALL_PLAY_RADIUS;
-    if (inHouseRoom || inHouseHall) {
-      inMine = false;
-      inLighthouseInterior = false;
-    }
+     inLighthouseInterior = Math.hypot(local.x - LIGHTHOUSE_INTERIOR_BASE.x, local.z - LIGHTHOUSE_INTERIOR_BASE.z) <= INTERIOR_PLAY_RADIUS;
+     inHouseRoom = Math.hypot(local.x - HOUSE_ROOM_BASE.x, local.z - HOUSE_ROOM_BASE.z) <= HOUSE_ROOM_PLAY_RADIUS;
+     inHouseHall = Math.hypot(local.x - HOUSE_HALL_BASE.x, local.z - HOUSE_HALL_BASE.z) <= HOUSE_HALL_PLAY_RADIUS;
+     inFishingShop = Math.hypot(local.x - FISHING_SHOP_BASE.x, local.z - FISHING_SHOP_BASE.z) <= 8.0;
+     inMarketShop = Math.hypot(local.x - MARKET_SHOP_BASE.x, local.z - MARKET_SHOP_BASE.z) <= 8.0;
+     inFurnitureShop = Math.hypot(local.x - FURNITURE_SHOP_BASE.x, local.z - FURNITURE_SHOP_BASE.z) <= 8.0;
+     if (inHouseRoom || inHouseHall || inFishingShop || inMarketShop || inFurnitureShop) {
+       inMine = false;
+       inLighthouseInterior = false;
+     }
     if (lighthouseInteriorGroup) lighthouseInteriorGroup.visible = inLighthouseInterior;
     if (houseRoomGroup) houseRoomGroup.visible = inHouseRoom;
     if (houseHallGroup) houseHallGroup.visible = inHouseHall;
     applyPlayerCustomization(local.id, local.name, local.color, local.appearance);
     customizeStatusEl.textContent = `Loaded account avatar for ${local.name || 'Player'}.`;
-  } else {
-    inMine = false;
-    inLighthouseInterior = false;
-    inHouseRoom = false;
-    inHouseHall = false;
-    if (lighthouseInteriorGroup) lighthouseInteriorGroup.visible = false;
-    if (houseRoomGroup) houseRoomGroup.visible = false;
-    if (houseHallGroup) houseHallGroup.visible = false;
+   } else {
+     inMine = false;
+     inLighthouseInterior = false;
+     inHouseRoom = false;
+     inHouseHall = false;
+     inFishingShop = false;
+     inMarketShop = false;
+     inFurnitureShop = false;
+     if (lighthouseInteriorGroup) lighthouseInteriorGroup.visible = false;
+     if (houseRoomGroup) houseRoomGroup.visible = false;
+     if (houseHallGroup) houseHallGroup.visible = false;
+     if (fishingShopGroup) fishingShopGroup.visible = false;
+     if (marketShopGroup) marketShopGroup.visible = false;
+     if (furnitureShopGroup) furnitureShopGroup.visible = false;
   }
   applyProgressState(payload.progress || null);
+  if (inHouseRoom) {
+    const ownedRoomId = normalizeHomeRoomState(questState.homeRoom).roomId;
+    activeHouseRoomId = ownedRoomId || activeHouseRoomId;
+    applyHomeRoomVisuals();
+  } else if (!inHouseHall) {
+    activeHouseRoomId = null;
+  }
   if (payload.worldState) {
     applyWorldState(payload.worldState);
   }
@@ -11020,6 +11512,23 @@ socket.on('progress:update', (payload) => {
 
 socket.on('world:update', (payload) => {
   applyWorldState(payload || null);
+});
+
+socket.on('home:roomUpdate', (payload) => {
+  const roomId = typeof payload?.roomId === 'string' ? payload.roomId.trim() : '';
+  if (!HOUSE_ROOM_IDS.includes(roomId)) return;
+  const state = normalizeHomeRoomState(payload?.state);
+  homeRoomStates.set(roomId, state);
+  if (activeHouseRoomId === roomId) {
+    applyHomeRoomVisuals();
+  }
+});
+
+socket.on('playerRoom', (payload) => {
+  const player = players.get(payload?.id);
+  if (!player) return;
+  const roomId = typeof payload?.roomId === 'string' ? payload.roomId.trim() : '';
+  player.currentRoomId = HOUSE_ROOM_IDS.includes(roomId) ? roomId : null;
 });
 
 socket.on('debug:kicked', (payload) => {
@@ -11062,7 +11571,8 @@ socket.on('playerMoved', ({
   torchEquipped: movedTorchEquipped,
   hasFishingRod,
   fishingRodTier,
-  isFishing
+  isFishing,
+  currentRoomId
 }) => {
   const player = players.get(id);
   if (!player) return;
@@ -11083,6 +11593,10 @@ socket.on('playerMoved', ({
   }
   if (typeof isFishing === 'boolean') {
     player.isFishing = isFishing;
+  }
+  if (typeof currentRoomId === 'string' || currentRoomId == null) {
+    const normalizedRoomId = typeof currentRoomId === 'string' ? currentRoomId.trim() : '';
+    player.currentRoomId = HOUSE_ROOM_IDS.includes(normalizedRoomId) ? normalizedRoomId : null;
   }
   if (typeof accountTag === 'string' || accountTag == null) {
     player.accountTag = normalizeAccountTag(accountTag);
@@ -11966,6 +12480,27 @@ homeFloorApplyEl?.addEventListener('click', () => {
     renderHomeModal();
   });
 });
+homeDoorToggleEl?.addEventListener('click', () => {
+  const room = normalizeHomeRoomState(questState.homeRoom);
+  if (!room.roomId) {
+    setHomeStatus('Claim a room before changing access.', '#fecaca');
+    return;
+  }
+  const nextOpen = room.doorOpen !== false ? false : true;
+  socket.emit('home:setDoor', { doorOpen: nextOpen }, (resp) => {
+    if (!resp?.ok) {
+      setHomeStatus(resp?.error || 'Could not update door access.', '#fecaca');
+      return;
+    }
+    if (resp.progress) {
+      applyProgressState(resp.progress);
+    } else if (typeof resp.doorOpen === 'boolean') {
+      questState.homeRoom.doorOpen = resp.doorOpen;
+      updateHomeDoorToggleUI();
+    }
+    setHomeStatus(`Door ${nextOpen ? 'opened' : 'closed'}.`, '#86efac');
+  });
+});
 marketOpenIndexEl?.addEventListener('click', () => {
   setMarketModalOpen(false);
   setFishIndexOpen(true);
@@ -12681,9 +13216,36 @@ function updateLocalPlayer(delta, nowMs) {
   }
 }
 
+function isInHouseHallZone(x, z) {
+  return Math.hypot(x - HOUSE_HALL_BASE.x, z - HOUSE_HALL_BASE.z) <= HOUSE_HALL_PLAY_RADIUS;
+}
+
+function isInHouseRoomZone(x, z) {
+  return Math.hypot(x - HOUSE_ROOM_BASE.x, z - HOUSE_ROOM_BASE.z) <= HOUSE_ROOM_PLAY_RADIUS;
+}
+
+function shouldRenderRemotePlayer(player) {
+  if (!player) return false;
+  if (inHouseRoom) {
+    return Boolean(activeHouseRoomId && player.currentRoomId === activeHouseRoomId);
+  }
+  if (inHouseHall) {
+    return !player.currentRoomId && isInHouseHallZone(player.x, player.z);
+  }
+  if (player.currentRoomId) return false;
+  if (isInHouseHallZone(player.x, player.z) || isInHouseRoomZone(player.x, player.z)) return false;
+  return true;
+}
+
 function updateRemotePlayers(delta) {
   players.forEach((player, id) => {
     if (id === localPlayerId) return;
+    const shouldShow = shouldRenderRemotePlayer(player);
+    player.mesh.visible = shouldShow;
+    if (!shouldShow) {
+      if (player.label) player.label.style.display = 'none';
+      if (player.bubble) player.bubble.style.display = 'none';
+    }
     const prevX = player.mesh.position.x;
     const prevZ = player.mesh.position.z;
     player.mesh.position.x += (player.x - player.mesh.position.x) * Math.min(1, delta * 12);
@@ -12718,6 +13280,11 @@ function updateNameTags() {
 
   players.forEach((player) => {
     if (!player.label) return;
+    if (!player.mesh?.visible) {
+      player.label.style.display = 'none';
+      if (player.bubble) player.bubble.style.display = 'none';
+      return;
+    }
 
     const position = _nameTagWorldPos.copy(player.mesh.position);
     position.y += TAG_WORLD_OFFSET_Y;
@@ -12779,13 +13346,22 @@ function updateInteractionHint() {
     }
     const hallDoor = getNearbyHouseHallDoor(local);
     if (hallDoor) {
-      const claimedId = normalizeHomeRoomState(questState.homeRoom).roomId;
-      if (claimedId === hallDoor.id) {
+      const ownedRoomId = normalizeHomeRoomState(questState.homeRoom).roomId;
+      const roomState = getHomeRoomState(hallDoor.id);
+      const isClaimed = Boolean(roomState?.roomId);
+      const isOwner = ownedRoomId === hallDoor.id;
+      const isOpen = roomState?.doorOpen !== false;
+      const hasRoom = Boolean(ownedRoomId);
+      if (isOwner) {
         interactHintEl.textContent = 'Press E to enter your room';
-      } else if (claimedId) {
-        interactHintEl.textContent = 'This room is already claimed';
+      } else if (!isClaimed) {
+        interactHintEl.textContent = hasRoom
+          ? 'Room unclaimed, but you already own one'
+          : `Press E to claim Room ${hallDoor.id.split('-')[1]}`;
+      } else if (isOpen) {
+        interactHintEl.textContent = 'Press E to enter (door open)';
       } else {
-        interactHintEl.textContent = `Press E to claim Room ${hallDoor.id.split('-')[1]}`;
+        interactHintEl.textContent = 'Room closed: owner has the door locked';
       }
       return;
     }
@@ -12801,10 +13377,16 @@ function updateInteractionHint() {
       return;
     }
     if (isNearHouseWorkshop(local)) {
-      interactHintEl.textContent = 'Press E to open home workshop';
+      const ownedRoomId = normalizeHomeRoomState(questState.homeRoom).roomId;
+      interactHintEl.textContent = ownedRoomId && ownedRoomId === activeHouseRoomId
+        ? 'Press E to open home workshop'
+        : 'Workshop is reserved for the room owner';
       return;
     }
-    interactHintEl.textContent = 'Your Room: use Workshop marker to place furniture and paint';
+    const ownedRoomId = normalizeHomeRoomState(questState.homeRoom).roomId;
+    interactHintEl.textContent = ownedRoomId && ownedRoomId === activeHouseRoomId
+      ? 'Your Room: use Workshop marker to place furniture and paint'
+      : 'Visiting room: door open by owner';
     return;
   }
   if (inMine) {
@@ -13140,6 +13722,28 @@ function updateHouseRoomVisuals(nowMs) {
     const spin = nowMs * 0.0012;
     houseHallRoomDoors.forEach((door) => {
       if (door.ring) {
+        const ownedRoomId = normalizeHomeRoomState(questState.homeRoom).roomId;
+        const roomState = getHomeRoomState(door.id);
+        const isClaimed = Boolean(roomState?.roomId);
+        const isOwner = ownedRoomId === door.id;
+        const isOpen = roomState?.doorOpen !== false;
+        let ringColor = 0x7dd3fc;
+        let emissiveColor = 0x0ea5e9;
+        if (isClaimed) {
+          if (isOpen) {
+            ringColor = isOwner ? 0xfacc15 : 0x34d399;
+            emissiveColor = isOwner ? 0xf59e0b : 0x059669;
+          } else {
+            ringColor = 0xf97316;
+            emissiveColor = 0xea580c;
+          }
+        }
+        if (door.ring.material?.color) {
+          door.ring.material.color.setHex(ringColor);
+        }
+        if (door.ring.material?.emissive) {
+          door.ring.material.emissive.setHex(emissiveColor);
+        }
         door.ring.rotation.z = spin;
         door.ring.position.y = GROUND_Y + 0.05 + Math.sin(nowMs * 0.003 + door.ring.position.x) * 0.04;
       }

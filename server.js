@@ -720,6 +720,7 @@ function defaultQuest(seed = 1) {
 function defaultHomeRoom() {
   return {
     roomId: null,
+    doorOpen: true,
     wallPaint: 'sand',
     floorPaint: 'oak',
     ownedFurniture: {
@@ -747,6 +748,9 @@ function sanitizeHomeRoom(value) {
   if (!value || typeof value !== 'object') return base;
   const roomId = normalizeHomeRoomId(value.roomId);
   if (roomId) base.roomId = roomId;
+  if (typeof value.doorOpen === 'boolean') {
+    base.doorOpen = value.doorOpen;
+  }
   const wallPaintRaw = typeof value.wallPaint === 'string' ? value.wallPaint.trim().toLowerCase() : '';
   const floorPaintRaw = typeof value.floorPaint === 'string' ? value.floorPaint.trim().toLowerCase() : '';
   if (HOME_ROOM_WALL_PAINTS.has(wallPaintRaw)) base.wallPaint = wallPaintRaw;
@@ -1079,6 +1083,12 @@ function progressSnapshot(progress) {
     fishingQuestCompletions: clamp(Math.floor(Number(progress.fishingQuestCompletions) || 0), 0, 1_000_000),
     fishingQuest: progress.fishingQuest ? { ...progress.fishingQuest } : defaultFishingQuest(0, 1),
     homeRoom: sanitizeHomeRoom(progress.homeRoom),
+    homeRooms: [...profiles.entries()].map(([profileId, profile]) => {
+      const room = sanitizeHomeRoom(profile?.progress?.homeRoom);
+      return room.roomId
+        ? { roomId: room.roomId, state: room }
+        : null;
+    }).filter(Boolean),
     furnitureTrader: furnitureTraderSnapshot(progress),
     shop: {
       order: [...PICKAXE_ORDER],
@@ -1916,6 +1926,7 @@ function spawnPlayer(socket, profileId, username) {
     inMine: false,
     isFishing: false,
     torchEquipped: false,
+    currentRoomId: null,
     appearance: sanitizeAppearance(profile?.appearance, {
       ...defaultAppearance(),
       shirt: profile?.color || randomHexColor()
@@ -2090,7 +2101,8 @@ io.on('connection', (socket) => {
       torchEquipped: current.torchEquipped === true,
       hasFishingRod: current?.progress?.hasFishingRod === true,
       fishingRodTier: sanitizeFishingRodTier(current?.progress?.fishingRodTier, 'basic'),
-      isFishing: current.isFishing === true
+      isFishing: current.isFishing === true,
+      currentRoomId: current.currentRoomId || null
     });
   });
 
@@ -2450,6 +2462,52 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('home:enterRoom', (payload, ack) => {
+    const actor = players.get(socket.id);
+    const progress = actor?.progress;
+    if (!actor || !progress) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Not authenticated.' });
+      return;
+    }
+    const roomId = normalizeHomeRoomId(payload?.roomId);
+    if (!roomId) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'That room does not exist.' });
+      return;
+    }
+    const ownerProfileId = findProfileIdByRoomId(roomId, null);
+    if (!ownerProfileId) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'This room is unclaimed.' });
+      return;
+    }
+    const ownerProfile = profiles.get(ownerProfileId);
+    const roomState = sanitizeHomeRoom(ownerProfile?.progress?.homeRoom);
+    const isOwner = ownerProfileId === actor.profileId;
+    if (!isOwner && roomState.doorOpen === false) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'The room owner has the door closed.' });
+      return;
+    }
+    actor.currentRoomId = roomId;
+    players.set(socket.id, actor);
+    io.emit('playerRoom', { id: socket.id, roomId });
+    if (typeof ack === 'function') {
+      ack({ ok: true, roomId, roomState });
+    }
+  });
+
+  socket.on('home:leaveRoom', (payload, ack) => {
+    const actor = players.get(socket.id);
+    if (!actor) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Not authenticated.' });
+      return;
+    }
+    if (actor.currentRoomId) {
+      actor.currentRoomId = null;
+      players.set(socket.id, actor);
+      io.emit('playerRoom', { id: socket.id, roomId: null });
+    }
+    if (typeof ack === 'function') ack({ ok: true });
+  });
+
   socket.on('home:claimRoom', (payload, ack) => {
     const actor = players.get(socket.id);
     const progress = actor?.progress;
@@ -2480,8 +2538,34 @@ io.on('connection', (socket) => {
     room.roomId = roomId;
     persistPlayerProgress(actor, { immediate: true });
     emitProgress(socket, actor);
+    io.emit('home:roomUpdate', { roomId, state: sanitizeHomeRoom(progress.homeRoom) });
     if (typeof ack === 'function') {
       ack({ ok: true, roomId, progress: progressSnapshot(progress) });
+    }
+  });
+
+  socket.on('home:setDoor', (payload, ack) => {
+    const actor = players.get(socket.id);
+    const progress = actor?.progress;
+    if (!actor || !progress) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Not authenticated.' });
+      return;
+    }
+    progress.homeRoom = sanitizeHomeRoom(progress.homeRoom);
+    const room = progress.homeRoom;
+    if (!room.roomId) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Claim a room first.' });
+      return;
+    }
+    const desiredOpen = payload?.doorOpen === true || payload?.doorOpen === false
+      ? payload.doorOpen === true
+      : !room.doorOpen;
+    room.doorOpen = desiredOpen;
+    persistPlayerProgress(actor, { immediate: true });
+    emitProgress(socket, actor);
+    io.emit('home:roomUpdate', { roomId: room.roomId, state: sanitizeHomeRoom(room) });
+    if (typeof ack === 'function') {
+      ack({ ok: true, doorOpen: desiredOpen, progress: progressSnapshot(progress) });
     }
   });
 
@@ -2509,6 +2593,9 @@ io.on('connection', (socket) => {
     room.placedFurniture[itemId] = desiredPlaced;
     persistPlayerProgress(actor, { immediate: true });
     emitProgress(socket, actor);
+    if (room.roomId) {
+      io.emit('home:roomUpdate', { roomId: room.roomId, state: sanitizeHomeRoom(room) });
+    }
     if (typeof ack === 'function') {
       ack({
         ok: true,
@@ -2555,6 +2642,9 @@ io.on('connection', (socket) => {
     }
     persistPlayerProgress(actor, { immediate: true });
     emitProgress(socket, actor);
+    if (room.roomId) {
+      io.emit('home:roomUpdate', { roomId: room.roomId, state: sanitizeHomeRoom(room) });
+    }
     if (typeof ack === 'function') {
       ack({
         ok: true,

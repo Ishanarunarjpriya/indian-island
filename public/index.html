@@ -1331,6 +1331,18 @@
         transform: translateY(-1px);
       }
 
+      #home-access-section .home-access-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: center;
+      }
+
+      #home-door-note {
+        font-size: 12px;
+        color: rgba(226, 232, 240, 0.8);
+      }
+
       #home-wall-apply,
       #home-floor-apply {
         width: 100%;
@@ -2936,6 +2948,13 @@
           <section class="market-section">
             <h3>Owned Furniture</h3>
             <div id="home-furniture-list"></div>
+          </section>
+          <section id="home-access-section" class="market-section">
+            <h3>Room Access</h3>
+            <div class="home-access-row">
+              <button id="home-door-toggle" type="button">Door: Open</button>
+              <span id="home-door-note">Visitors can enter when the door is open.</span>
+            </div>
           </section>
           <p id="home-status"></p>
         </div>
