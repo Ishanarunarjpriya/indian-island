@@ -61,6 +61,7 @@
         "description": "Bring 5 common fish to the Market Trader."
       },
       "homeRoom": {
+        "roomId": null,
         "wallPaint": "sand",
         "floorPaint": "oak",
         "ownedFurniture": {
@@ -144,6 +145,7 @@
         "description": "Bring 5 common fish to the Market Trader."
       },
       "homeRoom": {
+        "roomId": null,
         "wallPaint": "sand",
         "floorPaint": "oak",
         "ownedFurniture": {
@@ -227,6 +229,7 @@
         "description": "Bring 5 common fish to the Market Trader."
       },
       "homeRoom": {
+        "roomId": null,
         "wallPaint": "sand",
         "floorPaint": "oak",
         "ownedFurniture": {
@@ -310,6 +313,7 @@
         "description": "Bring 5 common fish to the Market Trader."
       },
       "homeRoom": {
+        "roomId": null,
         "wallPaint": "sand",
         "floorPaint": "oak",
         "ownedFurniture": {
@@ -333,10 +337,10 @@
   },
   "acct-guest_l483w1m4": {
     "name": "guest_l483w1m4",
-    "color": "#20bb15",
+    "color": "#6b1f13",
     "appearance": {
       "skin": "#f3cfb3",
-      "shirt": "#20bb15",
+      "shirt": "#6b1f13",
       "pants": "#334155",
       "shoes": "#111827",
       "hairStyle": "short",
@@ -344,9 +348,9 @@
       "faceStyle": "smile",
       "accessories": []
     },
-    "x": 1.1684429918719337,
+    "x": 87.71290211887651,
     "y": 1.35,
-    "z": -5.998681110470502,
+    "z": 75.78246381630603,
     "progress": {
       "coins": 0,
       "xp": 0,
@@ -367,7 +371,7 @@
       "maxStaminaBonusPct": 0,
       "questSeed": 1,
       "quest": {
-        "id": "q-1773698343623-1",
+        "id": "q-1773769331087-1",
         "type": "mine",
         "resource": "iron",
         "targetCount": 15,
@@ -381,7 +385,7 @@
       "fishingQuestSeed": 1,
       "fishingQuestCompletions": 0,
       "fishingQuest": {
-        "id": "fq-1773698343623-1",
+        "id": "fq-1773769331087-1",
         "type": "fishing",
         "status": "available",
         "targetRarity": "common",
@@ -393,6 +397,7 @@
         "description": "Bring 5 common fish to the Market Trader."
       },
       "homeRoom": {
+        "roomId": null,
         "wallPaint": "sand",
         "floorPaint": "oak",
         "ownedFurniture": {
@@ -409,7 +414,7 @@
         }
       },
       "furnitureTrader": {
-        "cycleId": 985391,
+        "cycleId": 985431,
         "purchasedThisCycle": {}
       }
     }
