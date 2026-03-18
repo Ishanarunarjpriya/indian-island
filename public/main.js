@@ -1674,7 +1674,7 @@ scene.fog = new THREE.Fog(0xb7d7e6, 45, 160);
 const camera = new THREE.PerspectiveCamera(68, window.innerWidth / window.innerHeight, 0.1, 300);
 camera.position.set(0, 11, 16);
 
-const renderer = new THREE.WebGLRenderer({ antialias: true });
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, renderPixelRatioCap));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = graphicsPreset !== 'performance';

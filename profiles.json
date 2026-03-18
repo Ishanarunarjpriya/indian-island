@@ -517,9 +517,9 @@
       "faceStyle": "smile",
       "accessories": []
     },
-    "x": -93.1740258412384,
+    "x": 88.78653391148288,
     "y": 1.35,
-    "z": 46.747895096624056,
+    "z": 75.27724876437108,
     "progress": {
       "coins": 0,
       "xp": 0,
@@ -600,7 +600,7 @@
         }
       },
       "furnitureTrader": {
-        "cycleId": 985482,
+        "cycleId": 985483,
         "purchasedThisCycle": {}
       }
     }

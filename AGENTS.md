@@ -46,3 +46,10 @@
 ## Session Memory
 - At the start of each subtask, list all files already read this session.
 - Do not re-read any file on that list.
+
+## main.js is Large
+- `public/main.js` is ~9000 lines. NEVER attempt to read it in full.
+- Always use `view_range` with specific line numbers when reading main.js.
+- Never read more than 150 lines at once from main.js.
+- If you don't know the exact line range you need, ask the user instead of exploring.
+- Do NOT search for functions by reading large chunks — ask the user for the line number first.
