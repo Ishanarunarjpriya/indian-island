@@ -189,6 +189,7 @@ let torchEquipped = false;
 const questState = createDefaultQuestState();
 let HOUSE_ROOM_SLOT_COUNT = 6;
 let HOUSE_ROOM_IDS = Array.from({ length: HOUSE_ROOM_SLOT_COUNT }, (_, i) => `room-${i + 1}`);
+let HOUSE_ROOM_OWNERS = {};
 initGameData({
   getCurrentHouseRoomIds: () => HOUSE_ROOM_IDS
 });
@@ -2059,6 +2060,7 @@ initInteriorBuilders({
   houseHallRoomDoorsRef: houseHallRoomDoors,
   getHouseRoomSlotCountRef: () => HOUSE_ROOM_SLOT_COUNT,
   getHouseRoomIdsRef: () => HOUSE_ROOM_IDS,
+  getRoomOwnersRef: () => HOUSE_ROOM_OWNERS,
   houseRoomContextRef: houseRoomContext,
   layoutRef: interiorLayout
 });
@@ -2232,6 +2234,9 @@ function applyRoomConfig(config) {
   if (!newRoomIds.length) return;
   HOUSE_ROOM_SLOT_COUNT = newSlotCount;
   HOUSE_ROOM_IDS = newRoomIds;
+  if (config.roomOwners && typeof config.roomOwners === 'object') {
+    HOUSE_ROOM_OWNERS = config.roomOwners;
+  }
   rebuildHouseHall();
 }
 
@@ -2255,6 +2260,12 @@ function rebuildHouseHall() {
 
 socket.on('home:roomConfig', (payload) => {
   applyRoomConfig(payload || null);
+});
+
+socket.on('home:roomUpdate', (payload) => {
+  if (payload?.roomId && payload.state) {
+    socket.emit('home:requestRoomConfig');
+  }
 });
 
 function addLandmarks() {
@@ -8832,7 +8843,7 @@ function animate(nowMs) {
             desiredZ = LIGHTHOUSE_INTERIOR_BASE.z + cdz * scale;
           }
         } else if (inHouseHall) {
-          const camRadius = getHallPlayRadius() - 1.35;
+          const camRadius = getHallPlayRadius() - 2.8;
           const cdx = desiredX - HOUSE_HALL_BASE.x;
           const cdz = desiredZ - HOUSE_HALL_BASE.z;
           const clen = Math.hypot(cdx, cdz);
@@ -8841,9 +8852,9 @@ function animate(nowMs) {
             desiredX = HOUSE_HALL_BASE.x + cdx * scale;
             desiredZ = HOUSE_HALL_BASE.z + cdz * scale;
           }
-          desiredY = Math.min(desiredY, GROUND_Y + 4.4);
+          desiredY = Math.min(desiredY, GROUND_Y + 3.8);
         } else if (inHouseRoom) {
-          const camRadius = HOUSE_ROOM_PLAY_RADIUS - 1.25;
+          const camRadius = HOUSE_ROOM_PLAY_RADIUS - 2.8;
           const cdx = desiredX - HOUSE_ROOM_BASE.x;
           const cdz = desiredZ - HOUSE_ROOM_BASE.z;
           const clen = Math.hypot(cdx, cdz);
@@ -8852,7 +8863,7 @@ function animate(nowMs) {
             desiredX = HOUSE_ROOM_BASE.x + cdx * scale;
             desiredZ = HOUSE_ROOM_BASE.z + cdz * scale;
           }
-          desiredY = Math.min(desiredY, GROUND_Y + 4.25);
+          desiredY = Math.min(desiredY, GROUND_Y + 3.8);
         } else if (inMine) {
           const camRadius = MINE_PLAY_RADIUS - 1.9;
           const cdx = desiredX - MINE_POS.x;

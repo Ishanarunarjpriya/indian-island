@@ -852,10 +852,20 @@ export function makeTextSign(text, width = 2.2, height = 0.7, bg = '#8b5a2b', fg
   ctx.lineWidth = 10;
   ctx.strokeRect(8, 8, canvas.width - 16, canvas.height - 16);
   ctx.fillStyle = fg;
-  ctx.font = 'bold 64px Arial';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(text, canvas.width * 0.5, canvas.height * 0.52);
+  const lines = String(text).split('\n');
+  if (lines.length <= 1) {
+    ctx.font = 'bold 64px Arial';
+    ctx.fillText(text, canvas.width * 0.5, canvas.height * 0.52);
+  } else {
+    const lineH = canvas.height / (lines.length + 0.4);
+    const fontSize = Math.min(48, Math.floor(lineH * 0.85));
+    ctx.font = `bold ${fontSize}px Arial`;
+    for (let i = 0; i < lines.length; i++) {
+      ctx.fillText(lines[i], canvas.width * 0.5, lineH * (i + 0.7));
+    }
+  }
   const tex = new THREE.CanvasTexture(canvas);
   tex.needsUpdate = true;
   const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9, metalness: 0.02 });

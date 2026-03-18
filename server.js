@@ -304,7 +304,7 @@ const profiles = new Map();
 const accounts = new Map();
 
 function getHomeRoomSlotCount() {
-  return Math.max(HOME_ROOM_MIN_COUNT, accounts.size);
+  return Math.max(HOME_ROOM_MIN_COUNT, players.size);
 }
 function getHomeRoomIds() {
   return Array.from({ length: getHomeRoomSlotCount() }, (_, i) => `room-${i + 1}`);
@@ -312,7 +312,14 @@ function getHomeRoomIds() {
 let HOME_ROOM_IDS = getHomeRoomIds();
 
 function getRoomConfig() {
-  return { roomIds: getHomeRoomIds(), slotCount: getHomeRoomSlotCount() };
+  const roomOwners = {};
+  for (const [, profile] of profiles) {
+    const roomId = profile?.progress?.homeRoom?.roomId;
+    if (roomId && profile.name) {
+      roomOwners[roomId] = profile.name;
+    }
+  }
+  return { roomIds: getHomeRoomIds(), slotCount: getHomeRoomSlotCount(), roomOwners };
 }
 
 function broadcastRoomConfig() {
@@ -1991,6 +1998,7 @@ function spawnPlayer(socket, profileId, username) {
   spawn.color = spawn.appearance.shirt;
   spawn.pickaxe = sanitizePickaxe(spawn.progress?.pickaxe, 'wood');
   players.set(socket.id, spawn);
+  broadcastRoomConfig();
   const roomName = effectiveRoomName(spawn);
   socket.join(roomName);
   const roomPlayers = [...players.values()].filter((p) => effectiveRoomName(p) === roomName);
@@ -2035,6 +2043,7 @@ function removeAuthenticatedPlayer(socket) {
   persistPlayerProgress(existing);
   const roomName = effectiveRoomName(existing);
   players.delete(socket.id);
+  broadcastRoomConfig();
   voiceParticipants.delete(socket.id);
   socket.broadcast.emit('voice:user-left', socket.id);
   io.to(roomName).emit('playerLeft', socket.id);
@@ -2522,6 +2531,10 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('home:requestRoomConfig', () => {
+    socket.emit('home:roomConfig', getRoomConfig());
+  });
+
   socket.on('home:enterRoom', (payload, ack) => {
     const actor = players.get(socket.id);
     const progress = actor?.progress;
@@ -2613,6 +2626,7 @@ io.on('connection', (socket) => {
     persistPlayerProgress(actor, { immediate: true });
     emitProgress(socket, actor);
     io.emit('home:roomUpdate', { roomId, state: sanitizeHomeRoom(progress.homeRoom) });
+    broadcastRoomConfig();
     if (typeof ack === 'function') {
       ack({ ok: true, roomId, progress: progressSnapshot(progress) });
     }
@@ -2767,6 +2781,7 @@ io.on('connection', (socket) => {
     persistPlayerProgress(actor, { immediate: true });
     emitProgress(socket, actor);
     io.emit('home:roomUpdate', { roomId: oldRoomId, state: sanitizeHomeRoom(room) });
+    broadcastRoomConfig();
     if (typeof ack === 'function') {
       ack({ ok: true, roomId: oldRoomId, sellPrice, progress: progressSnapshot(progress) });
     }

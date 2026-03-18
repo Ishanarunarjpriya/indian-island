@@ -20,6 +20,7 @@ let setFurnitureShopExitMarker = null;
 let houseHallRoomDoors = null;
 let getHouseRoomSlotCount = null;
 let getHouseRoomIds = null;
+let getRoomOwners = null;
 let houseRoomContext = null;
 let layout = null;
 
@@ -40,6 +41,7 @@ export function initInteriorBuilders({
   houseHallRoomDoorsRef = null,
   getHouseRoomSlotCountRef = null,
   getHouseRoomIdsRef = null,
+  getRoomOwnersRef = null,
   houseRoomContextRef = null,
   layoutRef = null
 } = {}) {
@@ -59,6 +61,7 @@ export function initInteriorBuilders({
   houseHallRoomDoors = houseHallRoomDoorsRef;
   getHouseRoomSlotCount = getHouseRoomSlotCountRef;
   getHouseRoomIds = getHouseRoomIdsRef;
+  getRoomOwners = getRoomOwnersRef;
   houseRoomContext = houseRoomContextRef;
   layout = layoutRef;
 }
@@ -1440,7 +1443,10 @@ export function addHouseHallInterior() {
     frame.rotation.y = isRight ? -Math.PI * 0.5 : Math.PI * 0.5;
     hall.add(frame);
 
-    const sign = makeTextSign(`Room ${i + 1}`, 2.2, 0.5, '#1f2937', '#e2e8f0');
+    const owners = getRoomOwners?.() || {};
+    const ownerName = owners[roomIds[i]] || null;
+    const signLabel = ownerName ? `Room ${i + 1}\n${ownerName}` : `Room ${i + 1}\nUnclaimed`;
+    const sign = makeTextSign(signLabel, 2.2, 0.65, '#1f2937', '#e2e8f0');
     sign.position.set(x, floorY + doorH + 0.45, z);
     sign.rotation.y = frame.rotation.y;
     hall.add(sign);
