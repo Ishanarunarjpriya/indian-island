@@ -5734,6 +5734,7 @@ function houseHallDoorInteract(local) {
     primaryLabel: 'Claim Room',
     secondaryLabel: 'Cancel',
     onPrimary: () => {
+      closeNpcDialogue();
       claimHouseRoom(door.id, () => {
         enterHouseRoom(local, door.id);
       });
@@ -7455,6 +7456,7 @@ homeUnclaimEl?.addEventListener('click', () => {
     primaryLabel: 'Sell Room',
     secondaryLabel: 'Cancel',
     onPrimary: () => {
+      closeNpcDialogue();
       localRoomTransitioning = true;
       socket.emit('home:unclaimRoom', {}, (resp) => {
         if (!resp?.ok) {
