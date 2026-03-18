@@ -506,10 +506,10 @@
   },
   "acct-guest_l483w1m3": {
     "name": "guest_l483w1m3",
-    "color": "#98ffbe",
+    "color": "#2f2ec7",
     "appearance": {
       "skin": "#f3cfb3",
-      "shirt": "#98ffbe",
+      "shirt": "#2f2ec7",
       "pants": "#334155",
       "shoes": "#111827",
       "hairStyle": "short",
@@ -517,9 +517,9 @@
       "faceStyle": "smile",
       "accessories": []
     },
-    "x": 136.40999411945106,
+    "x": -93.1740258412384,
     "y": 1.35,
-    "z": 152.78409595997434,
+    "z": 46.747895096624056,
     "progress": {
       "coins": 0,
       "xp": 0,
@@ -540,7 +540,7 @@
       "maxStaminaBonusPct": 0,
       "questSeed": 1,
       "quest": {
-        "id": "q-1773801126343-1",
+        "id": "q-1773867899440-1",
         "type": "mine",
         "resource": "iron",
         "targetCount": 15,
@@ -554,7 +554,7 @@
       "fishingQuestSeed": 1,
       "fishingQuestCompletions": 0,
       "fishingQuest": {
-        "id": "fq-1773801126343-1",
+        "id": "fq-1773867899440-1",
         "type": "fishing",
         "status": "available",
         "targetRarity": "common",
@@ -600,7 +600,7 @@
         }
       },
       "furnitureTrader": {
-        "cycleId": 985445,
+        "cycleId": 985482,
         "purchasedThisCycle": {}
       }
     }

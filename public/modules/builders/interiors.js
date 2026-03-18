@@ -293,16 +293,44 @@ export function addFishingShopInterior() {
    const wallMat = new THREE.MeshStandardMaterial({ color: wallPaint, roughness: 0.86 });
    const floorMat = new THREE.MeshStandardMaterial({ color: floorPaint, roughness: 0.92 });
    const trimMat = new THREE.MeshStandardMaterial({ color: 0x3b2f24, roughness: 0.88 });
+   const baseboardMat = new THREE.MeshStandardMaterial({ color: 0x2d2218, roughness: 0.85 });
+   const crownMat = new THREE.MeshStandardMaterial({ color: 0x4a3828, roughness: 0.82 });
+   const glassMat = new THREE.MeshStandardMaterial({ color: 0xa8d4f0, roughness: 0.1, metalness: 0.1, transparent: true, opacity: 0.35 });
+   const frameMat = new THREE.MeshStandardMaterial({ color: 0x2d2218, roughness: 0.85 });
+   const brassMat = new THREE.MeshStandardMaterial({ color: 0xc69332, roughness: 0.28, metalness: 0.82 });
+   const lanternMat = new THREE.MeshStandardMaterial({ color: 0x4a3828, roughness: 0.82 });
+   const lanternGlowMat = new THREE.MeshStandardMaterial({ color: 0xfff4cc, roughness: 0.5, emissive: 0xffe8a0, emissiveIntensity: 0.3 });
 
    const floor = new THREE.Mesh(new THREE.BoxGeometry(halfWidth * 2, 0.22, halfDepth * 2), floorMat);
    floor.position.set(FISHING_SHOP_BASE.x, floorY - 0.11, FISHING_SHOP_BASE.z);
    floor.receiveShadow = true;
    shop.add(floor);
 
+   const floorTileMat = new THREE.MeshStandardMaterial({ color: 0x4a3c2e, roughness: 0.88 });
+   for (let ix = -3; ix <= 3; ix += 1) {
+     for (let iz = -2; iz <= 2; iz += 1) {
+       if ((ix + iz) % 2 === 0) {
+         const tile = new THREE.Mesh(new THREE.BoxGeometry(halfWidth * 2 / 7 - 0.04, 0.02, halfDepth * 2 / 5 - 0.04), floorTileMat);
+         tile.position.set(FISHING_SHOP_BASE.x + ix * (halfWidth * 2 / 7), floorY + 0.01, FISHING_SHOP_BASE.z + iz * (halfDepth * 2 / 5));
+         tile.receiveShadow = true;
+         shop.add(tile);
+       }
+     }
+   }
+
    const ceiling = new THREE.Mesh(new THREE.BoxGeometry(halfWidth * 2, 0.18, halfDepth * 2), trimMat);
    ceiling.position.set(FISHING_SHOP_BASE.x, floorY + wallHeight + 0.1, FISHING_SHOP_BASE.z);
    ceiling.receiveShadow = true;
    shop.add(ceiling);
+
+   const beamMat = new THREE.MeshStandardMaterial({ color: 0x2d1f14, roughness: 0.88 });
+   for (let i = -1; i <= 1; i += 1) {
+     const beam = new THREE.Mesh(new THREE.BoxGeometry(halfWidth * 2 - 0.5, 0.22, 0.28), beamMat);
+     beam.position.set(FISHING_SHOP_BASE.x, floorY + wallHeight - 0.12, FISHING_SHOP_BASE.z + i * (halfDepth * 0.8));
+     beam.castShadow = true;
+     beam.receiveShadow = true;
+     shop.add(beam);
+   }
 
    const backWall = new THREE.Mesh(new THREE.BoxGeometry(halfWidth * 2, wallHeight, wallThickness), wallMat);
    backWall.position.set(FISHING_SHOP_BASE.x, wallCenterY, FISHING_SHOP_BASE.z - halfDepth + wallThickness * 0.5);
@@ -337,6 +365,55 @@ export function addFishingShopInterior() {
      FISHING_SHOP_BASE.z + halfDepth - wallThickness * 0.5
    );
    shop.add(frontTopWall);
+
+   const baseboardH = 0.28;
+   const baseboardInset = 0.02;
+   const bbBack = new THREE.Mesh(new THREE.BoxGeometry(halfWidth * 2 - 0.2, baseboardH, 0.06), baseboardMat);
+   bbBack.position.set(FISHING_SHOP_BASE.x, floorY + baseboardH * 0.5, FISHING_SHOP_BASE.z - halfDepth + wallThickness + baseboardInset);
+   shop.add(bbBack);
+   const bbLeft = new THREE.Mesh(new THREE.BoxGeometry(0.06, baseboardH, halfDepth * 2 - 0.2), baseboardMat);
+   bbLeft.position.set(FISHING_SHOP_BASE.x - halfWidth + wallThickness + baseboardInset, floorY + baseboardH * 0.5, FISHING_SHOP_BASE.z);
+   shop.add(bbLeft);
+   const bbRight = bbLeft.clone();
+   bbRight.position.x = FISHING_SHOP_BASE.x + halfWidth - wallThickness - baseboardInset;
+   shop.add(bbRight);
+
+   const crownH = 0.18;
+   const crBack = new THREE.Mesh(new THREE.BoxGeometry(halfWidth * 2 - 0.2, crownH, 0.08), crownMat);
+   crBack.position.set(FISHING_SHOP_BASE.x, floorY + wallHeight - crownH * 0.5, FISHING_SHOP_BASE.z - halfDepth + wallThickness + baseboardInset);
+   shop.add(crBack);
+   const crLeft = new THREE.Mesh(new THREE.BoxGeometry(0.08, crownH, halfDepth * 2 - 0.2), crownMat);
+   crLeft.position.set(FISHING_SHOP_BASE.x - halfWidth + wallThickness + baseboardInset, floorY + wallHeight - crownH * 0.5, FISHING_SHOP_BASE.z);
+   shop.add(crLeft);
+   const crRight = crLeft.clone();
+   crRight.position.x = FISHING_SHOP_BASE.x + halfWidth - wallThickness - baseboardInset;
+   shop.add(crRight);
+
+   const winW = 1.8;
+   const winH = 2.2;
+   const winY = floorY + wallHeight * 0.45;
+   for (const side of [-1, 1]) {
+     const wx = FISHING_SHOP_BASE.x + side * (halfWidth - 0.01);
+     const wz = FISHING_SHOP_BASE.z - 1.2;
+     const glass = new THREE.Mesh(new THREE.BoxGeometry(0.06, winH, winW), glassMat);
+     glass.position.set(wx - side * 0.02, winY, wz);
+     shop.add(glass);
+     const frameL = new THREE.Mesh(new THREE.BoxGeometry(0.1, winH + 0.16, 0.1), frameMat);
+     frameL.position.set(wx, winY, wz - winW * 0.5 - 0.04);
+     shop.add(frameL);
+     const frameR = frameL.clone();
+     frameR.position.z = wz + winW * 0.5 + 0.04;
+     shop.add(frameR);
+     const frameT = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, winW + 0.16), frameMat);
+     frameT.position.set(wx, winY + winH * 0.5 + 0.04, wz);
+     shop.add(frameT);
+     const frameB = frameT.clone();
+     frameB.position.y = winY - winH * 0.5 - 0.04;
+     shop.add(frameB);
+     const sill = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.06, winW + 0.2), frameMat);
+     sill.position.set(wx - side * 0.06, winY - winH * 0.5 - 0.1, wz);
+     shop.add(sill);
+   }
 
    const counterMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.82 });
    const shelfMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.78 });
@@ -450,15 +527,93 @@ export function addFishingShopInterior() {
    rope.position.set(FISHING_SHOP_BASE.x, floorY + wallHeight - 0.75, FISHING_SHOP_BASE.z);
    shop.add(rope);
 
-   const wallLamp = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.2, 10), shelfMat);
-   wallLamp.rotation.z = Math.PI * 0.5;
-   wallLamp.position.set(FISHING_SHOP_BASE.x - halfWidth + 0.18, floorY + 2.5, FISHING_SHOP_BASE.z - 0.8);
-   shop.add(wallLamp);
-   const wallLampGlow = new THREE.PointLight(0xfff3c4, 0.6, 4.5);
-   wallLampGlow.position.set(FISHING_SHOP_BASE.x - halfWidth + 0.4, floorY + 2.5, FISHING_SHOP_BASE.z - 0.8);
-   shop.add(wallLampGlow);
+    const wallLamp = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.2, 10), shelfMat);
+    wallLamp.rotation.z = Math.PI * 0.5;
+    wallLamp.position.set(FISHING_SHOP_BASE.x - halfWidth + 0.18, floorY + 2.5, FISHING_SHOP_BASE.z - 0.8);
+    shop.add(wallLamp);
+    const wallLampGlow = new THREE.PointLight(0xfff3c4, 0.6, 4.5);
+    wallLampGlow.position.set(FISHING_SHOP_BASE.x - halfWidth + 0.4, floorY + 2.5, FISHING_SHOP_BASE.z - 0.8);
+    shop.add(wallLampGlow);
 
-   shop.traverse((obj) => {
+    const sconceMat = new THREE.MeshStandardMaterial({ color: 0x4a3828, roughness: 0.78, metalness: 0.2 });
+    const sconceArmMat = new THREE.MeshStandardMaterial({ color: 0x2d2218, roughness: 0.82 });
+    const sconcePositions = [
+      [FISHING_SHOP_BASE.x - halfWidth + 0.15, floorY + 2.8, FISHING_SHOP_BASE.z + 0.5],
+      [FISHING_SHOP_BASE.x + halfWidth - 0.15, floorY + 2.8, FISHING_SHOP_BASE.z + 0.5],
+      [FISHING_SHOP_BASE.x - halfWidth + 0.15, floorY + 2.8, FISHING_SHOP_BASE.z + 1.8],
+      [FISHING_SHOP_BASE.x + halfWidth - 0.15, floorY + 2.8, FISHING_SHOP_BASE.z + 1.8]
+    ];
+    for (const [sx, sy, sz] of sconcePositions) {
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.3), sconceArmMat);
+      arm.position.set(sx, sy, sz);
+      shop.add(arm);
+      const holder = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 0.14, 8), sconceMat);
+      holder.position.set(sx, sy + 0.04, sz + 0.12);
+      shop.add(holder);
+      const flame = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 8), lanternGlowMat);
+      flame.position.set(sx, sy + 0.14, sz + 0.12);
+      shop.add(flame);
+    }
+
+    for (let i = 0; i < 2; i += 1) {
+      const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.42, 0.72, 12), barrelMat);
+      barrel.position.set(FISHING_SHOP_BASE.x - halfWidth + 1.0 + i * 1.1, floorY + 0.36, FISHING_SHOP_BASE.z - halfDepth + 1.0);
+      barrel.castShadow = true;
+      barrel.receiveShadow = true;
+      shop.add(barrel);
+      const barrelBand = new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.025, 6, 16), brassMat);
+      barrelBand.rotation.x = Math.PI * 0.5;
+      barrelBand.position.set(barrel.position.x, floorY + 0.22, barrel.position.z);
+      shop.add(barrelBand);
+      const barrelBand2 = barrelBand.clone();
+      barrelBand2.position.y = floorY + 0.52;
+      shop.add(barrelBand2);
+    }
+
+    const ropeCoilMat = new THREE.MeshStandardMaterial({ color: 0x8b7355, roughness: 0.92 });
+    for (let i = 0; i < 3; i += 1) {
+      const coil = new THREE.Mesh(new THREE.TorusGeometry(0.22 + i * 0.06, 0.035, 6, 16), ropeCoilMat);
+      coil.rotation.x = Math.PI * 0.5;
+      coil.position.set(FISHING_SHOP_BASE.x + halfWidth - 1.2, floorY + 0.06, FISHING_SHOP_BASE.z - halfDepth + 1.5);
+      shop.add(coil);
+    }
+
+    const hookMat = new THREE.MeshStandardMaterial({ color: 0x71717a, roughness: 0.4, metalness: 0.6 });
+    for (let i = 0; i < 4; i += 1) {
+      const hook = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.28, 6), hookMat);
+      hook.position.set(FISHING_SHOP_BASE.x - 1.8 + i * 0.9, floorY + 4.2, FISHING_SHOP_BASE.z - halfDepth + 0.3);
+      shop.add(hook);
+      const hookBase = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.04), shelfMat);
+      hookBase.position.set(hook.position.x, floorY + 4.34, hook.position.z);
+      shop.add(hookBase);
+    }
+
+    const lanternShadeMat = new THREE.MeshStandardMaterial({ color: 0xfef3c7, roughness: 0.5, side: THREE.DoubleSide });
+    const hangingLantern = new THREE.Group();
+    const lanternBody = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, 0.35, 10), lanternMat);
+    hangingLantern.add(lanternBody);
+    const lanternGlass = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 0.28, 10, 1, true), lanternShadeMat);
+    hangingLantern.add(lanternGlass);
+    const lanternTop = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.15, 10), lanternMat);
+    lanternTop.position.y = 0.24;
+    hangingLantern.add(lanternTop);
+    const lanternHandle = new THREE.Mesh(new THREE.TorusGeometry(0.12, 0.015, 6, 12, Math.PI), brassMat);
+    lanternHandle.position.y = 0.32;
+    hangingLantern.add(lanternHandle);
+    const lanternLight = new THREE.PointLight(0xffe8a0, 0.5, 5);
+    lanternLight.position.y = 0;
+    hangingLantern.add(lanternLight);
+    hangingLantern.position.set(FISHING_SHOP_BASE.x - 2.2, floorY + wallHeight - 0.6, FISHING_SHOP_BASE.z + 0.5);
+    shop.add(hangingLantern);
+
+    const hangingLantern2 = hangingLantern.clone();
+    hangingLantern2.position.set(FISHING_SHOP_BASE.x + 2.2, floorY + wallHeight - 0.6, FISHING_SHOP_BASE.z + 0.5);
+    shop.add(hangingLantern2);
+
+    const ambientLight = new THREE.AmbientLight(0xfff4e0, 0.18);
+    shop.add(ambientLight);
+
+    shop.traverse((obj) => {
      if (!obj?.isMesh) return;
      obj.castShadow = true;
      obj.receiveShadow = true;
@@ -500,16 +655,44 @@ export function addMarketShopInterior() {
    const wallMat = new THREE.MeshStandardMaterial({ color: wallPaint, roughness: 0.86 });
    const floorMat = new THREE.MeshStandardMaterial({ color: floorPaint, roughness: 0.92 });
    const trimMat = new THREE.MeshStandardMaterial({ color: 0x3b2f24, roughness: 0.88 });
+   const baseboardMat = new THREE.MeshStandardMaterial({ color: 0x2d1f14, roughness: 0.85 });
+   const crownMat = new THREE.MeshStandardMaterial({ color: 0x4a3018, roughness: 0.82 });
+   const glassMat = new THREE.MeshStandardMaterial({ color: 0xc9e4a8, roughness: 0.1, metalness: 0.1, transparent: true, opacity: 0.35 });
+   const frameMat = new THREE.MeshStandardMaterial({ color: 0x2d1f14, roughness: 0.85 });
+   const brassMat = new THREE.MeshStandardMaterial({ color: 0xc69332, roughness: 0.28, metalness: 0.82 });
+   const lanternMat = new THREE.MeshStandardMaterial({ color: 0x4a3018, roughness: 0.82 });
+   const lanternGlowMat = new THREE.MeshStandardMaterial({ color: 0xfff4cc, roughness: 0.5, emissive: 0xffe8a0, emissiveIntensity: 0.3 });
 
    const floor = new THREE.Mesh(new THREE.BoxGeometry(halfWidth * 2, 0.22, halfDepth * 2), floorMat);
    floor.position.set(MARKET_SHOP_BASE.x, floorY - 0.11, MARKET_SHOP_BASE.z);
    floor.receiveShadow = true;
    shop.add(floor);
 
+   const floorTileMat = new THREE.MeshStandardMaterial({ color: 0x4a3c2e, roughness: 0.88 });
+   for (let ix = -3; ix <= 3; ix += 1) {
+     for (let iz = -2; iz <= 2; iz += 1) {
+       if ((ix + iz) % 2 === 0) {
+         const tile = new THREE.Mesh(new THREE.BoxGeometry(halfWidth * 2 / 7 - 0.04, 0.02, halfDepth * 2 / 5 - 0.04), floorTileMat);
+         tile.position.set(MARKET_SHOP_BASE.x + ix * (halfWidth * 2 / 7), floorY + 0.01, MARKET_SHOP_BASE.z + iz * (halfDepth * 2 / 5));
+         tile.receiveShadow = true;
+         shop.add(tile);
+       }
+     }
+   }
+
    const ceiling = new THREE.Mesh(new THREE.BoxGeometry(halfWidth * 2, 0.18, halfDepth * 2), trimMat);
    ceiling.position.set(MARKET_SHOP_BASE.x, floorY + wallHeight + 0.1, MARKET_SHOP_BASE.z);
    ceiling.receiveShadow = true;
    shop.add(ceiling);
+
+   const beamMat = new THREE.MeshStandardMaterial({ color: 0x2d1f14, roughness: 0.88 });
+   for (let i = -1; i <= 1; i += 1) {
+     const beam = new THREE.Mesh(new THREE.BoxGeometry(halfWidth * 2 - 0.5, 0.22, 0.28), beamMat);
+     beam.position.set(MARKET_SHOP_BASE.x, floorY + wallHeight - 0.12, MARKET_SHOP_BASE.z + i * (halfDepth * 0.8));
+     beam.castShadow = true;
+     beam.receiveShadow = true;
+     shop.add(beam);
+   }
 
    const backWall = new THREE.Mesh(new THREE.BoxGeometry(halfWidth * 2, wallHeight, wallThickness), wallMat);
    backWall.position.set(MARKET_SHOP_BASE.x, wallCenterY, MARKET_SHOP_BASE.z - halfDepth + wallThickness * 0.5);
@@ -544,6 +727,55 @@ export function addMarketShopInterior() {
      MARKET_SHOP_BASE.z + halfDepth - wallThickness * 0.5
    );
    shop.add(frontTopWall);
+
+   const baseboardH = 0.28;
+   const baseboardInset = 0.02;
+   const bbBack = new THREE.Mesh(new THREE.BoxGeometry(halfWidth * 2 - 0.2, baseboardH, 0.06), baseboardMat);
+   bbBack.position.set(MARKET_SHOP_BASE.x, floorY + baseboardH * 0.5, MARKET_SHOP_BASE.z - halfDepth + wallThickness + baseboardInset);
+   shop.add(bbBack);
+   const bbLeft = new THREE.Mesh(new THREE.BoxGeometry(0.06, baseboardH, halfDepth * 2 - 0.2), baseboardMat);
+   bbLeft.position.set(MARKET_SHOP_BASE.x - halfWidth + wallThickness + baseboardInset, floorY + baseboardH * 0.5, MARKET_SHOP_BASE.z);
+   shop.add(bbLeft);
+   const bbRight = bbLeft.clone();
+   bbRight.position.x = MARKET_SHOP_BASE.x + halfWidth - wallThickness - baseboardInset;
+   shop.add(bbRight);
+
+   const crownH = 0.18;
+   const crBack = new THREE.Mesh(new THREE.BoxGeometry(halfWidth * 2 - 0.2, crownH, 0.08), crownMat);
+   crBack.position.set(MARKET_SHOP_BASE.x, floorY + wallHeight - crownH * 0.5, MARKET_SHOP_BASE.z - halfDepth + wallThickness + baseboardInset);
+   shop.add(crBack);
+   const crLeft = new THREE.Mesh(new THREE.BoxGeometry(0.08, crownH, halfDepth * 2 - 0.2), crownMat);
+   crLeft.position.set(MARKET_SHOP_BASE.x - halfWidth + wallThickness + baseboardInset, floorY + wallHeight - crownH * 0.5, MARKET_SHOP_BASE.z);
+   shop.add(crLeft);
+   const crRight = crLeft.clone();
+   crRight.position.x = MARKET_SHOP_BASE.x + halfWidth - wallThickness - baseboardInset;
+   shop.add(crRight);
+
+   const winW = 1.8;
+   const winH = 2.2;
+   const winY = floorY + wallHeight * 0.45;
+   for (const side of [-1, 1]) {
+     const wx = MARKET_SHOP_BASE.x + side * (halfWidth - 0.01);
+     const wz = MARKET_SHOP_BASE.z - 1.2;
+     const glass = new THREE.Mesh(new THREE.BoxGeometry(0.06, winH, winW), glassMat);
+     glass.position.set(wx - side * 0.02, winY, wz);
+     shop.add(glass);
+     const frameL = new THREE.Mesh(new THREE.BoxGeometry(0.1, winH + 0.16, 0.1), frameMat);
+     frameL.position.set(wx, winY, wz - winW * 0.5 - 0.04);
+     shop.add(frameL);
+     const frameR = frameL.clone();
+     frameR.position.z = wz + winW * 0.5 + 0.04;
+     shop.add(frameR);
+     const frameT = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, winW + 0.16), frameMat);
+     frameT.position.set(wx, winY + winH * 0.5 + 0.04, wz);
+     shop.add(frameT);
+     const frameB = frameT.clone();
+     frameB.position.y = winY - winH * 0.5 - 0.04;
+     shop.add(frameB);
+     const sill = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.06, winW + 0.2), frameMat);
+     sill.position.set(wx - side * 0.06, winY - winH * 0.5 - 0.1, wz);
+     shop.add(sill);
+   }
 
    const counterMat = new THREE.MeshStandardMaterial({ color: 0x3b2f24, roughness: 0.84 });
    const displayMat = new THREE.MeshStandardMaterial({ color: 0x92400e, roughness: 0.86 });
@@ -662,11 +894,82 @@ export function addMarketShopInterior() {
    rope.position.set(MARKET_SHOP_BASE.x, floorY + wallHeight - 0.8, MARKET_SHOP_BASE.z);
    shop.add(rope);
 
-   const sellSign = makeTextSign('Sell Your Fish', 3.2, 0.5, '#4c2a0f', '#fffbeb');
-   sellSign.position.set(MARKET_SHOP_BASE.x, floorY + 1.5, MARKET_SHOP_BASE.z - halfDepth + 0.5);
-   shop.add(sellSign);
+    const sellSign = makeTextSign('Sell Your Fish', 3.2, 0.5, '#4c2a0f', '#fffbeb');
+    sellSign.position.set(MARKET_SHOP_BASE.x, floorY + 1.5, MARKET_SHOP_BASE.z - halfDepth + 0.5);
+    shop.add(sellSign);
 
-   shop.traverse((obj) => {
+    const sconceMat = new THREE.MeshStandardMaterial({ color: 0x4a3018, roughness: 0.78, metalness: 0.2 });
+    const sconceArmMat = new THREE.MeshStandardMaterial({ color: 0x2d1f14, roughness: 0.82 });
+    const sconcePositions = [
+      [MARKET_SHOP_BASE.x - halfWidth + 0.15, floorY + 2.8, MARKET_SHOP_BASE.z + 0.5],
+      [MARKET_SHOP_BASE.x + halfWidth - 0.15, floorY + 2.8, MARKET_SHOP_BASE.z + 0.5],
+      [MARKET_SHOP_BASE.x - halfWidth + 0.15, floorY + 2.8, MARKET_SHOP_BASE.z + 1.8],
+      [MARKET_SHOP_BASE.x + halfWidth - 0.15, floorY + 2.8, MARKET_SHOP_BASE.z + 1.8]
+    ];
+    for (const [sx, sy, sz] of sconcePositions) {
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.3), sconceArmMat);
+      arm.position.set(sx, sy, sz);
+      shop.add(arm);
+      const holder = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 0.14, 8), sconceMat);
+      holder.position.set(sx, sy + 0.04, sz + 0.12);
+      shop.add(holder);
+      const flame = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 8), lanternGlowMat);
+      flame.position.set(sx, sy + 0.14, sz + 0.12);
+      shop.add(flame);
+    }
+
+    const barrelMat = new THREE.MeshStandardMaterial({ color: 0x6b4a2e, roughness: 0.86 });
+    for (let i = 0; i < 2; i += 1) {
+      const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.42, 0.72, 12), barrelMat);
+      barrel.position.set(MARKET_SHOP_BASE.x - halfWidth + 1.0 + i * 1.1, floorY + 0.36, MARKET_SHOP_BASE.z - halfDepth + 1.0);
+      barrel.castShadow = true;
+      barrel.receiveShadow = true;
+      shop.add(barrel);
+      const barrelBand = new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.025, 6, 16), brassMat);
+      barrelBand.rotation.x = Math.PI * 0.5;
+      barrelBand.position.set(barrel.position.x, floorY + 0.22, barrel.position.z);
+      shop.add(barrelBand);
+      const barrelBand2 = barrelBand.clone();
+      barrelBand2.position.y = floorY + 0.52;
+      shop.add(barrelBand2);
+    }
+
+    const crateMat = new THREE.MeshStandardMaterial({ color: 0x5b3a24, roughness: 0.88 });
+    for (let i = 0; i < 3; i += 1) {
+      const crate = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.45, 0.55), crateMat);
+      crate.position.set(MARKET_SHOP_BASE.x + halfWidth - 1.2, floorY + 0.22, MARKET_SHOP_BASE.z - halfDepth + 1.2 + i * 0.7);
+      crate.rotation.y = i * 0.15;
+      crate.castShadow = true;
+      crate.receiveShadow = true;
+      shop.add(crate);
+    }
+
+    const lanternShadeMat = new THREE.MeshStandardMaterial({ color: 0xfef3c7, roughness: 0.5, side: THREE.DoubleSide });
+    const hangingLantern = new THREE.Group();
+    const lanternBody = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, 0.35, 10), lanternMat);
+    hangingLantern.add(lanternBody);
+    const lanternGlass = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 0.28, 10, 1, true), lanternShadeMat);
+    hangingLantern.add(lanternGlass);
+    const lanternTop = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.15, 10), lanternMat);
+    lanternTop.position.y = 0.24;
+    hangingLantern.add(lanternTop);
+    const lanternHandle = new THREE.Mesh(new THREE.TorusGeometry(0.12, 0.015, 6, 12, Math.PI), brassMat);
+    lanternHandle.position.y = 0.32;
+    hangingLantern.add(lanternHandle);
+    const lanternLight = new THREE.PointLight(0xffe8a0, 0.5, 5);
+    lanternLight.position.y = 0;
+    hangingLantern.add(lanternLight);
+    hangingLantern.position.set(MARKET_SHOP_BASE.x - 2.2, floorY + wallHeight - 0.6, MARKET_SHOP_BASE.z + 0.5);
+    shop.add(hangingLantern);
+
+    const hangingLantern2 = hangingLantern.clone();
+    hangingLantern2.position.set(MARKET_SHOP_BASE.x + 2.2, floorY + wallHeight - 0.6, MARKET_SHOP_BASE.z + 0.5);
+    shop.add(hangingLantern2);
+
+    const ambientLight = new THREE.AmbientLight(0xfff4e0, 0.18);
+    shop.add(ambientLight);
+
+    shop.traverse((obj) => {
      if (!obj?.isMesh) return;
      obj.castShadow = true;
      obj.receiveShadow = true;
@@ -708,16 +1011,44 @@ export function addFurnitureShopInterior() {
    const wallMat = new THREE.MeshStandardMaterial({ color: wallPaint, roughness: 0.86 });
    const floorMat = new THREE.MeshStandardMaterial({ color: floorPaint, roughness: 0.92 });
    const trimMat = new THREE.MeshStandardMaterial({ color: 0x3b2f24, roughness: 0.88 });
+   const baseboardMat = new THREE.MeshStandardMaterial({ color: 0x2d1f14, roughness: 0.85 });
+   const crownMat = new THREE.MeshStandardMaterial({ color: 0x4a3018, roughness: 0.82 });
+   const glassMat = new THREE.MeshStandardMaterial({ color: 0xd4b8e8, roughness: 0.1, metalness: 0.1, transparent: true, opacity: 0.35 });
+   const frameMat = new THREE.MeshStandardMaterial({ color: 0x2d1f14, roughness: 0.85 });
+   const brassMat = new THREE.MeshStandardMaterial({ color: 0xc69332, roughness: 0.28, metalness: 0.82 });
+   const lanternMat = new THREE.MeshStandardMaterial({ color: 0x4a3018, roughness: 0.82 });
+   const lanternGlowMat = new THREE.MeshStandardMaterial({ color: 0xfff4cc, roughness: 0.5, emissive: 0xffe8a0, emissiveIntensity: 0.3 });
 
    const floor = new THREE.Mesh(new THREE.BoxGeometry(halfWidth * 2, 0.22, halfDepth * 2), floorMat);
    floor.position.set(FURNITURE_SHOP_BASE.x, floorY - 0.11, FURNITURE_SHOP_BASE.z);
    floor.receiveShadow = true;
    shop.add(floor);
 
+   const floorTileMat = new THREE.MeshStandardMaterial({ color: 0x4a3c2e, roughness: 0.88 });
+   for (let ix = -3; ix <= 3; ix += 1) {
+     for (let iz = -2; iz <= 2; iz += 1) {
+       if ((ix + iz) % 2 === 0) {
+         const tile = new THREE.Mesh(new THREE.BoxGeometry(halfWidth * 2 / 7 - 0.04, 0.02, halfDepth * 2 / 5 - 0.04), floorTileMat);
+         tile.position.set(FURNITURE_SHOP_BASE.x + ix * (halfWidth * 2 / 7), floorY + 0.01, FURNITURE_SHOP_BASE.z + iz * (halfDepth * 2 / 5));
+         tile.receiveShadow = true;
+         shop.add(tile);
+       }
+     }
+   }
+
    const ceiling = new THREE.Mesh(new THREE.BoxGeometry(halfWidth * 2, 0.18, halfDepth * 2), trimMat);
    ceiling.position.set(FURNITURE_SHOP_BASE.x, floorY + wallHeight + 0.1, FURNITURE_SHOP_BASE.z);
    ceiling.receiveShadow = true;
    shop.add(ceiling);
+
+   const beamMat = new THREE.MeshStandardMaterial({ color: 0x2d1f14, roughness: 0.88 });
+   for (let i = -1; i <= 1; i += 1) {
+     const beam = new THREE.Mesh(new THREE.BoxGeometry(halfWidth * 2 - 0.5, 0.22, 0.28), beamMat);
+     beam.position.set(FURNITURE_SHOP_BASE.x, floorY + wallHeight - 0.12, FURNITURE_SHOP_BASE.z + i * (halfDepth * 0.8));
+     beam.castShadow = true;
+     beam.receiveShadow = true;
+     shop.add(beam);
+   }
 
    const backWall = new THREE.Mesh(new THREE.BoxGeometry(halfWidth * 2, wallHeight, wallThickness), wallMat);
    backWall.position.set(FURNITURE_SHOP_BASE.x, wallCenterY, FURNITURE_SHOP_BASE.z - halfDepth + wallThickness * 0.5);
@@ -752,6 +1083,55 @@ export function addFurnitureShopInterior() {
      FURNITURE_SHOP_BASE.z + halfDepth - wallThickness * 0.5
    );
    shop.add(frontTopWall);
+
+   const baseboardH = 0.28;
+   const baseboardInset = 0.02;
+   const bbBack = new THREE.Mesh(new THREE.BoxGeometry(halfWidth * 2 - 0.2, baseboardH, 0.06), baseboardMat);
+   bbBack.position.set(FURNITURE_SHOP_BASE.x, floorY + baseboardH * 0.5, FURNITURE_SHOP_BASE.z - halfDepth + wallThickness + baseboardInset);
+   shop.add(bbBack);
+   const bbLeft = new THREE.Mesh(new THREE.BoxGeometry(0.06, baseboardH, halfDepth * 2 - 0.2), baseboardMat);
+   bbLeft.position.set(FURNITURE_SHOP_BASE.x - halfWidth + wallThickness + baseboardInset, floorY + baseboardH * 0.5, FURNITURE_SHOP_BASE.z);
+   shop.add(bbLeft);
+   const bbRight = bbLeft.clone();
+   bbRight.position.x = FURNITURE_SHOP_BASE.x + halfWidth - wallThickness - baseboardInset;
+   shop.add(bbRight);
+
+   const crownH = 0.18;
+   const crBack = new THREE.Mesh(new THREE.BoxGeometry(halfWidth * 2 - 0.2, crownH, 0.08), crownMat);
+   crBack.position.set(FURNITURE_SHOP_BASE.x, floorY + wallHeight - crownH * 0.5, FURNITURE_SHOP_BASE.z - halfDepth + wallThickness + baseboardInset);
+   shop.add(crBack);
+   const crLeft = new THREE.Mesh(new THREE.BoxGeometry(0.08, crownH, halfDepth * 2 - 0.2), crownMat);
+   crLeft.position.set(FURNITURE_SHOP_BASE.x - halfWidth + wallThickness + baseboardInset, floorY + wallHeight - crownH * 0.5, FURNITURE_SHOP_BASE.z);
+   shop.add(crLeft);
+   const crRight = crLeft.clone();
+   crRight.position.x = FURNITURE_SHOP_BASE.x + halfWidth - wallThickness - baseboardInset;
+   shop.add(crRight);
+
+   const winW = 1.8;
+   const winH = 2.2;
+   const winY = floorY + wallHeight * 0.45;
+   for (const side of [-1, 1]) {
+     const wx = FURNITURE_SHOP_BASE.x + side * (halfWidth - 0.01);
+     const wz = FURNITURE_SHOP_BASE.z - 1.2;
+     const glass = new THREE.Mesh(new THREE.BoxGeometry(0.06, winH, winW), glassMat);
+     glass.position.set(wx - side * 0.02, winY, wz);
+     shop.add(glass);
+     const frameL = new THREE.Mesh(new THREE.BoxGeometry(0.1, winH + 0.16, 0.1), frameMat);
+     frameL.position.set(wx, winY, wz - winW * 0.5 - 0.04);
+     shop.add(frameL);
+     const frameR = frameL.clone();
+     frameR.position.z = wz + winW * 0.5 + 0.04;
+     shop.add(frameR);
+     const frameT = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, winW + 0.16), frameMat);
+     frameT.position.set(wx, winY + winH * 0.5 + 0.04, wz);
+     shop.add(frameT);
+     const frameB = frameT.clone();
+     frameB.position.y = winY - winH * 0.5 - 0.04;
+     shop.add(frameB);
+     const sill = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.06, winW + 0.2), frameMat);
+     sill.position.set(wx - side * 0.06, winY - winH * 0.5 - 0.1, wz);
+     shop.add(sill);
+   }
 
    const counterMat = new THREE.MeshStandardMaterial({ color: 0x2f1e14, roughness: 0.84 });
    const displayMat = new THREE.MeshStandardMaterial({ color: 0x6b4a2e, roughness: 0.86 });
@@ -881,11 +1261,66 @@ export function addFurnitureShopInterior() {
    rope.position.set(FURNITURE_SHOP_BASE.x, floorY + wallHeight - 0.8, FURNITURE_SHOP_BASE.z);
    shop.add(rope);
 
-   const buySign = makeTextSign('Browse Furniture', 3.2, 0.5, '#2f1e14', '#fffbeb');
-   buySign.position.set(FURNITURE_SHOP_BASE.x, floorY + 1.5, FURNITURE_SHOP_BASE.z - halfDepth + 0.5);
-   shop.add(buySign);
+    const buySign = makeTextSign('Browse Furniture', 3.2, 0.5, '#2f1e14', '#fffbeb');
+    buySign.position.set(FURNITURE_SHOP_BASE.x, floorY + 1.5, FURNITURE_SHOP_BASE.z - halfDepth + 0.5);
+    shop.add(buySign);
 
-   shop.traverse((obj) => {
+    const sconceMat = new THREE.MeshStandardMaterial({ color: 0x4a3018, roughness: 0.78, metalness: 0.2 });
+    const sconceArmMat = new THREE.MeshStandardMaterial({ color: 0x2d1f14, roughness: 0.82 });
+    const sconcePositions = [
+      [FURNITURE_SHOP_BASE.x - halfWidth + 0.15, floorY + 2.8, FURNITURE_SHOP_BASE.z + 0.5],
+      [FURNITURE_SHOP_BASE.x + halfWidth - 0.15, floorY + 2.8, FURNITURE_SHOP_BASE.z + 0.5],
+      [FURNITURE_SHOP_BASE.x - halfWidth + 0.15, floorY + 2.8, FURNITURE_SHOP_BASE.z + 1.8],
+      [FURNITURE_SHOP_BASE.x + halfWidth - 0.15, floorY + 2.8, FURNITURE_SHOP_BASE.z + 1.8]
+    ];
+    for (const [sx, sy, sz] of sconcePositions) {
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.3), sconceArmMat);
+      arm.position.set(sx, sy, sz);
+      shop.add(arm);
+      const holder = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 0.14, 8), sconceMat);
+      holder.position.set(sx, sy + 0.04, sz + 0.12);
+      shop.add(holder);
+      const flame = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 8), lanternGlowMat);
+      flame.position.set(sx, sy + 0.14, sz + 0.12);
+      shop.add(flame);
+    }
+
+    const crateMat = new THREE.MeshStandardMaterial({ color: 0x5b3a24, roughness: 0.88 });
+    for (let i = 0; i < 3; i += 1) {
+      const crate = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.45, 0.55), crateMat);
+      crate.position.set(FURNITURE_SHOP_BASE.x - halfWidth + 1.2, floorY + 0.22, FURNITURE_SHOP_BASE.z - halfDepth + 1.2 + i * 0.7);
+      crate.rotation.y = i * 0.15;
+      crate.castShadow = true;
+      crate.receiveShadow = true;
+      shop.add(crate);
+    }
+
+    const lanternShadeMat = new THREE.MeshStandardMaterial({ color: 0xfef3c7, roughness: 0.5, side: THREE.DoubleSide });
+    const hangingLantern = new THREE.Group();
+    const lanternBody = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, 0.35, 10), lanternMat);
+    hangingLantern.add(lanternBody);
+    const lanternGlass = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 0.28, 10, 1, true), lanternShadeMat);
+    hangingLantern.add(lanternGlass);
+    const lanternTop = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.15, 10), lanternMat);
+    lanternTop.position.y = 0.24;
+    hangingLantern.add(lanternTop);
+    const lanternHandle = new THREE.Mesh(new THREE.TorusGeometry(0.12, 0.015, 6, 12, Math.PI), brassMat);
+    lanternHandle.position.y = 0.32;
+    hangingLantern.add(lanternHandle);
+    const lanternLight = new THREE.PointLight(0xffe8a0, 0.5, 5);
+    lanternLight.position.y = 0;
+    hangingLantern.add(lanternLight);
+    hangingLantern.position.set(FURNITURE_SHOP_BASE.x - 2.2, floorY + wallHeight - 0.6, FURNITURE_SHOP_BASE.z + 0.5);
+    shop.add(hangingLantern);
+
+    const hangingLantern2 = hangingLantern.clone();
+    hangingLantern2.position.set(FURNITURE_SHOP_BASE.x + 2.2, floorY + wallHeight - 0.6, FURNITURE_SHOP_BASE.z + 0.5);
+    shop.add(hangingLantern2);
+
+    const ambientLight = new THREE.AmbientLight(0xfff4e0, 0.18);
+    shop.add(ambientLight);
+
+    shop.traverse((obj) => {
      if (!obj?.isMesh) return;
      obj.castShadow = true;
      obj.receiveShadow = true;
