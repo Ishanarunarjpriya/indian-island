@@ -62,19 +62,36 @@
       },
       "homeRoom": {
         "roomId": null,
+        "doorOpen": true,
         "wallPaint": "sand",
         "floorPaint": "oak",
         "ownedFurniture": {
           "bed": false,
           "table": false,
           "lamp": false,
-          "plant": false
+          "plant": false,
+          "sofa": false,
+          "coffee-table": false,
+          "bookshelf": false,
+          "dresser": false,
+          "wardrobe": false,
+          "mirror": false,
+          "rug": false,
+          "wallart": false
         },
         "placedFurniture": {
           "bed": false,
           "table": false,
           "lamp": false,
-          "plant": false
+          "plant": false,
+          "sofa": false,
+          "coffee-table": false,
+          "bookshelf": false,
+          "dresser": false,
+          "wardrobe": false,
+          "mirror": false,
+          "rug": false,
+          "wallart": false
         }
       },
       "furnitureTrader": {
@@ -146,19 +163,36 @@
       },
       "homeRoom": {
         "roomId": null,
+        "doorOpen": true,
         "wallPaint": "sand",
         "floorPaint": "oak",
         "ownedFurniture": {
           "bed": false,
           "table": false,
           "lamp": false,
-          "plant": false
+          "plant": false,
+          "sofa": false,
+          "coffee-table": false,
+          "bookshelf": false,
+          "dresser": false,
+          "wardrobe": false,
+          "mirror": false,
+          "rug": false,
+          "wallart": false
         },
         "placedFurniture": {
           "bed": false,
           "table": false,
           "lamp": false,
-          "plant": false
+          "plant": false,
+          "sofa": false,
+          "coffee-table": false,
+          "bookshelf": false,
+          "dresser": false,
+          "wardrobe": false,
+          "mirror": false,
+          "rug": false,
+          "wallart": false
         }
       },
       "furnitureTrader": {
@@ -230,19 +264,36 @@
       },
       "homeRoom": {
         "roomId": null,
+        "doorOpen": true,
         "wallPaint": "sand",
         "floorPaint": "oak",
         "ownedFurniture": {
           "bed": false,
           "table": false,
           "lamp": false,
-          "plant": false
+          "plant": false,
+          "sofa": false,
+          "coffee-table": false,
+          "bookshelf": false,
+          "dresser": false,
+          "wardrobe": false,
+          "mirror": false,
+          "rug": false,
+          "wallart": false
         },
         "placedFurniture": {
           "bed": false,
           "table": false,
           "lamp": false,
-          "plant": false
+          "plant": false,
+          "sofa": false,
+          "coffee-table": false,
+          "bookshelf": false,
+          "dresser": false,
+          "wardrobe": false,
+          "mirror": false,
+          "rug": false,
+          "wallart": false
         }
       },
       "furnitureTrader": {
@@ -314,19 +365,36 @@
       },
       "homeRoom": {
         "roomId": null,
+        "doorOpen": true,
         "wallPaint": "sand",
         "floorPaint": "oak",
         "ownedFurniture": {
           "bed": false,
           "table": false,
           "lamp": false,
-          "plant": false
+          "plant": false,
+          "sofa": false,
+          "coffee-table": false,
+          "bookshelf": false,
+          "dresser": false,
+          "wardrobe": false,
+          "mirror": false,
+          "rug": false,
+          "wallart": false
         },
         "placedFurniture": {
           "bed": false,
           "table": false,
           "lamp": false,
-          "plant": false
+          "plant": false,
+          "sofa": false,
+          "coffee-table": false,
+          "bookshelf": false,
+          "dresser": false,
+          "wardrobe": false,
+          "mirror": false,
+          "rug": false,
+          "wallart": false
         }
       },
       "furnitureTrader": {
@@ -335,12 +403,12 @@
       }
     }
   },
-  "acct-guest_l483w1m4": {
-    "name": "guest_l483w1m4",
-    "color": "#6b1f13",
+  "acct-ishyfishyinthedishy": {
+    "name": "ishyfishyinthedish",
+    "color": "#d882b8",
     "appearance": {
       "skin": "#f3cfb3",
-      "shirt": "#6b1f13",
+      "shirt": "#d882b8",
       "pants": "#334155",
       "shoes": "#111827",
       "hairStyle": "short",
@@ -348,9 +416,9 @@
       "faceStyle": "smile",
       "accessories": []
     },
-    "x": 16.031382309228285,
+    "x": -209.2630397107911,
     "y": 1.35,
-    "z": -4.546680740925399,
+    "z": -211.16519687089837,
     "progress": {
       "coins": 0,
       "xp": 0,
@@ -371,7 +439,7 @@
       "maxStaminaBonusPct": 0,
       "questSeed": 1,
       "quest": {
-        "id": "q-1773769331087-1",
+        "id": "q-1773801099548-1",
         "type": "mine",
         "resource": "iron",
         "targetCount": 15,
@@ -385,7 +453,7 @@
       "fishingQuestSeed": 1,
       "fishingQuestCompletions": 0,
       "fishingQuest": {
-        "id": "fq-1773769331087-1",
+        "id": "fq-1773801099548-1",
         "type": "fishing",
         "status": "available",
         "targetRarity": "common",
@@ -398,33 +466,50 @@
       },
       "homeRoom": {
         "roomId": null,
+        "doorOpen": true,
         "wallPaint": "sand",
         "floorPaint": "oak",
         "ownedFurniture": {
-          "bed": false,
-          "table": false,
-          "lamp": false,
-          "plant": false
+          "bed": true,
+          "table": true,
+          "lamp": true,
+          "plant": true,
+          "sofa": false,
+          "coffee-table": false,
+          "bookshelf": false,
+          "dresser": false,
+          "wardrobe": false,
+          "mirror": false,
+          "rug": true,
+          "wallart": false
         },
         "placedFurniture": {
-          "bed": false,
-          "table": false,
-          "lamp": false,
-          "plant": false
+          "bed": true,
+          "table": true,
+          "lamp": true,
+          "plant": true,
+          "sofa": false,
+          "coffee-table": false,
+          "bookshelf": false,
+          "dresser": false,
+          "wardrobe": false,
+          "mirror": false,
+          "rug": true,
+          "wallart": false
         }
       },
       "furnitureTrader": {
-        "cycleId": 985433,
+        "cycleId": 985445,
         "purchasedThisCycle": {}
       }
     }
   },
   "acct-guest_l483w1m3": {
     "name": "guest_l483w1m3",
-    "color": "#f1172b",
+    "color": "#98ffbe",
     "appearance": {
       "skin": "#f3cfb3",
-      "shirt": "#f1172b",
+      "shirt": "#98ffbe",
       "pants": "#334155",
       "shoes": "#111827",
       "hairStyle": "short",
@@ -432,9 +517,9 @@
       "faceStyle": "smile",
       "accessories": []
     },
-    "x": 4.420483518370172,
+    "x": 136.40999411945106,
     "y": 1.35,
-    "z": -14.758850695040003,
+    "z": 152.78409595997434,
     "progress": {
       "coins": 0,
       "xp": 0,
@@ -455,7 +540,7 @@
       "maxStaminaBonusPct": 0,
       "questSeed": 1,
       "quest": {
-        "id": "q-1773779543343-1",
+        "id": "q-1773801126343-1",
         "type": "mine",
         "resource": "iron",
         "targetCount": 15,
@@ -469,7 +554,7 @@
       "fishingQuestSeed": 1,
       "fishingQuestCompletions": 0,
       "fishingQuest": {
-        "id": "fq-1773779543343-1",
+        "id": "fq-1773801126343-1",
         "type": "fishing",
         "status": "available",
         "targetRarity": "common",
@@ -482,23 +567,40 @@
       },
       "homeRoom": {
         "roomId": null,
+        "doorOpen": true,
         "wallPaint": "sand",
         "floorPaint": "oak",
         "ownedFurniture": {
-          "bed": false,
-          "table": false,
-          "lamp": false,
-          "plant": false
+          "bed": true,
+          "table": true,
+          "lamp": true,
+          "plant": true,
+          "sofa": false,
+          "coffee-table": false,
+          "bookshelf": false,
+          "dresser": false,
+          "wardrobe": false,
+          "mirror": false,
+          "rug": true,
+          "wallart": false
         },
         "placedFurniture": {
-          "bed": false,
-          "table": false,
-          "lamp": false,
-          "plant": false
+          "bed": true,
+          "table": true,
+          "lamp": true,
+          "plant": true,
+          "sofa": false,
+          "coffee-table": false,
+          "bookshelf": false,
+          "dresser": false,
+          "wardrobe": false,
+          "mirror": false,
+          "rug": true,
+          "wallart": false
         }
       },
       "furnitureTrader": {
-        "cycleId": 985433,
+        "cycleId": 985445,
         "purchasedThisCycle": {}
       }
     }

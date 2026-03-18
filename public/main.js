@@ -1,4 +1,168 @@
 import * as THREE from 'https://unpkg.com/three@0.165.0/build/three.module.js';
+import {
+  initFormatters,
+  normalizeAccountTag,
+  resolveAccountUsername,
+  applyTaggedNameToElement,
+  displayNameWithTag,
+  capitalizeWord,
+  normalizeFishRarity,
+  sanitizeHexColor,
+  normalizeFishIndexMap,
+  normalizeFishBagMap,
+  hexToCss,
+  formatRefreshCountdown
+} from './modules/utils/formatters.js';
+import {
+  initGameData,
+  CHAT_BUBBLE_MS,
+  MINE_SWING_MS,
+  MINE_TIMING_HIT_COOLDOWN_MS,
+  MINE_TIMING_TIMEOUT_FALLBACK_MS,
+  MINE_MISS_RETRY_COOLDOWN_MS,
+  MINE_TIMING_PROFILES,
+  MINE_REQUIRED_HITS,
+  PICKAXE_ACCURACY_ZONE_MULTIPLIER,
+  MINE_FOCUS_CAMERA_BACK,
+  MINE_FOCUS_CAMERA_SIDE,
+  MINE_FOCUS_CAMERA_HEIGHT,
+  FISH_FOCUS_CAMERA_BACK,
+  FISH_FOCUS_CAMERA_SIDE,
+  FISH_FOCUS_CAMERA_HEIGHT,
+  STAMINA_BASE_MAX,
+  MAX_PLAYER_LEVEL,
+  BASE_XP_TO_LEVEL,
+  XP_PER_LEVEL_STEP,
+  HOME_ROOM_PAINT_PRICE,
+  HOME_ROOM_WALL_OPTIONS,
+  HOME_ROOM_FLOOR_OPTIONS,
+  HOME_ROOM_FURNITURE_SHOP,
+  HOME_ROOM_FURNITURE_ORDER,
+  defaultFurnitureTraderItemState,
+  defaultFurnitureTraderViewState,
+  normalizeFurnitureTraderState,
+  defaultHomeRoomState,
+  normalizeHomeRoomState,
+  createDefaultQuestState,
+  PICKAXE_TIERS,
+  PICKAXE_LEVEL_REQUIREMENT,
+  PICKAXE_HEAD_COLORS,
+  FISHING_ROD_ACCENT_COLORS,
+  FISHING_ROD_LEVEL_REQUIREMENT,
+  ORE_RESOURCE_COLORS,
+  FISHING_ROD_PRICE,
+  ORE_SELL_PRICE,
+  FISH_SELL_BY_RARITY,
+  FISH_CATCH_CARD_SHOW_MS,
+  FISH_RARITY_ORDER,
+  FISH_RARITY_COLORS,
+  FISH_CATALOG,
+  FISH_BY_ID,
+  FISH_CATALOG_SORTED,
+  DEBUG_TAP_RESET_MS,
+  WORLD_CYCLE_MS,
+  WORLD_TIME_PRESETS,
+  FISHING_ROD_TIERS,
+  FISHING_ROD_TIER_LABEL,
+  SELLABLE_ORE_ORDER
+} from './modules/config/gameData.js';
+import {
+  initWorldLayout,
+  createWorldLayout,
+  getHallPlayRadius,
+  getHallExitPos
+} from './modules/config/worldLayout.js';
+import {
+  initCommonBuilders,
+  createHouseWindow,
+  createVendorShop,
+  createMarketStall,
+  addWoodHouse,
+  addStoreBuilding,
+  createVendorNpc,
+  createVendorStall,
+  makeTextSign
+} from './modules/builders/common.js';
+import {
+  initEnvironmentBuilders,
+  addBeaconIslandLights,
+  updateBeaconIslandLights,
+  mainIslandRadiusAtAngle,
+  radialShape,
+  addMainIslandTerrain,
+  createWaterfallFlowTexture,
+  createWaterfallMistTexture,
+  addPalm,
+  addBush,
+  addGrassTuft,
+  addFlowerPatch,
+  addCliffAndWaterfall,
+  populateMainIslandNature
+} from './modules/builders/environment.js';
+import {
+  initLandmarkBuilders,
+  dockOffsetPosition,
+  findWaterSideSlot,
+  dockSlots,
+  nearestDockSlot,
+  boatPoseForDock,
+  addDock,
+  drawLeaderboardBoardTexture,
+  refreshLeaderboardBoard,
+  updateLeaderboardBoard,
+  addLighthouseIsland,
+  addMineEntryIsland,
+  addFishingIsland,
+  addMarketIsland,
+  addFurnitureIsland,
+  addLeaderboardIsland,
+  addBoat,
+  addDecorBoat
+} from './modules/builders/landmarks.js';
+import {
+  initInteriorBuilders,
+  addLighthouseInterior,
+  addMainHouseRoomInterior,
+  addFishingShopInterior,
+  addMarketShopInterior,
+  addFurnitureShopInterior,
+  addHouseHallInterior
+} from './modules/builders/interiors.js';
+import {
+  initMineBuilders,
+  addMineArea
+} from './modules/builders/mine.js';
+import {
+  initPlayerMeshes,
+  makeExactBaconMesh,
+  createHeldPickaxeMesh,
+  createHeldFishingRodMesh,
+  createHeldTorchMesh,
+  paintPlayer,
+  applyHeldGearVisual,
+  makePlayerMesh
+} from './modules/render/playerMeshes.js';
+import {
+  initCustomizePreview,
+  refreshItemCards,
+  makePreviewMesh,
+  ensurePreviewScene,
+  updatePreviewAvatar,
+  renderPreview,
+  outfitStorageKey,
+  saveOutfit,
+  loadOutfit
+} from './modules/ui/customizePreview.js';
+import {
+  initUiRenderers,
+  renderFishIndex,
+  renderFurnitureTraderModal,
+  renderHomeModal,
+  renderInventoryModal,
+  renderRodShopModal,
+  renderMarketModal,
+  renderOreModal
+} from './modules/ui/renderers.js';
 
 const socket = io();
 const players = new Map();
@@ -20,458 +184,111 @@ let isAuthenticated = false;
 let localRoomTransitioning = false;
 const pendingLeaveMessages = new Map();
 const pendingJoinMessages = new Map();
-const CHAT_BUBBLE_MS = 4500;
 let lastMineAt = 0;
-const MINE_SWING_MS = 340;
-const MINE_TIMING_HIT_COOLDOWN_MS = 120;
-const MINE_TIMING_TIMEOUT_FALLBACK_MS = 5200;
-const MINE_MISS_RETRY_COOLDOWN_MS = 700;
-const MINE_TIMING_PROFILES = {
-  stone: { speed: 0.9, zoneWidth: 0.3, timeoutMs: 5600 },
-  iron: { speed: 1.16, zoneWidth: 0.23, timeoutMs: 5000 },
-  gold: { speed: 1.42, zoneWidth: 0.17, timeoutMs: 4400 },
-  diamond: { speed: 1.78, zoneWidth: 0.12, timeoutMs: 3800 }
-};
-const MINE_REQUIRED_HITS = {
-  stone: 1,
-  iron: 2,
-  gold: 3,
-  diamond: 4
-};
-const PICKAXE_ACCURACY_ZONE_MULTIPLIER = {
-  wood: 1.0,
-  stone: 1.14,
-  iron: 1.3,
-  diamond: 1.5
-};
-const MINE_FOCUS_CAMERA_BACK = 3.15;
-const MINE_FOCUS_CAMERA_SIDE = 1.15;
-const MINE_FOCUS_CAMERA_HEIGHT = 2.4;
-const FISH_FOCUS_CAMERA_BACK = 2.95;
-const FISH_FOCUS_CAMERA_SIDE = 0.92;
-const FISH_FOCUS_CAMERA_HEIGHT = 2.15;
-const STAMINA_BASE_MAX = 100;
-const MAX_PLAYER_LEVEL = 60;
-const BASE_XP_TO_LEVEL = 110;
-const XP_PER_LEVEL_STEP = 35;
-const HOME_ROOM_PAINT_PRICE = 90;
-const HOME_ROOM_WALL_OPTIONS = {
-  sand: { label: 'Sand', color: '#d9c4a3' },
-  sky: { label: 'Sky', color: '#9ec4e8' },
-  mint: { label: 'Mint', color: '#bde2c4' },
-  slate: { label: 'Slate', color: '#9ca3af' },
-  rose: { label: 'Rose', color: '#e9b6ba' }
-};
-const HOME_ROOM_FLOOR_OPTIONS = {
-  oak: { label: 'Oak', color: '#7d5a3a' },
-  walnut: { label: 'Walnut', color: '#5d3f2a' },
-  slate: { label: 'Slate Stone', color: '#6b7280' },
-  pine: { label: 'Pine', color: '#a67c52' }
-};
-const HOME_ROOM_FURNITURE_SHOP = {
-  bed: { label: 'Bed', price: 520, occasionallyAvailable: false },
-  table: { label: 'Desk', price: 320, occasionallyAvailable: false },
-  lamp: { label: 'Reading Lamp', price: 220, occasionallyAvailable: true },
-  plant: { label: 'Plant', price: 180, occasionallyAvailable: true },
-  sofa: { label: 'Sofa', price: 900, occasionallyAvailable: false },
-  'coffee-table': { label: 'Coffee Table', price: 260, occasionallyAvailable: false },
-  bookshelf: { label: 'Bookshelf', price: 620, occasionallyAvailable: true },
-  dresser: { label: 'Dresser', price: 520, occasionallyAvailable: true },
-  rug: { label: 'Bedroom Rug', price: 240, occasionallyAvailable: false },
-  wallart: { label: 'Wall Art', price: 200, occasionallyAvailable: true }
-};
-const HOME_ROOM_FURNITURE_ORDER = Object.keys(HOME_ROOM_FURNITURE_SHOP);
-
-function defaultFurnitureTraderItemState(itemId) {
-  const item = HOME_ROOM_FURNITURE_SHOP[itemId];
-  return {
-    itemId,
-    label: item?.label || capitalizeWord(itemId),
-    price: Math.max(0, Math.floor(Number(item?.price) || 0)),
-    occasional: item?.occasionallyAvailable === true,
-    availableThisCycle: item?.occasionallyAvailable !== true,
-    stock: item?.occasionallyAvailable === true ? 0 : 1,
-    purchased: 0,
-    remaining: item?.occasionallyAvailable === true ? 0 : 1,
-    soldOut: false,
-    owned: false
-  };
-}
-
-function defaultFurnitureTraderViewState() {
-  return {
-    cycleId: 0,
-    cycleEndsAt: 0,
-    cycleDurationMs: 0,
-    purchaseLimit: 0,
-    purchasesUsed: 0,
-    purchasesRemaining: 0,
-    items: HOME_ROOM_FURNITURE_ORDER.map((itemId) => defaultFurnitureTraderItemState(itemId))
-  };
-}
-
-function normalizeFurnitureTraderState(value) {
-  const base = defaultFurnitureTraderViewState();
-  if (!value || typeof value !== 'object') return base;
-  base.cycleId = Math.max(0, Math.floor(Number(value.cycleId) || 0));
-  base.cycleEndsAt = Math.max(0, Math.floor(Number(value.cycleEndsAt) || 0));
-  base.cycleDurationMs = Math.max(0, Math.floor(Number(value.cycleDurationMs) || 0));
-  base.purchaseLimit = Math.max(0, Math.floor(Number(value.purchaseLimit) || 0));
-  base.purchasesUsed = Math.max(0, Math.floor(Number(value.purchasesUsed) || 0));
-  base.purchasesRemaining = Math.max(0, Math.floor(Number(value.purchasesRemaining) || 0));
-  const byId = new Map(
-    Array.isArray(value.items)
-      ? value.items
-        .map((entry) => {
-          const itemId = typeof entry?.itemId === 'string' ? entry.itemId.trim().toLowerCase() : '';
-          return HOME_ROOM_FURNITURE_ORDER.includes(itemId) ? [itemId, entry] : null;
-        })
-        .filter(Boolean)
-      : []
-  );
-  base.items = HOME_ROOM_FURNITURE_ORDER.map((itemId) => {
-    const fallback = defaultFurnitureTraderItemState(itemId);
-    const entry = byId.get(itemId);
-    if (!entry || typeof entry !== 'object') return fallback;
-    const stock = Math.max(0, Math.floor(Number(entry.stock) || 0));
-    const purchased = Math.max(0, Math.floor(Number(entry.purchased) || 0));
-    const remaining = Math.max(0, Math.floor(Number(entry.remaining) || 0));
-    return {
-      itemId,
-      label: typeof entry.label === 'string' && entry.label.trim() ? entry.label.trim() : fallback.label,
-      price: Math.max(0, Math.floor(Number(entry.price) || fallback.price)),
-      occasional: entry.occasional === true || fallback.occasional,
-      availableThisCycle: entry.availableThisCycle === true,
-      stock,
-      purchased,
-      remaining,
-      soldOut: entry.soldOut === true,
-      owned: entry.owned === true
-    };
-  });
-  return base;
-}
-
-function defaultHomeRoomState() {
-  const ownedFurniture = {};
-  const placedFurniture = {};
-  for (const itemId of HOME_ROOM_FURNITURE_ORDER) {
-    ownedFurniture[itemId] = false;
-    placedFurniture[itemId] = false;
-  }
-  return {
-    roomId: null,
-    doorOpen: true,
-    wallPaint: 'sand',
-    floorPaint: 'oak',
-    ownedFurniture,
-    placedFurniture
-  };
-}
-
-function normalizeHomeRoomState(value) {
-  const base = defaultHomeRoomState();
-  if (!value || typeof value !== 'object') return base;
-  const roomIdRaw = typeof value.roomId === 'string' ? value.roomId.trim() : '';
-  if (HOUSE_ROOM_IDS.includes(roomIdRaw)) {
-    base.roomId = roomIdRaw;
-  }
-  if (typeof value.doorOpen === 'boolean') {
-    base.doorOpen = value.doorOpen;
-  }
-  const wallPaintRaw = typeof value.wallPaint === 'string' ? value.wallPaint.trim().toLowerCase() : '';
-  const floorPaintRaw = typeof value.floorPaint === 'string' ? value.floorPaint.trim().toLowerCase() : '';
-  if (Object.prototype.hasOwnProperty.call(HOME_ROOM_WALL_OPTIONS, wallPaintRaw)) {
-    base.wallPaint = wallPaintRaw;
-  }
-  if (Object.prototype.hasOwnProperty.call(HOME_ROOM_FLOOR_OPTIONS, floorPaintRaw)) {
-    base.floorPaint = floorPaintRaw;
-  }
-  const owned = value.ownedFurniture && typeof value.ownedFurniture === 'object'
-    ? value.ownedFurniture
-    : {};
-  const placed = value.placedFurniture && typeof value.placedFurniture === 'object'
-    ? value.placedFurniture
-    : {};
-  for (const itemId of HOME_ROOM_FURNITURE_ORDER) {
-    const isOwned = owned[itemId] === true;
-    base.ownedFurniture[itemId] = isOwned;
-    base.placedFurniture[itemId] = isOwned && placed[itemId] === true;
-  }
-  return base;
-}
 let torchEquipped = false;
-
-const questState = {
-  coins: 0,
-  xp: 0,
-  level: 1,
-  xpIntoLevel: 0,
-  xpToNextLevel: BASE_XP_TO_LEVEL,
-  pickaxe: 'wood',
-  inventory: { stone: 0, iron: 0, gold: 0, diamond: 0, torch: 1, fish: 0 },
-  fishBag: {},
-  fishIndex: {},
-  hasFishingRod: false,
-  fishingRodTier: 'basic',
-  fishingQuest: null,
-  fishingQuestCompletions: 0,
-  maxStaminaBonusPct: 0,
-  homeRoom: defaultHomeRoomState(),
-  furnitureTrader: defaultFurnitureTraderViewState(),
-  quest: null,
-  shop: {
-    order: ['wood', 'stone', 'iron', 'diamond'],
-    price: { stone: 360, iron: 840, diamond: 1860 },
-    levelReq: { wood: 1, stone: 2, iron: 5, diamond: 9 }
-  }
-};
-
-const PICKAXE_TIERS = ['wood', 'stone', 'iron', 'diamond'];
-const PICKAXE_LEVEL_REQUIREMENT = { wood: 1, stone: 2, iron: 5, diamond: 9 };
-const PICKAXE_HEAD_COLORS = {
-  wood: 0x8b5a2b,
-  stone: 0x94a3b8,
-  iron: 0xcbd5e1,
-  diamond: 0x67e8f9
-};
-const FISHING_ROD_ACCENT_COLORS = {
-  basic: 0x9ca3af,
-  reinforced: 0x34d399,
-  expert: 0x60a5fa,
-  master: 0xa78bfa,
-  mythic: 0xfacc15
-};
-const FISHING_ROD_LEVEL_REQUIREMENT = { basic: 1, reinforced: 4, expert: 7, master: 11, mythic: 15 };
-const ORE_RESOURCE_COLORS = {
-  stone: 0x9ca3af,
-  iron: 0xb45309,
-  gold: 0xf59e0b,
-  diamond: 0x22d3ee
-};
-
-const GROUND_Y = 1.35;
-const MINE_POS = new THREE.Vector3(140, 1.35, 140);
-const MINE_RADIUS = 52;
-const MINE_PLAY_RADIUS = MINE_RADIUS - 3;
-const MINE_ROCK_WALL_RADIUS = MINE_RADIUS - 2.3;
-const MINE_CEILING_Y = 19.8;
-const MINE_CAMERA_MAX_DISTANCE = 16;
-const MINE_SWIM_BLOCK_RADIUS = MINE_RADIUS + 34;
-const HOUSE_POS = new THREE.Vector3(-worldLimit * 0.33, 1.35, worldLimit * 0.12);
-const HOUSE_DOOR_POS = new THREE.Vector3(HOUSE_POS.x, 1.36, HOUSE_POS.z + 4.7);
-const HOUSE_ROOM_BASE = new THREE.Vector3(-220, 0, -210);
-const HOUSE_ROOM_PLAY_RADIUS = 10.8;
-const HOUSE_ROOM_ENTRY_POS = new THREE.Vector3(HOUSE_ROOM_BASE.x, 1.36, HOUSE_ROOM_BASE.z + 6.8);
-const HOUSE_ROOM_EXIT_POS = new THREE.Vector3(HOUSE_ROOM_BASE.x, 1.36, HOUSE_ROOM_BASE.z + 8.7);
-const HOUSE_ROOM_WORKSHOP_POS = new THREE.Vector3(HOUSE_ROOM_BASE.x - 3.2, 1.36, HOUSE_ROOM_BASE.z - 6.2);
-const HOUSE_HALL_BASE = new THREE.Vector3(HOUSE_ROOM_BASE.x + 60, 0, HOUSE_ROOM_BASE.z);
-const HOUSE_HALL_PLAY_RADIUS = 14.5;
-
-function getHallPlayRadius() {
-  const rowCount = Math.ceil(Math.max(1, HOUSE_ROOM_SLOT_COUNT) / 2);
-  const hallD = Math.max(24.0, rowCount * 7.0 + 10.0);
-  return Math.max(HOUSE_HALL_PLAY_RADIUS, hallD * 0.5 + 2);
-}
-const HOUSE_HALL_ENTRY_POS = new THREE.Vector3(HOUSE_HALL_BASE.x, 1.36, HOUSE_HALL_BASE.z + 5.8);
-const HOUSE_HALL_EXIT_POS = new THREE.Vector3(HOUSE_HALL_BASE.x, 1.36, HOUSE_HALL_BASE.z + 7.8);
-
-function getHallExitPos() {
-  const rowCount = Math.ceil(Math.max(1, HOUSE_ROOM_SLOT_COUNT) / 2);
-  const hallD = Math.max(24.0, rowCount * 7.0 + 10.0);
-  const exitZ = HOUSE_HALL_BASE.z + hallD * 0.5 - 1.5;
-  return new THREE.Vector3(HOUSE_HALL_BASE.x, 1.36, exitZ);
-}
-const HOUSE_HALL_EXIT_INTERACT_RADIUS = 3.05;
+const questState = createDefaultQuestState();
 let HOUSE_ROOM_SLOT_COUNT = 6;
 let HOUSE_ROOM_IDS = Array.from({ length: HOUSE_ROOM_SLOT_COUNT }, (_, i) => `room-${i + 1}`);
-const HOUSE_DOOR_INTERACT_RADIUS = 2.25;
-const HOUSE_ROOM_EXIT_INTERACT_RADIUS = 3.05;
-const HOUSE_ROOM_WORKSHOP_INTERACT_RADIUS = 3.25;
-const MINE_ENTRY_ISLAND_POS = new THREE.Vector3(-worldLimit * 1.95, 0, -worldLimit * 1.2);
-const MINE_ENTRY_ISLAND_RADIUS = 11.4;
-const FISHING_ISLAND_POS = new THREE.Vector3(worldLimit * 2.2, 0, worldLimit * 1.85);
-const FISHING_ISLAND_RADIUS = 8.6;
-const MARKET_ISLAND_POS = new THREE.Vector3(-worldLimit * 2.35, 0, worldLimit * 1.2);
-const MARKET_ISLAND_RADIUS = 8.3;
-const FURNITURE_ISLAND_POS = new THREE.Vector3(worldLimit * 0.35, 0, worldLimit * 3.0);
-const FURNITURE_ISLAND_RADIUS = 8.1;
-const LEADERBOARD_ISLAND_POS = new THREE.Vector3(worldLimit * 2.8, 0, -worldLimit * 0.95);
-const LEADERBOARD_ISLAND_RADIUS = 11.2;
-
-
-
-// Shop interior positions
-const FISHING_SHOP_BASE = new THREE.Vector3(-220, 0, 210);
-const MARKET_SHOP_BASE = new THREE.Vector3(-220, 0, 260);
-const FURNITURE_SHOP_BASE = new THREE.Vector3(-220, 0, 310);
-const SHOP_INTERIOR_HALF_DEPTH = 8.0;
-const SHOP_INTERIOR_HALF_WIDTH = 10.0;
-const SHOP_INTERIOR_RADIUS = 11.5;
-const SHOP_COUNTER_BACK_OFFSET = 4.2;
-const SHOP_EXIT_OFFSET = SHOP_INTERIOR_HALF_DEPTH - 1.35;
-const SHOP_EXIT_INTERACT_RADIUS = 3.0;
-const FISHING_SHOP_COUNTER_POS = new THREE.Vector3(
-  FISHING_SHOP_BASE.x,
-  1.35,
-  FISHING_SHOP_BASE.z - SHOP_INTERIOR_HALF_DEPTH + SHOP_COUNTER_BACK_OFFSET
-);
-const FISHING_SHOP_EXIT_POS = new THREE.Vector3(
-  FISHING_SHOP_BASE.x,
-  1.36,
-  FISHING_SHOP_BASE.z + SHOP_EXIT_OFFSET
-);
-const MARKET_SHOP_COUNTER_POS = new THREE.Vector3(
-  MARKET_SHOP_BASE.x,
-  1.35,
-  MARKET_SHOP_BASE.z - SHOP_INTERIOR_HALF_DEPTH + SHOP_COUNTER_BACK_OFFSET
-);
-const MARKET_SHOP_EXIT_POS = new THREE.Vector3(
-  MARKET_SHOP_BASE.x,
-  1.36,
-  MARKET_SHOP_BASE.z + SHOP_EXIT_OFFSET
-);
-const FURNITURE_SHOP_COUNTER_POS = new THREE.Vector3(
-  FURNITURE_SHOP_BASE.x,
-  1.35,
-  FURNITURE_SHOP_BASE.z - SHOP_INTERIOR_HALF_DEPTH + SHOP_COUNTER_BACK_OFFSET
-);
-const FURNITURE_SHOP_EXIT_POS = new THREE.Vector3(
-  FURNITURE_SHOP_BASE.x,
-  1.36,
-  FURNITURE_SHOP_BASE.z + SHOP_EXIT_OFFSET
-);
-const toMainFromMineEntryX = -MINE_ENTRY_ISLAND_POS.x;
-const toMainFromMineEntryZ = -MINE_ENTRY_ISLAND_POS.z;
-const toMainFromMineEntryLen = Math.hypot(toMainFromMineEntryX, toMainFromMineEntryZ) || 1;
-const MINE_ENTRY_DOCK_POS = new THREE.Vector3(
-  MINE_ENTRY_ISLAND_POS.x + (toMainFromMineEntryX / toMainFromMineEntryLen) * 10.1,
-  1.36,
-  MINE_ENTRY_ISLAND_POS.z + (toMainFromMineEntryZ / toMainFromMineEntryLen) * 10.1
-);
-const MINE_ENTRY_DOCK_YAW = Math.atan2(-(MINE_ENTRY_DOCK_POS.z - MINE_ENTRY_ISLAND_POS.z), MINE_ENTRY_DOCK_POS.x - MINE_ENTRY_ISLAND_POS.x);
-const toMainFromFishingX = -FISHING_ISLAND_POS.x;
-const toMainFromFishingZ = -FISHING_ISLAND_POS.z;
-const toMainFromFishingLen = Math.hypot(toMainFromFishingX, toMainFromFishingZ) || 1;
-const FISHING_DOCK_POS = new THREE.Vector3(
-  FISHING_ISLAND_POS.x + (toMainFromFishingX / toMainFromFishingLen) * (FISHING_ISLAND_RADIUS - 0.9),
-  1.36,
-  FISHING_ISLAND_POS.z + (toMainFromFishingZ / toMainFromFishingLen) * (FISHING_ISLAND_RADIUS - 0.9)
-);
-const FISHING_DOCK_YAW = Math.atan2(-(FISHING_DOCK_POS.z - FISHING_ISLAND_POS.z), FISHING_DOCK_POS.x - FISHING_ISLAND_POS.x);
-const toMainFromMarketX = -MARKET_ISLAND_POS.x;
-const toMainFromMarketZ = -MARKET_ISLAND_POS.z;
-const toMainFromMarketLen = Math.hypot(toMainFromMarketX, toMainFromMarketZ) || 1;
-const MARKET_DOCK_POS = new THREE.Vector3(
-  MARKET_ISLAND_POS.x + (toMainFromMarketX / toMainFromMarketLen) * (MARKET_ISLAND_RADIUS - 0.9),
-  1.36,
-  MARKET_ISLAND_POS.z + (toMainFromMarketZ / toMainFromMarketLen) * (MARKET_ISLAND_RADIUS - 0.9)
-);
-const MARKET_DOCK_YAW = Math.atan2(-(MARKET_DOCK_POS.z - MARKET_ISLAND_POS.z), MARKET_DOCK_POS.x - MARKET_ISLAND_POS.x);
-const toMainFromFurnitureX = -FURNITURE_ISLAND_POS.x;
-const toMainFromFurnitureZ = -FURNITURE_ISLAND_POS.z;
-const toMainFromFurnitureLen = Math.hypot(toMainFromFurnitureX, toMainFromFurnitureZ) || 1;
-const FURNITURE_DOCK_POS = new THREE.Vector3(
-  FURNITURE_ISLAND_POS.x + (toMainFromFurnitureX / toMainFromFurnitureLen) * (FURNITURE_ISLAND_RADIUS - 0.9),
-  1.36,
-  FURNITURE_ISLAND_POS.z + (toMainFromFurnitureZ / toMainFromFurnitureLen) * (FURNITURE_ISLAND_RADIUS - 0.9)
-);
-const FURNITURE_DOCK_YAW = Math.atan2(-(FURNITURE_DOCK_POS.z - FURNITURE_ISLAND_POS.z), FURNITURE_DOCK_POS.x - FURNITURE_ISLAND_POS.x);
-const toMainFromLeaderboardX = -LEADERBOARD_ISLAND_POS.x;
-const toMainFromLeaderboardZ = -LEADERBOARD_ISLAND_POS.z;
-const toMainFromLeaderboardLen = Math.hypot(toMainFromLeaderboardX, toMainFromLeaderboardZ) || 1;
-const LEADERBOARD_DOCK_POS = new THREE.Vector3(
-  LEADERBOARD_ISLAND_POS.x + (toMainFromLeaderboardX / toMainFromLeaderboardLen) * 10.5,
-  1.36,
-  LEADERBOARD_ISLAND_POS.z + (toMainFromLeaderboardZ / toMainFromLeaderboardLen) * 10.5
-);
-const LEADERBOARD_DOCK_YAW = Math.atan2(
-  -(LEADERBOARD_DOCK_POS.z - LEADERBOARD_ISLAND_POS.z),
-  LEADERBOARD_DOCK_POS.x - LEADERBOARD_ISLAND_POS.x
-);
-const LEADERBOARD_BOARD_REFRESH_MS = 12_000;
-const LEADERBOARD_BOARD_ROW_LIMIT = 8;
-const MINE_ENTRY_POS = new THREE.Vector3(
-  MINE_ENTRY_ISLAND_POS.x - (toMainFromMineEntryX / toMainFromMineEntryLen) * 2.4,
-  1.35,
-  MINE_ENTRY_ISLAND_POS.z - (toMainFromMineEntryZ / toMainFromMineEntryLen) * 2.4
-);
-const MINE_ENTRY_WARNING_PREF_KEY = 'island_skip_mine_warning';
-const MINE_EXIT_POS = new THREE.Vector3(MINE_POS.x + 2.6, 1.35, MINE_POS.z + 23.2);
-const MINE_CRYSTAL_INTERACT_RADIUS = 3.0;
-const QUEST_NPC_POS = new THREE.Vector3(MINE_POS.x + 19.5, 1.35, MINE_POS.z + 8.1);
-const MINE_SHOP_NPC_POS = new THREE.Vector3(MINE_POS.x - 18.2, 1.35, MINE_POS.z - 9.2);
-const MINE_ORE_TRADER_POS = new THREE.Vector3(151.04, 1.35, 123.13);
-const VENDOR_STAND_Y = 1.35;
-const FISHING_VENDOR_POS = new THREE.Vector3(FISHING_ISLAND_POS.x, 1.35, FISHING_ISLAND_POS.z);
-const MARKET_VENDOR_POS = new THREE.Vector3(MARKET_ISLAND_POS.x, 1.35, MARKET_ISLAND_POS.z);
-const FURNITURE_VENDOR_POS = new THREE.Vector3(FURNITURE_ISLAND_POS.x, 1.35, FURNITURE_ISLAND_POS.z);
-const FISHING_SPOT_RADIUS = 3.2;
-const FISHING_ROD_PRICE = 780;
-const ORE_SELL_PRICE = { stone: 2, iron: 8, gold: 22, diamond: 120 };
-const FISH_SELL_BY_RARITY = {
-  common: 18,
-  uncommon: 32,
-  rare: 56,
-  epic: 120,
-  legendary: 320,
-  mythic: 1500
-};
-const FISH_CATCH_CARD_SHOW_MS = 2400;
-const FISH_RARITY_ORDER = ['common', 'uncommon', 'rare', 'epic', 'legendary', 'mythic'];
-const FISH_RARITY_COLORS = {
-  common: '#cbd5e1',
-  uncommon: '#86efac',
-  rare: '#93c5fd',
-  epic: '#c084fc',
-  legendary: '#fcd34d',
-  mythic: '#f472b6'
-};
-const FISH_CATALOG = [
-  { id: 'pond-minnow', name: 'Pond Minnow', rarity: 'common', chanceLabel: '1 in 5', color: '#7dc7ff', accent: '#d8f2ff' },
-  { id: 'river-darter', name: 'River Darter', rarity: 'common', chanceLabel: '1 in 6', color: '#60a5fa', accent: '#bfdbfe' },
-  { id: 'silver-gill', name: 'Silver Gill', rarity: 'common', chanceLabel: '1 in 7', color: '#94a3b8', accent: '#e2e8f0' },
-  { id: 'mud-carp', name: 'Mud Carp', rarity: 'common', chanceLabel: '1 in 8', color: '#84cc16', accent: '#d9f99d' },
-  { id: 'reed-snapper', name: 'Reed Snapper', rarity: 'common', chanceLabel: '1 in 10', color: '#22d3ee', accent: '#a5f3fc' },
-  { id: 'striped-koi', name: 'Striped Koi', rarity: 'common', chanceLabel: '1 in 13', color: '#fb923c', accent: '#fed7aa' },
-  { id: 'coral-perch', name: 'Coral Perch', rarity: 'uncommon', chanceLabel: '1 in 18', color: '#fb7185', accent: '#fecdd3' },
-  { id: 'moon-tilapia', name: 'Moon Tilapia', rarity: 'uncommon', chanceLabel: '1 in 22', color: '#a78bfa', accent: '#ddd6fe' },
-  { id: 'drift-trout', name: 'Drift Trout', rarity: 'uncommon', chanceLabel: '1 in 26', color: '#38bdf8', accent: '#bae6fd' },
-  { id: 'amber-flounder', name: 'Amber Flounder', rarity: 'uncommon', chanceLabel: '1 in 31', color: '#f59e0b', accent: '#fde68a' },
-  { id: 'glass-catfish', name: 'Glass Catfish', rarity: 'uncommon', chanceLabel: '1 in 37', color: '#67e8f9', accent: '#ecfeff' },
-  { id: 'thunder-pike', name: 'Thunder Pike', rarity: 'rare', chanceLabel: '1 in 53', color: '#818cf8', accent: '#c7d2fe' },
-  { id: 'lava-char', name: 'Lava Char', rarity: 'rare', chanceLabel: '1 in 74', color: '#f97316', accent: '#fdba74' },
-  { id: 'ghost-bass', name: 'Ghost Bass', rarity: 'rare', chanceLabel: '1 in 102', color: '#d1d5db', accent: '#f8fafc' },
-  { id: 'cobalt-ray', name: 'Cobalt Ray', rarity: 'rare', chanceLabel: '1 in 140', color: '#2563eb', accent: '#93c5fd' },
-  { id: 'sunblade-mako', name: 'Sunblade Mako', rarity: 'epic', chanceLabel: '1 in 220', color: '#facc15', accent: '#fef08a' },
-  { id: 'prism-swordfish', name: 'Prism Swordfish', rarity: 'epic', chanceLabel: '1 in 350', color: '#8b5cf6', accent: '#ddd6fe' },
-  { id: 'deepfin-marlin', name: 'Deepfin Marlin', rarity: 'epic', chanceLabel: '1 in 560', color: '#0ea5e9', accent: '#bae6fd' },
-  { id: 'void-whalelet', name: 'Void Whalelet', rarity: 'legendary', chanceLabel: '1 in 1650', color: '#6366f1', accent: '#c7d2fe' },
-  { id: 'crown-leviathan', name: 'Crown Leviathan', rarity: 'mythic', chanceLabel: '1 in 6500', color: '#f43f5e', accent: '#fecdd3' }
-];
-const FISH_BY_ID = new Map(FISH_CATALOG.map((fish) => [fish.id, fish]));
-const FISH_CATALOG_SORTED = [...FISH_CATALOG].sort((a, b) => {
-  const rarityGap = FISH_RARITY_ORDER.indexOf(a.rarity) - FISH_RARITY_ORDER.indexOf(b.rarity);
-  if (rarityGap !== 0) return rarityGap;
-  return a.name.localeCompare(b.name);
+initGameData({
+  getCurrentHouseRoomIds: () => HOUSE_ROOM_IDS
 });
-const DEBUG_TAP_RESET_MS = 2500;
-const WORLD_CYCLE_MS = 240000;
-const WORLD_TIME_PRESETS = {
-  day: 0.5,
-  evening: 0.72,
-  night: 0.9
-};
-const FISHING_ROD_TIERS = ['basic', 'reinforced', 'expert', 'master', 'mythic'];
-const FISHING_ROD_TIER_LABEL = {
-  basic: 'Basic Rod',
-  reinforced: 'Reinforced Rod',
-  expert: 'Expert Rod',
-  master: 'Master Rod',
-  mythic: 'Mythic Rod'
-};
-const SELLABLE_ORE_ORDER = ['stone', 'iron', 'gold', 'diamond'];
-const MINE_ENTRY_YAW = Math.atan2(MINE_ENTRY_DOCK_POS.x - MINE_ENTRY_POS.x, MINE_ENTRY_DOCK_POS.z - MINE_ENTRY_POS.z);
+initWorldLayout({
+  getCurrentHouseRoomSlotCount: () => HOUSE_ROOM_SLOT_COUNT
+});
+const {
+  GROUND_Y,
+  MINE_POS,
+  MINE_RADIUS,
+  MINE_PLAY_RADIUS,
+  MINE_ROCK_WALL_RADIUS,
+  MINE_CEILING_Y,
+  MINE_CAMERA_MAX_DISTANCE,
+  MINE_SWIM_BLOCK_RADIUS,
+  HOUSE_POS,
+  HOUSE_DOOR_POS,
+  HOUSE_ROOM_BASE,
+  HOUSE_ROOM_PLAY_RADIUS,
+  HOUSE_ROOM_ENTRY_POS,
+  HOUSE_ROOM_EXIT_POS,
+  HOUSE_ROOM_WORKSHOP_POS,
+  HOUSE_HALL_BASE,
+  HOUSE_HALL_PLAY_RADIUS,
+  HOUSE_HALL_ENTRY_POS,
+  HOUSE_HALL_EXIT_POS,
+  HOUSE_HALL_EXIT_INTERACT_RADIUS,
+  HOUSE_DOOR_INTERACT_RADIUS,
+  HOUSE_ROOM_EXIT_INTERACT_RADIUS,
+  HOUSE_ROOM_WORKSHOP_INTERACT_RADIUS,
+  MINE_ENTRY_ISLAND_POS,
+  MINE_ENTRY_ISLAND_RADIUS,
+  FISHING_ISLAND_POS,
+  FISHING_ISLAND_RADIUS,
+  MARKET_ISLAND_POS,
+  MARKET_ISLAND_RADIUS,
+  FURNITURE_ISLAND_POS,
+  FURNITURE_ISLAND_RADIUS,
+  LEADERBOARD_ISLAND_POS,
+  LEADERBOARD_ISLAND_RADIUS,
+  FISHING_SHOP_BASE,
+  MARKET_SHOP_BASE,
+  FURNITURE_SHOP_BASE,
+  SHOP_INTERIOR_HALF_DEPTH,
+  SHOP_INTERIOR_HALF_WIDTH,
+  SHOP_INTERIOR_RADIUS,
+  SHOP_COUNTER_BACK_OFFSET,
+  SHOP_EXIT_OFFSET,
+  SHOP_EXIT_INTERACT_RADIUS,
+  FISHING_SHOP_COUNTER_POS,
+  FISHING_SHOP_EXIT_POS,
+  MARKET_SHOP_COUNTER_POS,
+  MARKET_SHOP_EXIT_POS,
+  FURNITURE_SHOP_COUNTER_POS,
+  FURNITURE_SHOP_EXIT_POS,
+  toMainFromMineEntryX,
+  toMainFromMineEntryZ,
+  toMainFromMineEntryLen,
+  MINE_ENTRY_DOCK_POS,
+  MINE_ENTRY_DOCK_YAW,
+  toMainFromFishingX,
+  toMainFromFishingZ,
+  toMainFromFishingLen,
+  FISHING_DOCK_POS,
+  FISHING_DOCK_YAW,
+  toMainFromMarketX,
+  toMainFromMarketZ,
+  toMainFromMarketLen,
+  MARKET_DOCK_POS,
+  MARKET_DOCK_YAW,
+  toMainFromFurnitureX,
+  toMainFromFurnitureZ,
+  toMainFromFurnitureLen,
+  FURNITURE_DOCK_POS,
+  FURNITURE_DOCK_YAW,
+  toMainFromLeaderboardX,
+  toMainFromLeaderboardZ,
+  toMainFromLeaderboardLen,
+  LEADERBOARD_DOCK_POS,
+  LEADERBOARD_DOCK_YAW,
+  LEADERBOARD_BOARD_REFRESH_MS,
+  LEADERBOARD_BOARD_ROW_LIMIT,
+  MINE_ENTRY_POS,
+  MINE_ENTRY_WARNING_PREF_KEY,
+  MINE_EXIT_POS,
+  MINE_CRYSTAL_INTERACT_RADIUS,
+  QUEST_NPC_POS,
+  MINE_SHOP_NPC_POS,
+  MINE_ORE_TRADER_POS,
+  VENDOR_STAND_Y,
+  FISHING_VENDOR_POS,
+  MARKET_VENDOR_POS,
+  FURNITURE_VENDOR_POS,
+  FISHING_SPOT_RADIUS,
+  MINE_ENTRY_YAW
+} = createWorldLayout(THREE, worldLimit);
+initFormatters({
+  fishRarityOrder: FISH_RARITY_ORDER,
+  fishById: FISH_BY_ID
+});
 
 let inMine = false;
 let questNpcMesh = null;
@@ -939,6 +756,198 @@ let previewLastX = 0;
 let previewLastY = 0;
 let previewRenderWidth = 0;
 let previewRenderHeight = 0;
+const previewState = {
+  get previewScene() {
+    return previewScene;
+  },
+  set previewScene(value) {
+    previewScene = value;
+  },
+  get previewCamera() {
+    return previewCamera;
+  },
+  set previewCamera(value) {
+    previewCamera = value;
+  },
+  get previewRenderer() {
+    return previewRenderer;
+  },
+  set previewRenderer(value) {
+    previewRenderer = value;
+  },
+  get previewAvatar() {
+    return previewAvatar;
+  },
+  set previewAvatar(value) {
+    previewAvatar = value;
+  },
+  get previewLight() {
+    return previewLight;
+  },
+  set previewLight(value) {
+    previewLight = value;
+  },
+  get previewYaw() {
+    return previewYaw;
+  },
+  set previewYaw(value) {
+    previewYaw = value;
+  },
+  get previewPitch() {
+    return previewPitch;
+  },
+  set previewPitch(value) {
+    previewPitch = value;
+  },
+  get previewDistance() {
+    return previewDistance;
+  },
+  set previewDistance(value) {
+    previewDistance = value;
+  },
+  get previewAutoSpin() {
+    return previewAutoSpin;
+  },
+  set previewAutoSpin(value) {
+    previewAutoSpin = value;
+  },
+  get previewDragging() {
+    return previewDragging;
+  },
+  set previewDragging(value) {
+    previewDragging = value;
+  },
+  get previewPointerId() {
+    return previewPointerId;
+  },
+  set previewPointerId(value) {
+    previewPointerId = value;
+  },
+  get previewLastX() {
+    return previewLastX;
+  },
+  set previewLastX(value) {
+    previewLastX = value;
+  },
+  get previewLastY() {
+    return previewLastY;
+  },
+  set previewLastY(value) {
+    previewLastY = value;
+  },
+  get previewRenderWidth() {
+    return previewRenderWidth;
+  },
+  set previewRenderWidth(value) {
+    previewRenderWidth = value;
+  },
+  get previewRenderHeight() {
+    return previewRenderHeight;
+  },
+  set previewRenderHeight(value) {
+    previewRenderHeight = value;
+  },
+  get previewPixelRatioCap() {
+    return previewPixelRatioCap;
+  }
+};
+const customizePreviewRefs = {
+  itemCards,
+  selectedAccessories,
+  hairStyleInputEl,
+  faceStyleInputEl,
+  customizePreviewEl,
+  customizeModalEl,
+  nameInputEl,
+  skinInputEl,
+  colorInputEl,
+  pantsColorInputEl,
+  shoesColorInputEl,
+  hairColorInputEl,
+  customizeStatusEl
+};
+const uiRendererRefs = {
+  get inventoryViewTab() {
+    return inventoryViewTab;
+  },
+  set inventoryViewTab(value) {
+    inventoryViewTab = value;
+  },
+  fishIndexListEl,
+  fishIndexSummaryEl,
+  marketFishIndexSummaryEl,
+  furnitureTraderListEl,
+  homeWallSelectEl,
+  homeFloorSelectEl,
+  homeWallApplyEl,
+  homeFloorApplyEl,
+  homeFurnitureListEl,
+  homeDoorToggleEl,
+  homeStatusEl,
+  inventoryListEl,
+  inventoryTabOresEl,
+  inventoryTabFishEl,
+  rodCurrentTierEl,
+  rodNextTierEl,
+  rodUpgradeCostEl,
+  rodUpgradeFishCostEl,
+  rodBuyBtnEl,
+  rodUpgradeBtnEl,
+  questState,
+  socket,
+  rodShopSnapshot,
+  FISH_CATALOG_SORTED,
+  FISHING_ROD_PRICE,
+  FISHING_ROD_LEVEL_REQUIREMENT,
+  HOME_ROOM_WALL_OPTIONS,
+  HOME_ROOM_FLOOR_OPTIONS,
+  HOME_ROOM_PAINT_PRICE,
+  HOME_ROOM_FURNITURE_ORDER,
+  HOME_ROOM_FURNITURE_SHOP,
+  discoveredFishCount,
+  caughtFishCount,
+  buildFishIconMarkup,
+  capitalizeWord,
+  normalizeFurnitureTraderState,
+  normalizeHomeRoomState,
+  normalizeRodTier,
+  rodTierLabel,
+  updateFurnitureTraderSummary,
+  setFurnitureTraderStatus,
+  applyProgressState,
+  ensureHomePaintSelectOptions,
+  setHomeStatus,
+  applyHomeRoomVisuals,
+  inventoryEntriesForTab,
+  ownedFishCount,
+  renderMarketSellOptions,
+  renderMarketSellPreview,
+  renderMarketQuestSection,
+  renderOreSellOptions,
+  renderOreSellPreview
+};
+initUiRenderers(uiRendererRefs);
+const houseRoomContext = new Proxy({}, {
+  has() {
+    return true;
+  },
+  get(_target, prop) {
+    if (typeof prop !== 'string') return undefined;
+    try {
+      return eval(prop);
+    } catch {
+      return undefined;
+    }
+  },
+  set(_target, prop, value) {
+    if (typeof prop !== 'string') return true;
+    try {
+      const __value__ = value;
+      eval(`${prop} = __value__`);
+    } catch {}
+    return true;
+  }
+});
 
 function setMinimapCanvasSize(expanded) {
   const size = lowPerformanceMode
@@ -1672,6 +1681,21 @@ renderer.shadowMap.enabled = graphicsPreset !== 'performance';
 document.body.appendChild(renderer.domElement);
 renderer.domElement.style.touchAction = 'none';
 
+initCustomizePreview({
+  sceneRef: scene,
+  makePlayerMeshRef: makePlayerMesh,
+  paintPlayerRef: paintPlayer,
+  normalizeAppearanceRef: normalizeAppearance,
+  currentFormAppearanceRef: currentFormAppearance,
+  refsRef: customizePreviewRefs,
+  stateRef: previewState
+});
+initPlayerMeshes({
+  sceneRef: scene,
+  fishingMiniGameRef: fishingMiniGame,
+  questStateRef: questState
+});
+
 function getFullscreenElement() {
   return document.fullscreenElement
     || document.webkitFullscreenElement
@@ -1781,57 +1805,6 @@ torchLight.visible = false;
 scene.add(torchLight);
 
 const beaconIslandLights = [];
-const ISLAND_LAMP_BASE_INTENSITY = 0;
-const ISLAND_LAMP_ACTIVE_INTENSITY = 9.2;
-const ISLAND_LAMP_RANGE = 38;
-const ISLAND_LAMP_DECAY = 1.45;
-
-function addBeaconIslandLights() {
-  const count = 10;
-  const ringRadius = worldLimit * 0.86;
-  const poleScale = 1.28;
-  const postMat = new THREE.MeshStandardMaterial({ color: 0x433222, roughness: 0.88, metalness: 0.02 });
-  for (let i = 0; i < count; i += 1) {
-    const angle = (i / count) * Math.PI * 2 + 0.18;
-    const x = Math.cos(angle) * ringRadius;
-    const z = Math.sin(angle) * ringRadius;
-
-    const post = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.1 * poleScale, 0.1 * poleScale, 2.35 * poleScale, 8),
-      postMat
-    );
-    post.position.set(x, 2.35 * poleScale, z);
-    post.castShadow = true;
-    post.receiveShadow = true;
-    scene.add(post);
-
-    const bulbMat = new THREE.MeshStandardMaterial({
-      color: 0xffdf8f,
-      emissive: 0x2a220f,
-      emissiveIntensity: 0,
-      roughness: 0.45
-    });
-    const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.18 * poleScale, 12, 10), bulbMat);
-    bulb.position.set(x, 3.62 * poleScale, z);
-    scene.add(bulb);
-
-    const light = new THREE.PointLight(0xffd27a, ISLAND_LAMP_BASE_INTENSITY, ISLAND_LAMP_RANGE, ISLAND_LAMP_DECAY);
-    light.position.set(x, 3.62 * poleScale, z);
-    scene.add(light);
-
-    beaconIslandLights.push({ light, bulb });
-  }
-}
-
-function updateBeaconIslandLights(active, delta) {
-  const targetIntensity = active ? ISLAND_LAMP_ACTIVE_INTENSITY : ISLAND_LAMP_BASE_INTENSITY;
-  const blend = Math.min(1, delta * 4.6);
-  for (const entry of beaconIslandLights) {
-    entry.light.intensity = THREE.MathUtils.lerp(entry.light.intensity, targetIntensity, blend);
-    const glow = entry.light.intensity / ISLAND_LAMP_ACTIVE_INTENSITY;
-    entry.bulb.material.emissiveIntensity = glow * 3.8;
-  }
-}
 
 const water = new THREE.Mesh(
   new THREE.CircleGeometry(170, 80),
@@ -1845,74 +1818,6 @@ water.rotation.x = -Math.PI / 2;
 water.position.y = 0.38;
 scene.add(water);
 
-function mainIslandRadiusAtAngle(angle) {
-  const profile = 0.86
-    + Math.sin(angle * 2 + 0.6) * 0.11
-    + Math.sin(angle * 5 - 0.9) * 0.06
-    + Math.cos(angle * 1 + 2.1) * 0.04;
-  return THREE.MathUtils.clamp(worldLimit * profile, worldLimit * 0.66, worldLimit * 1.08);
-}
-
-function radialShape(radiusOffset = 0, segments = 144) {
-  const shape = new THREE.Shape();
-  for (let i = 0; i < segments; i += 1) {
-    const t = (i / segments) * Math.PI * 2;
-    const radius = Math.max(2.2, mainIslandRadiusAtAngle(t) + radiusOffset);
-    const x = Math.cos(t) * radius;
-    const z = Math.sin(t) * radius;
-    if (i === 0) {
-      shape.moveTo(x, z);
-    } else {
-      shape.lineTo(x, z);
-    }
-  }
-  shape.closePath();
-  return shape;
-}
-
-function addMainIslandTerrain() {
-  // Original island scale restored. Only vertical alignment changed to remove the seam.
-  const cliff = new THREE.Mesh(
-    new THREE.CylinderGeometry(worldLimit + 4, worldLimit + 7, 4.9, 72, 1),
-    new THREE.MeshStandardMaterial({ color: 0xc6b188, roughness: 0.96, metalness: 0.01 })
-  );
-  cliff.position.y = -1.15; // top at ~1.3, matching shoreline layers
-  cliff.receiveShadow = true;
-  scene.add(cliff);
-
-  const shoreGeo = new THREE.ShapeGeometry(radialShape(2.6), 132);
-  shoreGeo.rotateX(-Math.PI / 2);
-  const shore = new THREE.Mesh(
-    shoreGeo,
-    new THREE.MeshStandardMaterial({ color: 0xbb9c6b, roughness: 0.98, metalness: 0.01 })
-  );
-  shore.position.y = 1.31;
-  shore.receiveShadow = true;
-  scene.add(shore);
-
-  const sandGeo = new THREE.ShapeGeometry(radialShape(0.85), 132);
-  sandGeo.rotateX(-Math.PI / 2);
-  const sand = new THREE.Mesh(
-    sandGeo,
-    new THREE.MeshStandardMaterial({ color: 0xcdb180, roughness: 0.97, metalness: 0.01 })
-  );
-  sand.position.y = 1.34;
-  sand.receiveShadow = true;
-  scene.add(sand);
-
-  const grassGeo = new THREE.ShapeGeometry(radialShape(-1.65), 132);
-  grassGeo.rotateX(-Math.PI / 2);
-  const grass = new THREE.Mesh(
-    grassGeo,
-    new THREE.MeshStandardMaterial({ color: 0x79a85d, roughness: 0.92, metalness: 0.02 })
-  );
-  grass.position.y = 1.36;
-  grass.receiveShadow = true;
-  scene.add(grass);
-}
-
-addMainIslandTerrain();
-
 const PLAYER_COLLISION_RADIUS = 0.46;
 const worldColliders = [];
 let cliffWaterfallRoot = null;
@@ -1923,107 +1828,24 @@ const waterfallToCamera = new THREE.Vector3();
 const waterfallForward = new THREE.Vector3();
 const waterfallWorldQuat = new THREE.Quaternion();
 
-function createWaterfallFlowTexture() {
-  const canvas = document.createElement('canvas');
-  canvas.width = 192;
-  canvas.height = 512;
-  const ctx = canvas.getContext('2d');
-
-  const baseGradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-  baseGradient.addColorStop(0, 'rgba(163, 230, 255, 0.9)');
-  baseGradient.addColorStop(0.26, 'rgba(104, 206, 247, 0.86)');
-  baseGradient.addColorStop(0.66, 'rgba(58, 166, 220, 0.82)');
-  baseGradient.addColorStop(1, 'rgba(34, 120, 178, 0.78)');
-  ctx.fillStyle = baseGradient;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  for (let i = 0; i < 64; i += 1) {
-    const x = Math.random() * canvas.width;
-    const y = Math.random() * canvas.height;
-    const length = 54 + Math.random() * 168;
-    const width = 1.1 + Math.random() * 2.8;
-    const alpha = 0.12 + Math.random() * 0.28;
-    ctx.strokeStyle = `rgba(235,248,255,${alpha.toFixed(3)})`;
-    ctx.lineWidth = width;
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    ctx.lineTo(x + (Math.random() - 0.5) * 15, y + length);
-    ctx.stroke();
+initEnvironmentBuilders({
+  sceneRef: scene,
+  addWorldColliderRef: addWorldCollider,
+  addRockFootprintCollisionFromMeshRef: addRockFootprintCollisionFromMesh,
+  getWorldLimitRef: () => worldLimit,
+  beaconIslandLightsRef: beaconIslandLights,
+  setCliffWaterfallRootRef: (value) => {
+    cliffWaterfallRoot = value;
+  },
+  setCliffWaterfallFoamRef: (value) => {
+    cliffWaterfallFoam = value;
+  },
+  setCliffWaterfallStateRef: (value) => {
+    cliffWaterfallState = value;
   }
+});
 
-  for (let i = 0; i < 30; i += 1) {
-    const radius = 6 + Math.random() * 14;
-    const x = Math.random() * canvas.width;
-    const y = Math.random() * canvas.height;
-    const glow = ctx.createRadialGradient(x, y, 0, x, y, radius);
-    glow.addColorStop(0, 'rgba(230, 248, 255, 0.22)');
-    glow.addColorStop(1, 'rgba(230, 248, 255, 0)');
-    ctx.fillStyle = glow;
-    ctx.beginPath();
-    ctx.arc(x, y, radius, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  for (let i = 0; i < 18; i += 1) {
-    const laneWidth = 8 + Math.random() * 18;
-    const laneX = Math.random() * canvas.width;
-    const laneGradient = ctx.createLinearGradient(laneX, 0, laneX + laneWidth, 0);
-    laneGradient.addColorStop(0, 'rgba(255,255,255,0)');
-    laneGradient.addColorStop(0.5, `rgba(240,252,255,${(0.12 + Math.random() * 0.14).toFixed(3)})`);
-    laneGradient.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.fillStyle = laneGradient;
-    ctx.fillRect(laneX, 0, laneWidth, canvas.height);
-  }
-
-  const edgeMask = ctx.createLinearGradient(0, 0, canvas.width, 0);
-  edgeMask.addColorStop(0, 'rgba(0,0,0,0)');
-  edgeMask.addColorStop(0.08, 'rgba(0,0,0,0.18)');
-  edgeMask.addColorStop(0.2, 'rgba(0,0,0,0.88)');
-  edgeMask.addColorStop(0.5, 'rgba(0,0,0,1)');
-  edgeMask.addColorStop(0.8, 'rgba(0,0,0,0.88)');
-  edgeMask.addColorStop(0.92, 'rgba(0,0,0,0.18)');
-  edgeMask.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.globalCompositeOperation = 'destination-in';
-  ctx.fillStyle = edgeMask;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  const heightMask = ctx.createLinearGradient(0, 0, 0, canvas.height);
-  heightMask.addColorStop(0, 'rgba(0,0,0,0.75)');
-  heightMask.addColorStop(0.08, 'rgba(0,0,0,1)');
-  heightMask.addColorStop(0.84, 'rgba(0,0,0,0.98)');
-  heightMask.addColorStop(1, 'rgba(0,0,0,0.72)');
-  ctx.fillStyle = heightMask;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.globalCompositeOperation = 'source-over';
-
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(1.05, 1.95);
-  tex.anisotropy = 4;
-  return tex;
-}
-
-function createWaterfallMistTexture() {
-  const canvas = document.createElement('canvas');
-  canvas.width = 96;
-  canvas.height = 96;
-  const ctx = canvas.getContext('2d');
-  const cx = canvas.width * 0.5;
-  const cy = canvas.height * 0.5;
-  const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, canvas.width * 0.5);
-  gradient.addColorStop(0, 'rgba(245, 253, 255, 0.96)');
-  gradient.addColorStop(0.25, 'rgba(228, 248, 255, 0.55)');
-  gradient.addColorStop(0.65, 'rgba(210, 238, 251, 0.22)');
-  gradient.addColorStop(1, 'rgba(210, 238, 251, 0)');
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.wrapS = THREE.ClampToEdgeWrapping;
-  tex.wrapT = THREE.ClampToEdgeWrapping;
-  return tex;
-}
+addMainIslandTerrain();
 
 function addWorldCollider(x, z, radius, tag = 'solid') {
   worldColliders.push({ x, z, radius, tag });
@@ -2114,6 +1936,11 @@ function addRockFootprintCollisionFromMesh(mesh, tag = 'rock', radiusPadding = 0
   addWorldCollider(cx, cz + offsetZ, armRadius, tag);
 }
 
+initCommonBuilders({
+  sceneRef: scene,
+  addWallCollisionFromMeshRef: addWallCollisionFromMesh
+});
+
 function resolveWorldCollisions(x, z, y = GROUND_Y) {
   let nextX = x;
   let nextZ = z;
@@ -2133,91 +1960,6 @@ function resolveWorldCollisions(x, z, y = GROUND_Y) {
     nextZ = collider.z + dz * scale;
   }
   return { x: nextX, z: nextZ };
-}
-
-function addPalm(x, z, scale = 1) {
-  const trunkCurve = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.2 * scale, 0.38 * scale, 4.8 * scale, 10),
-    new THREE.MeshStandardMaterial({ color: 0x7b5135, roughness: 0.9 })
-  );
-  trunkCurve.position.set(x + 0.15 * scale, 2.5 * scale, z - 0.12 * scale);
-  trunkCurve.rotation.z = 0.13;
-  trunkCurve.castShadow = true;
-  trunkCurve.receiveShadow = true;
-  scene.add(trunkCurve);
-
-  const trunk = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.19 * scale, 0.34 * scale, 4.2 * scale, 9),
-    new THREE.MeshStandardMaterial({ color: 0x7b5135, roughness: 0.9 })
-  );
-  trunk.position.set(x, 3.0 * scale, z);
-  trunk.rotation.z = -0.09;
-  trunk.castShadow = true;
-  trunk.receiveShadow = true;
-
-  const leaves = new THREE.Group();
-  for (let i = 0; i < 6; i += 1) {
-    const frond = new THREE.Mesh(
-      new THREE.ConeGeometry(0.22 * scale, 2.25 * scale, 6),
-      new THREE.MeshStandardMaterial({ color: 0x2f7f46, roughness: 0.82 })
-    );
-    frond.rotation.z = Math.PI / 2.35;
-    frond.rotation.y = (i / 6) * Math.PI * 2;
-    frond.position.set(x, 5.45 * scale, z);
-    frond.castShadow = true;
-    leaves.add(frond);
-  }
-
-  scene.add(trunk);
-  scene.add(leaves);
-  addWorldCollider(x, z, 0.64 * scale, 'tree');
-}
-
-function addBush(x, z, scale = 1) {
-  const bush = new THREE.Mesh(
-    new THREE.SphereGeometry(0.78 * scale, 10, 8),
-    new THREE.MeshStandardMaterial({ color: 0x3d8e4d, roughness: 0.88 })
-  );
-  bush.position.set(x, 1.62 + 0.2 * scale, z);
-  bush.castShadow = true;
-  bush.receiveShadow = true;
-  scene.add(bush);
-  addWorldCollider(x, z, 0.5 * scale, 'bush');
-}
-
-function addGrassTuft(x, z, scale = 1, color = 0x4f8a3f) {
-  const tuft = new THREE.Group();
-  for (let i = 0; i < 4; i += 1) {
-    const blade = new THREE.Mesh(
-      new THREE.ConeGeometry(0.08 * scale, 0.55 * scale, 5),
-      new THREE.MeshStandardMaterial({ color, roughness: 0.9 })
-    );
-    blade.position.set((Math.random() - 0.5) * 0.18 * scale, 1.45 + 0.2 * scale, (Math.random() - 0.5) * 0.18 * scale);
-    blade.rotation.x = (Math.random() - 0.5) * 0.24;
-    blade.rotation.z = (Math.random() - 0.5) * 0.24;
-    tuft.add(blade);
-  }
-  tuft.position.set(x, 0, z);
-  scene.add(tuft);
-}
-
-function addFlowerPatch(x, z, count = 10, spread = 2.2) {
-  for (let i = 0; i < count; i += 1) {
-    const px = x + (Math.random() - 0.5) * spread;
-    const pz = z + (Math.random() - 0.5) * spread;
-    const stem = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.016, 0.016, 0.36, 6),
-      new THREE.MeshStandardMaterial({ color: 0x3c8a3a, roughness: 0.92 })
-    );
-    stem.position.set(px, 1.53, pz);
-    const bloomColor = [0xfef08a, 0xfda4af, 0xbfdbfe, 0xf5d0fe][i % 4];
-    const bloom = new THREE.Mesh(
-      new THREE.SphereGeometry(0.08, 8, 6),
-      new THREE.MeshStandardMaterial({ color: bloomColor, roughness: 0.75 })
-    );
-    bloom.position.set(px, 1.76, pz);
-    scene.add(stem, bloom);
-  }
 }
 
 const LIGHTHOUSE_POS = new THREE.Vector3(worldLimit * 1.65, 0, -worldLimit * 1.85);
@@ -2249,6 +1991,30 @@ const INTERIOR_EXIT_PORTAL_POS = new THREE.Vector3(
   INTERIOR_TOP_POS.y + 0.14,
   LIGHTHOUSE_INTERIOR_BASE.z + Math.sin(INTERIOR_STAIR_END_ANGLE) * (INTERIOR_STAIR_RADIUS + 0.45)
 );
+const interiorLayout = {
+  GROUND_Y,
+  LIGHTHOUSE_INTERIOR_BASE,
+  INTERIOR_TOP_POS,
+  INTERIOR_ENTRY_POS,
+  INTERIOR_EXIT_PORTAL_POS,
+  INTERIOR_STAIR_RADIUS,
+  INTERIOR_STAIR_START_Y,
+  INTERIOR_STAIR_RISE,
+  INTERIOR_STAIR_ANGLE_STEP,
+  INTERIOR_STAIR_STEPS,
+  HOUSE_HALL_BASE,
+  FISHING_SHOP_BASE,
+  MARKET_SHOP_BASE,
+  FURNITURE_SHOP_BASE,
+  SHOP_INTERIOR_HALF_DEPTH,
+  SHOP_INTERIOR_HALF_WIDTH,
+  FISHING_SHOP_COUNTER_POS,
+  MARKET_SHOP_COUNTER_POS,
+  FURNITURE_SHOP_COUNTER_POS,
+  FISHING_SHOP_EXIT_POS,
+  MARKET_SHOP_EXIT_POS,
+  FURNITURE_SHOP_EXIT_POS
+};
 const SWIM_MIN_RADIUS = worldLimit + 0.6;
 const SWIM_MAX_RADIUS = worldLimit * 3.9;
 const SWIM_SURFACE_Y = 0.38;
@@ -2256,11 +2022,189 @@ const SWIM_SINK_Y = -3.6;
 let lighthouseInteriorGroup = null;
 let lighthouseInteriorPortal = null;
 let lighthouseTopPortal = null;
+initInteriorBuilders({
+  sceneRef: scene,
+  addWorldColliderRef: addWorldCollider,
+  addWallCollisionFromMeshRef: addWallCollisionFromMesh,
+  setLighthouseInteriorPortalRef: (value) => {
+    lighthouseInteriorPortal = value;
+  },
+  setLighthouseInteriorGroupRef: (value) => {
+    lighthouseInteriorGroup = value;
+  },
+  setHouseHallGroupRef: (value) => {
+    houseHallGroup = value;
+  },
+  setHouseHallExitMarkerRef: (value) => {
+    houseHallExitMarker = value;
+  },
+  setFishingShopGroupRef: (value) => {
+    fishingShopGroup = value;
+  },
+  setFishingShopExitMarkerRef: (value) => {
+    fishingShopExitMarker = value;
+  },
+  setMarketShopGroupRef: (value) => {
+    marketShopGroup = value;
+  },
+  setMarketShopExitMarkerRef: (value) => {
+    marketShopExitMarker = value;
+  },
+  setFurnitureShopGroupRef: (value) => {
+    furnitureShopGroup = value;
+  },
+  setFurnitureShopExitMarkerRef: (value) => {
+    furnitureShopExitMarker = value;
+  },
+  houseHallRoomDoorsRef: houseHallRoomDoors,
+  getHouseRoomSlotCountRef: () => HOUSE_ROOM_SLOT_COUNT,
+  getHouseRoomIdsRef: () => HOUSE_ROOM_IDS,
+  houseRoomContextRef: houseRoomContext,
+  layoutRef: interiorLayout
+});
+initMineBuilders({
+  sceneRef: scene,
+  addWorldColliderRef: addWorldCollider,
+  oreNodesRef: oreNodes,
+  setQuestNpcMeshRef: (value) => {
+    questNpcMesh = value;
+  },
+  setMineShopNpcMeshRef: (value) => {
+    mineShopNpcMesh = value;
+  },
+  setMineEntranceMeshRef: (value) => {
+    mineEntranceMesh = value;
+  },
+  setMineExitMeshRef: (value) => {
+    mineExitMesh = value;
+  },
+  setMineCentralCrystalMeshRef: (value) => {
+    mineCentralCrystalMesh = value;
+  },
+  setMineGroupRef: (value) => {
+    mineGroup = value;
+  },
+  setMineOreTraderNpcMeshRef: (value) => {
+    mineOreTraderNpcMesh = value;
+  },
+  layoutRef: {
+    MINE_POS,
+    MINE_RADIUS,
+    MINE_CEILING_Y,
+    MINE_ROCK_WALL_RADIUS,
+    MINE_ENTRY_POS,
+    MINE_ENTRY_YAW,
+    MINE_EXIT_POS,
+    QUEST_NPC_POS,
+    MINE_SHOP_NPC_POS,
+    MINE_ORE_TRADER_POS,
+    VENDOR_STAND_Y
+  }
+});
 let inLighthouseInterior = false;
 let isTeleporting = false;
 const TELEPORT_TRIGGER_COOLDOWN_MS = 900;
 let teleportTriggerLockUntil = 0;
 const dockWalkZones = [];
+
+const landmarkLayout = {
+  ISLAND_DOCK_POS,
+  ISLAND_DOCK_YAW,
+  LIGHTHOUSE_POS,
+  LIGHTHOUSE_DOCK_POS,
+  LIGHTHOUSE_DOCK_YAW,
+  LIGHTHOUSE_DOOR_POS,
+  MINE_ENTRY_DOCK_POS,
+  MINE_ENTRY_DOCK_YAW,
+  FISHING_DOCK_POS,
+  FISHING_DOCK_YAW,
+  MARKET_DOCK_POS,
+  MARKET_DOCK_YAW,
+  FURNITURE_DOCK_POS,
+  FURNITURE_DOCK_YAW,
+  LEADERBOARD_DOCK_POS,
+  LEADERBOARD_DOCK_YAW,
+  MINE_ENTRY_ISLAND_POS,
+  MINE_ENTRY_ISLAND_RADIUS,
+  FISHING_ISLAND_POS,
+  FISHING_ISLAND_RADIUS,
+  MARKET_ISLAND_POS,
+  MARKET_ISLAND_RADIUS,
+  FURNITURE_ISLAND_POS,
+  FURNITURE_ISLAND_RADIUS,
+  LEADERBOARD_ISLAND_POS,
+  LEADERBOARD_ISLAND_RADIUS,
+  FISHING_VENDOR_POS,
+  MARKET_VENDOR_POS,
+  FURNITURE_VENDOR_POS,
+  VENDOR_STAND_Y,
+  LEADERBOARD_BOARD_REFRESH_MS,
+  LEADERBOARD_BOARD_ROW_LIMIT
+};
+
+const leaderboardBoardStateRef = {
+  get canvas() {
+    return leaderboardBoardCanvas;
+  },
+  set canvas(value) {
+    leaderboardBoardCanvas = value;
+  },
+  get ctx() {
+    return leaderboardBoardCtx;
+  },
+  set ctx(value) {
+    leaderboardBoardCtx = value;
+  },
+  get texture() {
+    return leaderboardBoardTexture;
+  },
+  set texture(value) {
+    leaderboardBoardTexture = value;
+  },
+  get rows() {
+    return leaderboardBoardRows;
+  },
+  set rows(value) {
+    leaderboardBoardRows = value;
+  },
+  get needsRedraw() {
+    return leaderboardBoardNeedsRedraw;
+  },
+  set needsRedraw(value) {
+    leaderboardBoardNeedsRedraw = value;
+  },
+  get fetchInFlight() {
+    return leaderboardBoardFetchInFlight;
+  },
+  set fetchInFlight(value) {
+    leaderboardBoardFetchInFlight = value;
+  },
+  get lastFetchAt() {
+    return leaderboardBoardLastFetchAt;
+  },
+  set lastFetchAt(value) {
+    leaderboardBoardLastFetchAt = value;
+  }
+};
+
+initLandmarkBuilders({
+  sceneRef: scene,
+  addWorldColliderRef: addWorldCollider,
+  createVendorNpcRef: createVendorNpc,
+  createVendorStallRef: createVendorStall,
+  addStoreBuildingRef: addStoreBuilding,
+  makeTextSignRef: makeTextSign,
+  distance2DRef: distance2D,
+  isWaterAtRef: isWaterAt,
+  dockWalkZonesRef: dockWalkZones,
+  fishingSpotsRef: fishingSpots,
+  getBoatStateRef: () => boatState,
+  setLighthouseTopPortalRef: (value) => {
+    lighthouseTopPortal = value;
+  },
+  leaderboardStateRef: leaderboardBoardStateRef,
+  layoutRef: landmarkLayout
+});
 
 const boatState = {
   mesh: null,
@@ -2280,4334 +2224,6 @@ const BOAT_CLEARANCE_FISHING = FISHING_ISLAND_RADIUS + 1.9;
 const BOAT_CLEARANCE_MARKET = MARKET_ISLAND_RADIUS + 1.9;
 const BOAT_CLEARANCE_LEADERBOARD = LEADERBOARD_ISLAND_RADIUS + 1.9;
 addWorldCollider(LIGHTHOUSE_POS.x, LIGHTHOUSE_POS.z, 2.32, 'lighthouse-shell');
-
-function dockOffsetPosition(dock, yaw, forward = 0, side = 0) {
-  const fX = Math.sin(yaw);
-  const fZ = Math.cos(yaw);
-  const rX = Math.cos(yaw);
-  const rZ = -Math.sin(yaw);
-  return {
-    x: dock.x + fX * forward + rX * side,
-    z: dock.z + fZ * forward + rZ * side
-  };
-}
-
-function findWaterSideSlot(dock, yaw, preferSide = 1, forward = 6.0, baseSide = 3.2) {
-  for (const sideDir of [preferSide, -preferSide]) {
-    for (let side = baseSide; side <= baseSide + 8; side += 0.5) {
-      const pos = dockOffsetPosition(dock, yaw, forward, side * sideDir);
-      if (isWaterAt(pos.x, pos.z)) return pos;
-    }
-  }
-  return dockOffsetPosition(dock, yaw, forward, baseSide * preferSide);
-}
-
-function dockSlots() {
-  return [
-    { dock: ISLAND_DOCK_POS, yaw: ISLAND_DOCK_YAW },
-    { dock: LIGHTHOUSE_DOCK_POS, yaw: LIGHTHOUSE_DOCK_YAW },
-    { dock: MINE_ENTRY_DOCK_POS, yaw: MINE_ENTRY_DOCK_YAW },
-    { dock: FISHING_DOCK_POS, yaw: FISHING_DOCK_YAW },
-    { dock: MARKET_DOCK_POS, yaw: MARKET_DOCK_YAW },
-    { dock: FURNITURE_DOCK_POS, yaw: FURNITURE_DOCK_YAW },
-    { dock: LEADERBOARD_DOCK_POS, yaw: LEADERBOARD_DOCK_YAW }
-  ];
-}
-
-function nearestDockSlot(point, maxDistance = Infinity) {
-  let best = null;
-  for (const slot of dockSlots()) {
-    const dist = distance2D(point, slot.dock);
-    if (dist <= maxDistance && (!best || dist < best.distance)) {
-      best = { ...slot, distance: dist };
-    }
-  }
-  return best;
-}
-
-function boatPoseForDock(slot) {
-  if (slot.dock === ISLAND_DOCK_POS) {
-    return { ...findWaterSideSlot(slot.dock, slot.yaw, 1, 6.0, 3.2), yaw: slot.yaw };
-  }
-  return { ...findWaterSideSlot(slot.dock, slot.yaw, 1, 5.0, 2.4), yaw: slot.yaw };
-}
-
-function addDock(anchor, yaw = 0, options = {}) {
-  const segments = options.segments ?? 7;
-  const plankLength = options.plankLength ?? 2.2;
-  const plankWidth = options.plankWidth ?? 0.7;
-  const spacing = options.spacing ?? 1.05;
-  const addRamp = options.addRamp !== false;
-  const walkable = options.walkable !== false;
-  const dock = new THREE.Group();
-  dock.position.copy(anchor);
-  dock.rotation.y = yaw;
-  const lastCenterX = (segments - 1) * spacing;
-  const deckLength = lastCenterX + plankLength;
-  const deckCenterX = lastCenterX * 0.5;
-
-  const deck = new THREE.Mesh(
-    new THREE.BoxGeometry(deckLength, 0.16, plankWidth),
-    new THREE.MeshStandardMaterial({ color: 0x7a5230, roughness: 0.9 })
-  );
-  deck.position.set(deckCenterX, 0.05, 0);
-  deck.castShadow = true;
-  deck.receiveShadow = true;
-  dock.add(deck);
-
-  if (addRamp) {
-    const ramp = new THREE.Mesh(
-      new THREE.BoxGeometry(2.6, 0.18, plankWidth + 0.34),
-      new THREE.MeshStandardMaterial({ color: 0x80552f, roughness: 0.9 })
-    );
-    ramp.position.set(-1.45, -0.01, 0);
-    ramp.rotation.z = 0.07;
-    ramp.receiveShadow = true;
-    dock.add(ramp);
-  }
-
-  for (let i = 0; i < segments; i += 1) {
-    const seam = new THREE.Mesh(
-      new THREE.BoxGeometry(0.03, 0.165, plankWidth * 0.98),
-      new THREE.MeshStandardMaterial({ color: 0x5b412c, roughness: 0.95 })
-    );
-    seam.position.set(i * spacing - spacing * 0.5, 0.06, 0);
-    seam.castShadow = true;
-    dock.add(seam);
-  }
-
-  const railOffsetZ = plankWidth * 0.5 + 0.2;
-  const railHeight = options.railHeight ?? 0.5;
-  for (const z of [-railOffsetZ, railOffsetZ]) {
-    const topRail = new THREE.Mesh(
-      new THREE.BoxGeometry(deckLength + 0.34, 0.1, 0.12),
-      new THREE.MeshStandardMaterial({ color: 0x5b412c, roughness: 0.92 })
-    );
-    topRail.position.set(deckCenterX, railHeight, z);
-    topRail.castShadow = true;
-    topRail.receiveShadow = true;
-    dock.add(topRail);
-
-    const midRail = new THREE.Mesh(
-      new THREE.BoxGeometry(deckLength + 0.28, 0.08, 0.1),
-      new THREE.MeshStandardMaterial({ color: 0x60452f, roughness: 0.92 })
-    );
-    midRail.position.set(deckCenterX, railHeight - 0.18, z);
-    midRail.castShadow = true;
-    midRail.receiveShadow = true;
-    dock.add(midRail);
-  }
-
-  const railPostGeo = new THREE.BoxGeometry(0.12, railHeight + 0.06, 0.12);
-  const railPosts = Math.max(6, Math.floor(deckLength / 1.6));
-  for (let i = 0; i <= railPosts; i += 1) {
-    const t = railPosts === 0 ? 0 : i / railPosts;
-    const px = -plankLength * 0.5 + t * deckLength;
-    for (const z of [-railOffsetZ, railOffsetZ]) {
-      const post = new THREE.Mesh(
-        railPostGeo,
-        new THREE.MeshStandardMaterial({ color: 0x4d3624, roughness: 0.94 })
-      );
-      post.position.set(px, railHeight * 0.5, z);
-      post.castShadow = true;
-      post.receiveShadow = true;
-      dock.add(post);
-    }
-  }
-
-  const pillarGeo = new THREE.CylinderGeometry(0.14, 0.18, 1.0, 10);
-  const pillarRows = Math.max(5, Math.floor(segments * 0.6));
-  for (let i = 0; i < pillarRows; i += 1) {
-    const t = pillarRows === 1 ? 0 : i / (pillarRows - 1);
-    const px = -plankLength * 0.5 + 0.25 + t * (deckLength - 0.5);
-    for (const z of [-railOffsetZ + 0.08, railOffsetZ - 0.08]) {
-      const pillar = new THREE.Mesh(
-        pillarGeo,
-        new THREE.MeshStandardMaterial({ color: 0x4b3623, roughness: 0.95 })
-      );
-      pillar.position.set(px, -0.4, z);
-      pillar.castShadow = true;
-      dock.add(pillar);
-    }
-  }
-
-  if (walkable) {
-    const startX = addRamp ? -2.8 : -plankLength * 0.5 - 0.2;
-    const endX = lastCenterX + plankLength * 0.5 + 0.25;
-    const deckMinX = -plankLength * 0.5;
-    const deckMaxX = lastCenterX + plankLength * 0.5;
-    dockWalkZones.push({
-      x: anchor.x,
-      z: anchor.z,
-      yaw,
-      minForward: Math.min(startX, deckMinX) - 3.2,
-      maxForward: Math.max(endX, deckMaxX) + 3.2,
-      halfWidth: plankWidth * 0.5 + 1.8,
-      floorY: anchor.y + 0.13
-    });
-  }
-
-  scene.add(dock);
-}
-
-function addLighthouseIsland() {
-  const base = new THREE.Mesh(
-    new THREE.CylinderGeometry(12.5, 14.5, 3.0, 36),
-    new THREE.MeshStandardMaterial({ color: 0x8b6a4c, roughness: 0.95 })
-  );
-  base.position.set(LIGHTHOUSE_POS.x, -0.4, LIGHTHOUSE_POS.z);
-  base.receiveShadow = true;
-  scene.add(base);
-
-  const top = new THREE.Mesh(
-    new THREE.CylinderGeometry(10.8, 12.3, 1.3, 40),
-    new THREE.MeshStandardMaterial({ color: 0x7ea35f, roughness: 0.9 })
-  );
-  top.position.set(LIGHTHOUSE_POS.x, 1.35, LIGHTHOUSE_POS.z);
-  top.receiveShadow = true;
-  scene.add(top);
-
-  const lighthouse = new THREE.Group();
-  const tower = new THREE.Mesh(
-    new THREE.CylinderGeometry(1.55, 2.0, 12.5, 24),
-    new THREE.MeshStandardMaterial({ color: 0xf1f5f9, roughness: 0.75 })
-  );
-  tower.position.y = 7.4;
-  tower.castShadow = true;
-  const band = new THREE.Mesh(
-    new THREE.TorusGeometry(1.88, 0.12, 8, 24),
-    new THREE.MeshStandardMaterial({ color: 0xdc2626, roughness: 0.55 })
-  );
-  band.rotation.x = Math.PI / 2;
-  band.position.y = 8.1;
-  const roof = new THREE.Mesh(
-    new THREE.ConeGeometry(1.95, 2.4, 24),
-    new THREE.MeshStandardMaterial({ color: 0xdc2626, roughness: 0.55 })
-  );
-  roof.position.y = 14.7;
-  roof.castShadow = true;
-  const balcony = new THREE.Mesh(
-    new THREE.CylinderGeometry(2.55, 2.55, 0.24, 24),
-    new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.72 })
-  );
-  balcony.position.y = 13.1;
-  balcony.receiveShadow = true;
-  const rail = new THREE.Mesh(
-    new THREE.TorusGeometry(2.45, 0.08, 8, 32),
-    new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.72 })
-  );
-  rail.rotation.x = Math.PI / 2;
-  rail.position.y = 13.58;
-
-  const doorFrameMat = new THREE.MeshStandardMaterial({ color: 0x8b5a2b, roughness: 0.88, side: THREE.DoubleSide });
-  const doorWoodMat = new THREE.MeshStandardMaterial({ color: 0x6b4226, roughness: 0.9, side: THREE.DoubleSide });
-  const doorMetalMat = new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.58, metalness: 0.3, side: THREE.DoubleSide });
-  // CylinderGeometry uses 0 radians at +Z, same convention as atan2(dx, dz) yaw math.
-  const doorCenterAngle = Math.atan2(
-    LIGHTHOUSE_DOOR_POS.x - LIGHTHOUSE_POS.x,
-    LIGHTHOUSE_DOOR_POS.z - LIGHTHOUSE_POS.z
-  );
-
-  const frameArc = 1.42;
-  const frameStart = doorCenterAngle - frameArc * 0.5;
-  const doorFrame = new THREE.Mesh(
-    new THREE.CylinderGeometry(2.34, 2.5, 3.98, 28, 1, true, frameStart, frameArc),
-    doorFrameMat
-  );
-  doorFrame.position.y = 3.0;
-  doorFrame.castShadow = true;
-  doorFrame.receiveShadow = true;
-
-  const doorVoidArc = 1.2;
-  const doorVoidStart = doorCenterAngle - doorVoidArc * 0.5;
-  const doorVoid = new THREE.Mesh(
-    new THREE.CylinderGeometry(2.2, 2.34, 3.82, 24, 1, true, doorVoidStart, doorVoidArc),
-    new THREE.MeshBasicMaterial({ color: 0x0b0f17, side: THREE.DoubleSide })
-  );
-  doorVoid.position.y = 3.0;
-
-  function makeLighthouseDoor(side = 1) {
-    const door = new THREE.Group();
-    const panelArc = 0.53;
-    const centerGap = 0.08;
-    const panelStart = side < 0
-      ? doorCenterAngle - centerGap * 0.5 - panelArc
-      : doorCenterAngle + centerGap * 0.5;
-    const panel = new THREE.Mesh(
-      new THREE.CylinderGeometry(2.26, 2.4, 3.56, 18, 1, true, panelStart, panelArc),
-      doorWoodMat
-    );
-    panel.position.y = 3.0;
-    panel.castShadow = true;
-    panel.receiveShadow = true;
-    door.add(panel);
-
-    for (const yOffset of [1.05, 0, -1.05]) {
-      const strap = new THREE.Mesh(
-        new THREE.CylinderGeometry(2.29, 2.43, 0.09, 18, 1, true, panelStart, panelArc),
-        doorMetalMat
-      );
-      strap.position.y = 3.0 + yOffset;
-      strap.castShadow = true;
-      strap.receiveShadow = true;
-      door.add(strap);
-    }
-
-    const handleAngle = side < 0
-      ? doorCenterAngle - centerGap * 0.5 - 0.03
-      : doorCenterAngle + centerGap * 0.5 + 0.03;
-    const handle = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), doorMetalMat);
-    handle.position.set(Math.cos(handleAngle) * 2.34, 3.05, Math.sin(handleAngle) * 2.34);
-    handle.castShadow = true;
-    door.add(handle);
-
-    return door;
-  }
-
-  const wallLampL = new THREE.PointLight(0xffd68a, 0.45, 5, 2);
-  wallLampL.position.set(-1.18, 2.95, 2.2);
-  const wallLampR = new THREE.PointLight(0xffd68a, 0.45, 5, 2);
-  wallLampR.position.set(1.18, 2.95, 2.2);
-
-  lighthouseTopPortal = new THREE.Group();
-  const topPortalDisc = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.72, 0.72, 0.1, 24),
-    new THREE.MeshStandardMaterial({
-      color: 0x7dd3fc,
-      emissive: 0x0284c7,
-      emissiveIntensity: 1.15,
-      roughness: 0.28,
-      metalness: 0.32
-    })
-  );
-  const topPortalRing = new THREE.Mesh(
-    new THREE.TorusGeometry(1.0, 0.08, 12, 28),
-    new THREE.MeshStandardMaterial({
-      color: 0x38bdf8,
-      emissive: 0x0ea5e9,
-      emissiveIntensity: 0.85,
-      roughness: 0.35
-    })
-  );
-  topPortalRing.rotation.x = Math.PI / 2;
-  topPortalRing.position.y = 0.06;
-  lighthouseTopPortal.position.set(0, 13.23, 0);
-  lighthouseTopPortal.add(topPortalDisc, topPortalRing);
-  const topPortalLight = new THREE.PointLight(0x67e8f9, 0.75, 8, 2);
-  topPortalLight.position.set(0, 13.55, 0);
-  lighthouseTopPortal.add(topPortalLight);
-  lighthouse.add(
-    tower, band, balcony, rail, roof,
-    doorFrame, doorVoid,
-    makeLighthouseDoor(-1), makeLighthouseDoor(1),
-    wallLampL, wallLampR
-  );
-  lighthouse.add(lighthouseTopPortal);
-  lighthouse.position.set(LIGHTHOUSE_POS.x, 0, LIGHTHOUSE_POS.z);
-  scene.add(lighthouse);
-}
-
-function addMineEntryIsland() {
-  const base = new THREE.Mesh(
-    new THREE.CylinderGeometry(MINE_ENTRY_ISLAND_RADIUS + 1.8, MINE_ENTRY_ISLAND_RADIUS + 3.4, 3.2, 34),
-    new THREE.MeshStandardMaterial({ color: 0x8b6a4c, roughness: 0.95 })
-  );
-  base.position.set(MINE_ENTRY_ISLAND_POS.x, -0.35, MINE_ENTRY_ISLAND_POS.z);
-  base.receiveShadow = true;
-  scene.add(base);
-
-  const top = new THREE.Mesh(
-    new THREE.CylinderGeometry(MINE_ENTRY_ISLAND_RADIUS, MINE_ENTRY_ISLAND_RADIUS + 1.2, 1.2, 34),
-    new THREE.MeshStandardMaterial({ color: 0x7ea35f, roughness: 0.9 })
-  );
-  top.position.set(MINE_ENTRY_ISLAND_POS.x, 1.35, MINE_ENTRY_ISLAND_POS.z);
-  top.receiveShadow = true;
-  scene.add(top);
-
-  const rockMat = new THREE.MeshStandardMaterial({ color: 0x5f6470, roughness: 0.9 });
-  const edgeRocks = 14;
-  for (let i = 0; i < edgeRocks; i += 1) {
-    const angle = (i / edgeRocks) * Math.PI * 2;
-    const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(1.1 + Math.random() * 0.5, 0), rockMat);
-    const radius = MINE_ENTRY_ISLAND_RADIUS - 0.9 + Math.random() * 1.7;
-    rock.position.set(
-      MINE_ENTRY_ISLAND_POS.x + Math.cos(angle) * radius,
-      1.8 + Math.random() * 1.0,
-      MINE_ENTRY_ISLAND_POS.z + Math.sin(angle) * radius
-    );
-    rock.scale.set(1 + Math.random() * 0.45, 1 + Math.random() * 0.5, 1 + Math.random() * 0.45);
-    rock.castShadow = true;
-    rock.receiveShadow = true;
-    scene.add(rock);
-  }
-}
-
-function addFishingIsland() {
-  const base = new THREE.Mesh(
-    new THREE.CylinderGeometry(FISHING_ISLAND_RADIUS + 1.8, FISHING_ISLAND_RADIUS + 3.4, 3.2, 34),
-    new THREE.MeshStandardMaterial({ color: 0x8c6a4c, roughness: 0.94 })
-  );
-  base.position.set(FISHING_ISLAND_POS.x, -0.35, FISHING_ISLAND_POS.z);
-  base.receiveShadow = true;
-  scene.add(base);
-
-  const top = new THREE.Mesh(
-    new THREE.CylinderGeometry(FISHING_ISLAND_RADIUS, FISHING_ISLAND_RADIUS + 1.1, 1.2, 34),
-    new THREE.MeshStandardMaterial({ color: 0x6f9b62, roughness: 0.9 })
-  );
-  top.position.set(FISHING_ISLAND_POS.x, 1.35, FISHING_ISLAND_POS.z);
-  top.receiveShadow = true;
-  scene.add(top);
-
-  const ring = new THREE.Mesh(
-    new THREE.RingGeometry(FISHING_ISLAND_RADIUS - 1.2, FISHING_ISLAND_RADIUS + 0.2, 38),
-    new THREE.MeshStandardMaterial({ color: 0xc5a273, roughness: 0.94 })
-  );
-  ring.rotation.x = -Math.PI / 2;
-  ring.position.set(FISHING_ISLAND_POS.x, 1.38, FISHING_ISLAND_POS.z);
-  ring.receiveShadow = true;
-  scene.add(ring);
-
-  const vendor = createVendorNpc({
-    shirtColor: 0x0891b2,
-    skinColor: 0xd6a581,
-    hairColor: 0x1f2937,
-    hatColor: 0x0f172a
-  });
-  vendor.scale.setScalar(0.65);
-  const stall = createVendorStall({
-    label: 'Fishing',
-    signColor: '#0b2940',
-    canopyA: 0x0ea5e9,
-    canopyB: 0xffffff,
-    vendor
-  });
-  const fishingHouseYaw = Math.atan2(-FISHING_VENDOR_POS.x, -FISHING_VENDOR_POS.z);
-  const fishingStoreOffset = 2.0;
-  const fishingStoreX = FISHING_VENDOR_POS.x - Math.sin(fishingHouseYaw) * fishingStoreOffset;
-  const fishingStoreZ = FISHING_VENDOR_POS.z - Math.cos(fishingHouseYaw) * fishingStoreOffset;
-  addStoreBuilding(fishingStoreX, fishingStoreZ, fishingHouseYaw);
-  vendor.position.set(0, VENDOR_STAND_Y - 0.05, -1.0);
-  stall.position.set(FISHING_VENDOR_POS.x, 0, FISHING_VENDOR_POS.z);
-  stall.rotation.y = fishingHouseYaw;
-  scene.add(stall);
-  addWorldCollider(FISHING_VENDOR_POS.x, FISHING_VENDOR_POS.z, 1.04, 'npc');
-
-  const spotDefs = [
-    { id: 'fish-north', x: FISHING_ISLAND_POS.x + 0.8, z: FISHING_ISLAND_POS.z - (FISHING_ISLAND_RADIUS + 0.65) },
-    { id: 'fish-east', x: FISHING_ISLAND_POS.x + (FISHING_ISLAND_RADIUS + 0.55), z: FISHING_ISLAND_POS.z + 0.9 },
-    { id: 'fish-west', x: FISHING_ISLAND_POS.x - (FISHING_ISLAND_RADIUS + 0.48), z: FISHING_ISLAND_POS.z - 0.6 }
-  ];
-  for (const spot of spotDefs) {
-    const marker = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.26, 0.26, 0.08, 16),
-      new THREE.MeshStandardMaterial({ color: 0x22d3ee, emissive: 0x0e7490, emissiveIntensity: 0.65, roughness: 0.32 })
-    );
-    marker.position.set(spot.x, 0.43, spot.z);
-    marker.castShadow = true;
-    scene.add(marker);
-    fishingSpots.push({
-      id: spot.id,
-      x: spot.x,
-      z: spot.z,
-      marker
-    });
-  }
-}
-
-function addMarketIsland() {
-  const base = new THREE.Mesh(
-    new THREE.CylinderGeometry(MARKET_ISLAND_RADIUS + 1.8, MARKET_ISLAND_RADIUS + 3.4, 3.2, 34),
-    new THREE.MeshStandardMaterial({ color: 0x8b6b4f, roughness: 0.95 })
-  );
-  base.position.set(MARKET_ISLAND_POS.x, -0.35, MARKET_ISLAND_POS.z);
-  base.receiveShadow = true;
-  scene.add(base);
-
-  const top = new THREE.Mesh(
-    new THREE.CylinderGeometry(MARKET_ISLAND_RADIUS, MARKET_ISLAND_RADIUS + 1.1, 1.2, 34),
-    new THREE.MeshStandardMaterial({ color: 0x739a62, roughness: 0.9 })
-  );
-  top.position.set(MARKET_ISLAND_POS.x, 1.35, MARKET_ISLAND_POS.z);
-  top.receiveShadow = true;
-  scene.add(top);
-
-  const vendor = createVendorNpc({
-    shirtColor: 0xa16207,
-    skinColor: 0xe0b18f,
-    hairColor: 0x111827,
-    hatColor: 0x3f2a1a
-  });
-  vendor.scale.setScalar(0.65);
-  const stall = createVendorStall({
-    label: 'Fish Market',
-    signColor: '#2f2417',
-    canopyA: 0xf59e0b,
-    canopyB: 0xffffff,
-    vendor
-  });
-  const marketHouseYaw = Math.atan2(-MARKET_VENDOR_POS.x, -MARKET_VENDOR_POS.z);
-  const marketStoreOffset = 2.0;
-  const marketStoreX = MARKET_VENDOR_POS.x - Math.sin(marketHouseYaw) * marketStoreOffset;
-  const marketStoreZ = MARKET_VENDOR_POS.z - Math.cos(marketHouseYaw) * marketStoreOffset;
-  addStoreBuilding(marketStoreX, marketStoreZ, marketHouseYaw);
-  vendor.position.set(0, VENDOR_STAND_Y - 0.05, -1.0);
-  stall.position.set(MARKET_VENDOR_POS.x, 0, MARKET_VENDOR_POS.z);
-  stall.rotation.y = marketHouseYaw;
-  scene.add(stall);
-  addWorldCollider(MARKET_VENDOR_POS.x, MARKET_VENDOR_POS.z, 1.04, 'npc');
-
-  const spotDefs = [
-    { id: 'market-fish-north', x: MARKET_ISLAND_POS.x + 0.75, z: MARKET_ISLAND_POS.z - (MARKET_ISLAND_RADIUS + 0.62) },
-    { id: 'market-fish-east', x: MARKET_ISLAND_POS.x + (MARKET_ISLAND_RADIUS + 0.56), z: MARKET_ISLAND_POS.z + 0.55 },
-    { id: 'market-fish-south', x: MARKET_ISLAND_POS.x - 0.45, z: MARKET_ISLAND_POS.z + (MARKET_ISLAND_RADIUS + 0.58) }
-  ];
-  for (const spot of spotDefs) {
-    const marker = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.26, 0.26, 0.08, 16),
-      new THREE.MeshStandardMaterial({ color: 0x38bdf8, emissive: 0x0c4a6e, emissiveIntensity: 0.72, roughness: 0.34 })
-    );
-    marker.position.set(spot.x, 0.43, spot.z);
-    marker.castShadow = true;
-    scene.add(marker);
-    fishingSpots.push({
-      id: spot.id,
-      x: spot.x,
-      z: spot.z,
-      marker
-    });
-  }
-}
-
-function addFurnitureIsland() {
-  const base = new THREE.Mesh(
-    new THREE.CylinderGeometry(FURNITURE_ISLAND_RADIUS + 1.8, FURNITURE_ISLAND_RADIUS + 3.4, 3.2, 34),
-    new THREE.MeshStandardMaterial({ color: 0x8b6d52, roughness: 0.95 })
-  );
-  base.position.set(FURNITURE_ISLAND_POS.x, -0.35, FURNITURE_ISLAND_POS.z);
-  base.receiveShadow = true;
-  scene.add(base);
-
-  const top = new THREE.Mesh(
-    new THREE.CylinderGeometry(FURNITURE_ISLAND_RADIUS, FURNITURE_ISLAND_RADIUS + 1.1, 1.2, 34),
-    new THREE.MeshStandardMaterial({ color: 0x7ca069, roughness: 0.9 })
-  );
-  top.position.set(FURNITURE_ISLAND_POS.x, 1.35, FURNITURE_ISLAND_POS.z);
-  top.receiveShadow = true;
-  scene.add(top);
-
-  const accentRing = new THREE.Mesh(
-    new THREE.RingGeometry(FURNITURE_ISLAND_RADIUS - 1.1, FURNITURE_ISLAND_RADIUS + 0.24, 40),
-    new THREE.MeshStandardMaterial({ color: 0xd5b48d, roughness: 0.92 })
-  );
-  accentRing.rotation.x = -Math.PI / 2;
-  accentRing.position.set(FURNITURE_ISLAND_POS.x, 1.38, FURNITURE_ISLAND_POS.z);
-  accentRing.receiveShadow = true;
-  scene.add(accentRing);
-
-  const vendor = createVendorNpc({
-    shirtColor: 0xfb7185,
-    skinColor: 0xe0b18f,
-    hairColor: 0x3f2a1a,
-    hatColor: 0x7c2d12
-  });
-  vendor.scale.setScalar(0.65);
-  const stall = createVendorStall({
-    label: 'Furniture',
-    signColor: '#46271a',
-    canopyA: 0xfb7185,
-    canopyB: 0xfffbeb,
-    vendor
-  });
-  const furnitureHouseYaw = Math.atan2(-FURNITURE_VENDOR_POS.x, -FURNITURE_VENDOR_POS.z);
-  const furnitureStoreOffset = 2.0;
-  const furnitureStoreX = FURNITURE_VENDOR_POS.x - Math.sin(furnitureHouseYaw) * furnitureStoreOffset;
-  const furnitureStoreZ = FURNITURE_VENDOR_POS.z - Math.cos(furnitureHouseYaw) * furnitureStoreOffset;
-  addStoreBuilding(furnitureStoreX, furnitureStoreZ, furnitureHouseYaw);
-  vendor.position.set(0, VENDOR_STAND_Y - 0.05, -1.0);
-  stall.position.set(FURNITURE_VENDOR_POS.x, 0, FURNITURE_VENDOR_POS.z);
-  stall.rotation.y = furnitureHouseYaw;
-  scene.add(stall);
-  addWorldCollider(FURNITURE_VENDOR_POS.x, FURNITURE_VENDOR_POS.z, 1.04, 'npc');
-}
-
-function drawLeaderboardBoardTexture() {
-  if (!leaderboardBoardCtx || !leaderboardBoardCanvas || !leaderboardBoardTexture) return;
-  const ctx = leaderboardBoardCtx;
-  const canvas = leaderboardBoardCanvas;
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  const bgGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
-  bgGrad.addColorStop(0, '#0b1726');
-  bgGrad.addColorStop(0.55, '#11263a');
-  bgGrad.addColorStop(1, '#0a1522');
-  ctx.fillStyle = bgGrad;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  ctx.strokeStyle = 'rgba(236, 253, 245, 0.2)';
-  ctx.lineWidth = 8;
-  ctx.strokeRect(14, 14, canvas.width - 28, canvas.height - 28);
-
-  const now = new Date();
-  ctx.fillStyle = '#f8fafc';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.font = '800 62px "Trebuchet MS", "Segoe UI", sans-serif';
-  ctx.fillText('Top Islanders', canvas.width * 0.5, 74);
-  ctx.font = '500 24px "Trebuchet MS", "Segoe UI", sans-serif';
-  ctx.fillStyle = '#bfdbfe';
-  ctx.fillText(`Updated ${now.toLocaleTimeString()}`, canvas.width * 0.5, 120);
-
-  const rows = Array.isArray(leaderboardBoardRows) ? leaderboardBoardRows.slice(0, LEADERBOARD_BOARD_ROW_LIMIT) : [];
-  if (!rows.length) {
-    ctx.fillStyle = '#cbd5e1';
-    ctx.font = '600 38px "Trebuchet MS", "Segoe UI", sans-serif';
-    ctx.fillText('No leaderboard data yet', canvas.width * 0.5, canvas.height * 0.5);
-    leaderboardBoardTexture.needsUpdate = true;
-    leaderboardBoardNeedsRedraw = false;
-    return;
-  }
-
-  const rowStartY = 174;
-  const rowHeight = 66;
-  for (let i = 0; i < rows.length; i += 1) {
-    const row = rows[i];
-    const y = rowStartY + i * rowHeight;
-    const odd = i % 2 === 1;
-    ctx.fillStyle = odd ? 'rgba(30, 64, 95, 0.38)' : 'rgba(15, 30, 48, 0.28)';
-    ctx.fillRect(34, y - 25, canvas.width - 68, 50);
-
-    ctx.textAlign = 'left';
-    ctx.font = '700 30px "Trebuchet MS", "Segoe UI", sans-serif';
-    ctx.fillStyle = '#e2e8f0';
-    ctx.fillText(`#${row.rank || (i + 1)}`, 56, y);
-    ctx.fillStyle = '#f8fafc';
-    const safeName = String(row.name || 'Player').slice(0, 20);
-    ctx.fillText(safeName, 138, y);
-
-    ctx.textAlign = 'right';
-    ctx.fillStyle = '#facc15';
-    ctx.fillText(`${Math.max(0, Math.floor(Number(row.coins) || 0)).toLocaleString()}c`, canvas.width - 56, y);
-    ctx.fillStyle = '#93c5fd';
-    ctx.font = '600 24px "Trebuchet MS", "Segoe UI", sans-serif';
-    ctx.fillText(
-      `Lv ${Math.max(1, Math.floor(Number(row.level) || 1))}  XP ${Math.max(0, Math.floor(Number(row.xp) || 0)).toLocaleString()}`,
-      canvas.width - 252,
-      y
-    );
-  }
-
-  leaderboardBoardTexture.needsUpdate = true;
-  leaderboardBoardNeedsRedraw = false;
-}
-
-async function refreshLeaderboardBoard(force = false) {
-  if (!leaderboardBoardCanvas) return;
-  if (leaderboardBoardFetchInFlight) return;
-  const now = performance.now();
-  if (!force && now - leaderboardBoardLastFetchAt < LEADERBOARD_BOARD_REFRESH_MS) return;
-  leaderboardBoardLastFetchAt = now;
-  leaderboardBoardFetchInFlight = true;
-  try {
-    const response = await fetch(`/leaderboard?limit=${LEADERBOARD_BOARD_ROW_LIMIT}`, { cache: 'no-store' });
-    if (!response.ok) return;
-    const payload = await response.json();
-    if (!payload?.ok || !Array.isArray(payload.rows)) return;
-    leaderboardBoardRows = payload.rows.map((row, index) => ({
-      rank: Math.max(1, Math.floor(Number(row?.rank) || (index + 1))),
-      name: typeof row?.name === 'string' && row.name.trim() ? row.name.trim() : 'Player',
-      level: Math.max(1, Math.floor(Number(row?.level) || 1)),
-      xp: Math.max(0, Math.floor(Number(row?.xp) || 0)),
-      coins: Math.max(0, Math.floor(Number(row?.coins) || 0))
-    }));
-    leaderboardBoardNeedsRedraw = true;
-  } catch {
-    // Keep last rendered board state if network fetch fails.
-  } finally {
-    leaderboardBoardFetchInFlight = false;
-  }
-}
-
-function updateLeaderboardBoard(nowMs) {
-  if (!leaderboardBoardCanvas) return;
-  if (leaderboardBoardNeedsRedraw) {
-    drawLeaderboardBoardTexture();
-  }
-  if (nowMs - leaderboardBoardLastFetchAt >= LEADERBOARD_BOARD_REFRESH_MS) {
-    void refreshLeaderboardBoard();
-  }
-}
-
-function addLeaderboardIsland() {
-  const base = new THREE.Mesh(
-    new THREE.CylinderGeometry(LEADERBOARD_ISLAND_RADIUS + 1.7, LEADERBOARD_ISLAND_RADIUS + 3.3, 3.2, 34),
-    new THREE.MeshStandardMaterial({ color: 0x87684a, roughness: 0.95 })
-  );
-  base.position.set(LEADERBOARD_ISLAND_POS.x, -0.35, LEADERBOARD_ISLAND_POS.z);
-  base.receiveShadow = true;
-  scene.add(base);
-
-  const top = new THREE.Mesh(
-    new THREE.CylinderGeometry(LEADERBOARD_ISLAND_RADIUS, LEADERBOARD_ISLAND_RADIUS + 1.1, 1.2, 34),
-    new THREE.MeshStandardMaterial({ color: 0x6d945f, roughness: 0.9 })
-  );
-  top.position.set(LEADERBOARD_ISLAND_POS.x, 1.35, LEADERBOARD_ISLAND_POS.z);
-  top.receiveShadow = true;
-  scene.add(top);
-
-  const accentRing = new THREE.Mesh(
-    new THREE.RingGeometry(LEADERBOARD_ISLAND_RADIUS - 1.2, LEADERBOARD_ISLAND_RADIUS + 0.25, 42),
-    new THREE.MeshStandardMaterial({ color: 0xc7a67b, roughness: 0.92 })
-  );
-  accentRing.rotation.x = -Math.PI / 2;
-  accentRing.position.set(LEADERBOARD_ISLAND_POS.x, 1.38, LEADERBOARD_ISLAND_POS.z);
-  accentRing.receiveShadow = true;
-  scene.add(accentRing);
-
-  leaderboardBoardCanvas = document.createElement('canvas');
-  leaderboardBoardCanvas.width = 1024;
-  leaderboardBoardCanvas.height = 768;
-  leaderboardBoardCtx = leaderboardBoardCanvas.getContext('2d');
-  leaderboardBoardTexture = new THREE.CanvasTexture(leaderboardBoardCanvas);
-  leaderboardBoardTexture.colorSpace = THREE.SRGBColorSpace;
-  leaderboardBoardTexture.minFilter = THREE.LinearFilter;
-  leaderboardBoardTexture.magFilter = THREE.LinearFilter;
-
-  const boardFacingYaw = Math.atan2(-LEADERBOARD_ISLAND_POS.x, -LEADERBOARD_ISLAND_POS.z);
-  const board = new THREE.Group();
-  board.position.set(LEADERBOARD_ISLAND_POS.x, 0, LEADERBOARD_ISLAND_POS.z);
-  board.rotation.y = boardFacingYaw;
-
-  const postMat = new THREE.MeshStandardMaterial({ color: 0x4a311f, roughness: 0.92 });
-  const frameMat = new THREE.MeshStandardMaterial({ color: 0x5e4026, roughness: 0.9 });
-  const panelBackMat = new THREE.MeshStandardMaterial({ color: 0x14263a, roughness: 0.86 });
-  const postGeo = new THREE.BoxGeometry(0.24, 5.6, 0.24);
-  for (const x of [-2.5, 2.5]) {
-    const post = new THREE.Mesh(postGeo, postMat);
-    post.position.set(x, 2.9, -0.45);
-    post.castShadow = true;
-    post.receiveShadow = true;
-    board.add(post);
-  }
-  const topBeam = new THREE.Mesh(new THREE.BoxGeometry(5.35, 0.28, 0.26), frameMat);
-  topBeam.position.set(0, 5.6, -0.45);
-  topBeam.castShadow = true;
-  board.add(topBeam);
-
-  const boardBack = new THREE.Mesh(new THREE.BoxGeometry(5.2, 4.6, 0.26), panelBackMat);
-  boardBack.position.set(0, 2.9, -0.36);
-  boardBack.castShadow = true;
-  boardBack.receiveShadow = true;
-  board.add(boardBack);
-
-  const boardFace = new THREE.Mesh(
-    new THREE.PlaneGeometry(4.9, 4.25),
-    new THREE.MeshStandardMaterial({ map: leaderboardBoardTexture, roughness: 0.8, metalness: 0.02 })
-  );
-  boardFace.position.set(0, 2.9, -0.2);
-  boardFace.castShadow = true;
-  board.add(boardFace);
-
-  const sign = makeTextSign('Leaderboard', 3.0, 0.72, '#14263a', '#f8fafc');
-  sign.position.set(0, 6.05, -0.22);
-  board.add(sign);
-  scene.add(board);
-  addWorldCollider(LEADERBOARD_ISLAND_POS.x, LEADERBOARD_ISLAND_POS.z, 2.9, 'stall');
-
-  leaderboardBoardRows = [];
-  leaderboardBoardNeedsRedraw = true;
-  drawLeaderboardBoardTexture();
-  void refreshLeaderboardBoard(true);
-}
-
-function addLighthouseInterior() {
-  const interior = new THREE.Group();
-  const shellMat = new THREE.MeshStandardMaterial({ color: 0xdfe6ee, roughness: 0.86, side: THREE.DoubleSide });
-  const trimMat = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.72 });
-  const woodMat = new THREE.MeshStandardMaterial({ color: 0x8d5a2b, roughness: 0.82 });
-  const stoneMat = new THREE.MeshStandardMaterial({ color: 0x6b7280, roughness: 0.9 });
-  const brassMat = new THREE.MeshStandardMaterial({ color: 0xf2c66a, roughness: 0.34, metalness: 0.55 });
-  const shellRadius = 11.8;
-  const shellHeight = 24.5;
-  const floorRadius = 11.2;
-  const stairRadius = INTERIOR_STAIR_RADIUS;
-  const stairSteps = INTERIOR_STAIR_STEPS;
-  const stairRise = INTERIOR_STAIR_RISE;
-
-  const wall = new THREE.Mesh(new THREE.CylinderGeometry(shellRadius, shellRadius + 0.35, shellHeight, 56, 1, true), shellMat);
-  wall.position.set(LIGHTHOUSE_INTERIOR_BASE.x, shellHeight * 0.5 - 0.12, LIGHTHOUSE_INTERIOR_BASE.z);
-  wall.receiveShadow = true;
-  interior.add(wall);
-
-  const floorBase = new THREE.Mesh(new THREE.CircleGeometry(floorRadius, 56), stoneMat);
-  floorBase.rotation.x = -Math.PI / 2;
-  floorBase.position.set(LIGHTHOUSE_INTERIOR_BASE.x, 1.34, LIGHTHOUSE_INTERIOR_BASE.z);
-  floorBase.receiveShadow = true;
-  interior.add(floorBase);
-
-  const floorRing = new THREE.Mesh(
-    new THREE.RingGeometry(3.1, floorRadius - 0.3, 56),
-    new THREE.MeshStandardMaterial({ color: 0x4b5563, roughness: 0.85 })
-  );
-  floorRing.rotation.x = -Math.PI / 2;
-  floorRing.position.set(LIGHTHOUSE_INTERIOR_BASE.x, 1.345, LIGHTHOUSE_INTERIOR_BASE.z);
-  interior.add(floorRing);
-
-  const centerWell = new THREE.Mesh(
-    new THREE.CylinderGeometry(2.25, 2.4, shellHeight - 2.2, 28),
-    new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.82 })
-  );
-  centerWell.position.set(LIGHTHOUSE_INTERIOR_BASE.x, 1.35 + (shellHeight - 2.2) * 0.5, LIGHTHOUSE_INTERIOR_BASE.z);
-  centerWell.castShadow = true;
-  centerWell.receiveShadow = true;
-  interior.add(centerWell);
-  addWorldCollider(LIGHTHOUSE_INTERIOR_BASE.x, LIGHTHOUSE_INTERIOR_BASE.z, 2.55, 'interior-core');
-
-  const lowerTrim = new THREE.Mesh(new THREE.TorusGeometry(floorRadius - 0.05, 0.12, 8, 64), trimMat);
-  lowerTrim.rotation.x = Math.PI / 2;
-  lowerTrim.position.set(LIGHTHOUSE_INTERIOR_BASE.x, 1.72, LIGHTHOUSE_INTERIOR_BASE.z);
-  interior.add(lowerTrim);
-  const upperTrim = lowerTrim.clone();
-  upperTrim.position.y = shellHeight - 0.35;
-  interior.add(upperTrim);
-
-  const stairRailMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.78 });
-  for (let i = 0; i < stairSteps; i += 1) {
-    const angle = i * INTERIOR_STAIR_ANGLE_STEP;
-    const step = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.14, 1.55), woodMat);
-    step.position.set(
-      LIGHTHOUSE_INTERIOR_BASE.x + Math.cos(angle) * stairRadius,
-      INTERIOR_STAIR_START_Y + i * stairRise,
-      LIGHTHOUSE_INTERIOR_BASE.z + Math.sin(angle) * stairRadius
-    );
-    step.rotation.y = -angle;
-    step.castShadow = true;
-    step.receiveShadow = true;
-    interior.add(step);
-
-    if (i < stairSteps - 1) {
-      const nextAngle = (i + 1) * INTERIOR_STAIR_ANGLE_STEP;
-      const nextX = LIGHTHOUSE_INTERIOR_BASE.x + Math.cos(nextAngle) * stairRadius;
-      const nextZ = LIGHTHOUSE_INTERIOR_BASE.z + Math.sin(nextAngle) * stairRadius;
-      const nextY = INTERIOR_STAIR_START_Y + (i + 1) * stairRise;
-      const midX = (step.position.x + nextX) * 0.5;
-      const midZ = (step.position.z + nextZ) * 0.5;
-      const midY = (step.position.y + nextY) * 0.5 - 0.01;
-      const run = Math.hypot(nextX - step.position.x, nextZ - step.position.z);
-      const bridge = new THREE.Mesh(
-        new THREE.BoxGeometry(3.2, stairRise + 0.08, run + 0.62),
-        new THREE.MeshStandardMaterial({ color: 0x8a572a, roughness: 0.82 })
-      );
-      bridge.position.set(midX, midY, midZ);
-      bridge.rotation.y = -((angle + nextAngle) * 0.5);
-      bridge.castShadow = true;
-      bridge.receiveShadow = true;
-      interior.add(bridge);
-    }
-
-    if (i % 2 === 0) {
-      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.72, 8), stairRailMat);
-      post.position.set(
-        LIGHTHOUSE_INTERIOR_BASE.x + Math.cos(angle) * (stairRadius + 1.52),
-        step.position.y + 0.38,
-        LIGHTHOUSE_INTERIOR_BASE.z + Math.sin(angle) * (stairRadius + 1.52)
-      );
-      post.castShadow = true;
-      interior.add(post);
-    }
-  }
-
-  for (let i = 0; i < 24; i += 1) {
-    const a = (i / 24) * Math.PI * 2;
-    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 1.0, 8), trimMat);
-    post.position.set(
-      INTERIOR_TOP_POS.x + Math.cos(a) * 3.45,
-      INTERIOR_TOP_POS.y + 0.18,
-      INTERIOR_TOP_POS.z + Math.sin(a) * 3.45
-    );
-    post.castShadow = true;
-    interior.add(post);
-  }
-  const topRail = new THREE.Mesh(new THREE.TorusGeometry(3.45, 0.08, 10, 40), trimMat);
-  topRail.rotation.x = Math.PI / 2;
-  topRail.position.set(INTERIOR_TOP_POS.x, INTERIOR_TOP_POS.y + 0.72, INTERIOR_TOP_POS.z);
-  interior.add(topRail);
-
-  const topPlatform = new THREE.Mesh(
-    new THREE.CircleGeometry(3.35, 36),
-    new THREE.MeshStandardMaterial({ color: 0x374151, roughness: 0.76 })
-  );
-  topPlatform.rotation.x = -Math.PI / 2;
-  topPlatform.position.set(INTERIOR_TOP_POS.x, INTERIOR_TOP_POS.y + 0.1, INTERIOR_TOP_POS.z);
-  interior.add(topPlatform);
-
-  const upperDeck = new THREE.Mesh(
-    new THREE.RingGeometry(5.0, floorRadius - 0.25, 48),
-    new THREE.MeshStandardMaterial({ color: 0x7c4f2d, roughness: 0.84 })
-  );
-  upperDeck.rotation.x = -Math.PI / 2;
-  upperDeck.position.set(LIGHTHOUSE_INTERIOR_BASE.x, INTERIOR_TOP_POS.y - 0.42, LIGHTHOUSE_INTERIOR_BASE.z);
-  upperDeck.receiveShadow = true;
-  interior.add(upperDeck);
-
-  const ceiling = new THREE.Mesh(
-    new THREE.CircleGeometry(shellRadius - 0.2, 56),
-    new THREE.MeshStandardMaterial({ color: 0xcbd5e1, roughness: 0.8 })
-  );
-  ceiling.rotation.x = Math.PI / 2;
-  ceiling.position.set(LIGHTHOUSE_INTERIOR_BASE.x, shellHeight - 0.22, LIGHTHOUSE_INTERIOR_BASE.z);
-  interior.add(ceiling);
-
-  const entryFrame = new THREE.Mesh(
-    new THREE.TorusGeometry(1.2, 0.1, 10, 30),
-    new THREE.MeshStandardMaterial({ color: 0x60a5fa, emissive: 0x1d4ed8, emissiveIntensity: 0.5 })
-  );
-  entryFrame.rotation.x = Math.PI / 2;
-  entryFrame.position.set(INTERIOR_ENTRY_POS.x, 1.45, INTERIOR_ENTRY_POS.z);
-  interior.add(entryFrame);
-
-  const mapTable = new THREE.Mesh(new THREE.CylinderGeometry(0.88, 0.96, 0.72, 20), woodMat);
-  mapTable.position.set(LIGHTHOUSE_INTERIOR_BASE.x - 4.25, 1.72, LIGHTHOUSE_INTERIOR_BASE.z - 3.4);
-  mapTable.castShadow = true;
-  mapTable.receiveShadow = true;
-  interior.add(mapTable);
-  const mapTop = new THREE.Mesh(
-    new THREE.CircleGeometry(0.82, 20),
-    new THREE.MeshStandardMaterial({ color: 0xf3ecd2, roughness: 0.96 })
-  );
-  mapTop.rotation.x = -Math.PI / 2;
-  mapTop.position.set(mapTable.position.x, 2.09, mapTable.position.z);
-  interior.add(mapTop);
-
-  const lantern = new THREE.PointLight(0xffe8ad, 1.65, 42, 2);
-  lantern.position.set(LIGHTHOUSE_INTERIOR_BASE.x, shellHeight - 2.1, LIGHTHOUSE_INTERIOR_BASE.z);
-  interior.add(lantern);
-
-  lighthouseInteriorPortal = new THREE.Group();
-  const portalDisc = new THREE.Mesh(
-    new THREE.CylinderGeometry(1.12, 1.12, 0.16, 28),
-    new THREE.MeshStandardMaterial({
-      color: 0x7dd3fc,
-      emissive: 0x0ea5e9,
-      emissiveIntensity: 1.55,
-      roughness: 0.24,
-      metalness: 0.36
-    })
-  );
-  const portalRing = new THREE.Mesh(
-    new THREE.TorusGeometry(1.38, 0.12, 12, 32),
-    new THREE.MeshStandardMaterial({ color: 0x38bdf8, emissive: 0x0284c7, emissiveIntensity: 1.2 })
-  );
-  portalRing.rotation.x = Math.PI / 2;
-  portalRing.position.y = 0.06;
-  const portalCap = new THREE.Mesh(new THREE.SphereGeometry(0.24, 14, 12), brassMat);
-  portalCap.position.y = 0.36;
-  const portalBeam = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.22, 0.44, 2.25, 18, 1, true),
-    new THREE.MeshBasicMaterial({ color: 0x67e8f9, transparent: true, opacity: 0.42, side: THREE.DoubleSide })
-  );
-  portalBeam.position.y = 1.1;
-  lighthouseInteriorPortal.add(portalDisc, portalRing, portalCap, portalBeam);
-  lighthouseInteriorPortal.position.set(INTERIOR_EXIT_PORTAL_POS.x, INTERIOR_EXIT_PORTAL_POS.y, INTERIOR_EXIT_PORTAL_POS.z);
-  const portalGlow = new THREE.PointLight(0x7dd3fc, 1.25, 12, 2);
-  portalGlow.position.y = 0.7;
-  lighthouseInteriorPortal.add(portalGlow);
-  interior.add(lighthouseInteriorPortal);
-
-  interior.visible = false;
-  lighthouseInteriorGroup = interior;
-  scene.add(interior);
-}
-
-function addBoat() {
-  const boat = new THREE.Group();
-  const hullMat = new THREE.MeshStandardMaterial({ color: 0x8b5a2b, roughness: 0.86 });
-  const trimMat = new THREE.MeshStandardMaterial({ color: 0x4a2f1c, roughness: 0.9 });
-  const hullCore = new THREE.Mesh(new THREE.CylinderGeometry(0.66, 0.72, 3.35, 14, 1), hullMat);
-  hullCore.rotation.x = Math.PI / 2;
-  hullCore.position.y = 0.25;
-  hullCore.scale.set(1, 0.55, 1);
-  hullCore.castShadow = true;
-  const bow = new THREE.Mesh(new THREE.ConeGeometry(0.64, 0.88, 14), hullMat);
-  bow.rotation.x = Math.PI / 2;
-  bow.position.set(0, 0.24, 1.92);
-  bow.castShadow = true;
-  const stern = new THREE.Mesh(new THREE.ConeGeometry(0.6, 0.72, 14), hullMat);
-  stern.rotation.x = -Math.PI / 2;
-  stern.position.set(0, 0.24, -1.88);
-  stern.castShadow = true;
-  const deck = new THREE.Mesh(new THREE.BoxGeometry(1.18, 0.1, 2.28), new THREE.MeshStandardMaterial({ color: 0xbf7a31, roughness: 0.78 }));
-  deck.position.y = 0.56;
-  deck.castShadow = true;
-  const bench = new THREE.Mesh(new THREE.BoxGeometry(0.96, 0.16, 0.54), trimMat);
-  bench.position.set(0, 0.72, -0.2);
-  bench.castShadow = true;
-  const gunwaleL = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.14, 3.2), trimMat);
-  gunwaleL.position.set(-0.67, 0.52, 0);
-  const gunwaleR = gunwaleL.clone();
-  gunwaleR.position.x = 0.67;
-  const sideFillFL = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.26, 0.66), trimMat);
-  sideFillFL.position.set(-0.56, 0.24, 1.34);
-  const sideFillFR = sideFillFL.clone();
-  sideFillFR.position.x = 0.56;
-  const sideFillBL = sideFillFL.clone();
-  sideFillBL.position.set(-0.56, 0.24, -1.34);
-  const sideFillBR = sideFillBL.clone();
-  sideFillBR.position.x = 0.56;
-  const centerFill = new THREE.Mesh(new THREE.BoxGeometry(1.06, 0.18, 2.78), new THREE.MeshStandardMaterial({ color: 0xa1622b, roughness: 0.82 }));
-  centerFill.position.y = 0.43;
-  boat.add(hullCore, bow, stern, centerFill, deck, bench, gunwaleL, gunwaleR, sideFillFL, sideFillFR, sideFillBL, sideFillBR);
-
-  const paddleMaterial = new THREE.MeshStandardMaterial({ color: 0x6b3d1f, roughness: 0.84 });
-  function createPaddle(side = 1) {
-    const pivot = new THREE.Group();
-    pivot.position.set(0.78 * side, 0.66, -0.08);
-    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 1.35, 8), paddleMaterial);
-    shaft.rotation.z = Math.PI / 2;
-    shaft.position.x = 0.46 * side;
-    shaft.castShadow = true;
-    const blade = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.1, 0.24), paddleMaterial);
-    blade.position.x = 1.04 * side;
-    blade.castShadow = true;
-    pivot.add(shaft, blade);
-    return pivot;
-  }
-  const paddleLeftPivot = createPaddle(-1);
-  const paddleRightPivot = createPaddle(1);
-  boat.add(paddleLeftPivot, paddleRightPivot);
-  boat.position.set(boatState.x, boatState.y, boatState.z);
-  scene.add(boat);
-  boatState.mesh = boat;
-  boatState.paddleLeftPivot = paddleLeftPivot;
-  boatState.paddleRightPivot = paddleRightPivot;
-}
-
-function addDecorBoat(x, z, yaw = 0, scale = 1.9, y = 1.06) {
-  const boat = new THREE.Group();
-  boat.position.set(x, y, z);
-  boat.rotation.y = yaw;
-  const hullMat = new THREE.MeshStandardMaterial({ color: 0x744521, roughness: 0.87 });
-  const trimMat = new THREE.MeshStandardMaterial({ color: 0x4a2c18, roughness: 0.9 });
-
-  const hull = new THREE.Mesh(new THREE.BoxGeometry(2.3 * scale, 0.82 * scale, 7.4 * scale), hullMat);
-  hull.castShadow = true;
-  hull.receiveShadow = true;
-  boat.add(hull);
-
-  const bow = new THREE.Mesh(new THREE.ConeGeometry(1.15 * scale, 2.1 * scale, 14), hullMat);
-  bow.rotation.x = Math.PI / 2;
-  bow.position.z = 4.15 * scale;
-  bow.castShadow = true;
-  boat.add(bow);
-
-  const stern = new THREE.Mesh(new THREE.BoxGeometry(2.1 * scale, 0.58 * scale, 1.5 * scale), trimMat);
-  stern.position.z = -3.7 * scale;
-  stern.position.y = 0.12 * scale;
-  stern.castShadow = true;
-  boat.add(stern);
-
-  const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.09 * scale, 0.11 * scale, 2.9 * scale, 8), trimMat);
-  mast.position.y = 1.95 * scale;
-  mast.castShadow = true;
-  boat.add(mast);
-
-  const sail = new THREE.Mesh(
-    new THREE.PlaneGeometry(1.7 * scale, 1.25 * scale),
-    new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.85, side: THREE.DoubleSide })
-  );
-  sail.position.set(0.86 * scale, 2.0 * scale, 0);
-  sail.rotation.y = Math.PI / 2;
-  boat.add(sail);
-
-  scene.add(boat);
-}
-
-function createHouseWindow(w, h) {
-  const group = new THREE.Group();
-  const frameMat = new THREE.MeshStandardMaterial({ color: 0x3d2b1f, roughness: 0.85 });
-  const glassMat = new THREE.MeshStandardMaterial({
-    color: 0x8ecae6,
-    roughness: 0.1,
-    metalness: 0.1,
-    transparent: true,
-    opacity: 0.45
-  });
-  const sillMat = new THREE.MeshStandardMaterial({ color: 0x5b3a24, roughness: 0.88 });
-  const frameT = 0.09;
-  const glassInset = 0.03;
-  // Frame pieces
-  const topFrame = new THREE.Mesh(new THREE.BoxGeometry(w + frameT * 2, frameT, frameT * 1.6), frameMat);
-  topFrame.position.y = h * 0.5;
-  const bottomFrame = topFrame.clone();
-  bottomFrame.position.y = -h * 0.5;
-  const leftFrame = new THREE.Mesh(new THREE.BoxGeometry(frameT, h, frameT * 1.6), frameMat);
-  leftFrame.position.x = -w * 0.5;
-  const rightFrame = leftFrame.clone();
-  rightFrame.position.x = w * 0.5;
-  // Cross bars
-  const hBar = new THREE.Mesh(new THREE.BoxGeometry(w, frameT * 0.7, frameT * 1.2), frameMat);
-  const vBar = new THREE.Mesh(new THREE.BoxGeometry(frameT * 0.7, h, frameT * 1.2), frameMat);
-  // Glass pane
-  const glass = new THREE.Mesh(new THREE.BoxGeometry(w - frameT, h - frameT, glassInset), glassMat);
-  glass.position.z = glassInset * 0.5;
-  // Window sill
-  const sill = new THREE.Mesh(new THREE.BoxGeometry(w + frameT * 4, 0.08, 0.22), sillMat);
-  sill.position.set(0, -h * 0.5 - 0.06, 0.12);
-  // Shutters
-  const shutterMat = new THREE.MeshStandardMaterial({ color: 0x2d5016, roughness: 0.82 });
-  const shutterW = w * 0.52;
-  const shutterH = h + 0.1;
-  const shutterT = 0.06;
-  const leftShutter = new THREE.Mesh(new THREE.BoxGeometry(shutterW, shutterH, shutterT), shutterMat);
-  leftShutter.position.set(-w * 0.5 - shutterW * 0.5 - 0.02, 0, -0.02);
-  const rightShutter = new THREE.Mesh(new THREE.BoxGeometry(shutterW, shutterH, shutterT), shutterMat);
-  rightShutter.position.set(w * 0.5 + shutterW * 0.5 + 0.02, 0, -0.02);
-  group.add(topFrame, bottomFrame, leftFrame, rightFrame, hBar, vBar, glass, sill, leftShutter, rightShutter);
-  return group;
-}
-
-// Shop building functions
-function createVendorShop(x, z, yaw = 0, options = {}) {
-  const shop = new THREE.Group();
-  shop.position.set(x, 1.35, z);
-  shop.rotation.y = yaw;
-  const vendor = options?.vendor || null;
-  
-  const wallMat = new THREE.MeshStandardMaterial({ color: 0x8b7355, roughness: 0.88 });
-  const trimMat = new THREE.MeshStandardMaterial({ color: 0x6b5a44, roughness: 0.9 });
-  const roofMat = new THREE.MeshStandardMaterial({ color: 0x4e3423, roughness: 0.9 });
-  const stoneMat = new THREE.MeshStandardMaterial({ color: 0x6b7280, roughness: 0.92 });
-  const brickMat = new THREE.MeshStandardMaterial({ color: 0x92400e, roughness: 0.85 });
-  const doorMat = new THREE.MeshStandardMaterial({ color: 0x3f2510, roughness: 0.82 });
-  const counterMat = new THREE.MeshStandardMaterial({ color: 0x8b6914, roughness: 0.85 });
-  const shelfMat = new THREE.MeshStandardMaterial({ color: 0x6b4a2e, roughness: 0.84 });
-  const canopyMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.92 });
-  const signMat = new THREE.MeshStandardMaterial({ color: 0xfbbf24, roughness: 0.3, metalness: 0.8 });
-  
-  const shopScale = 1.0;
-  const shopW = 7.0 * shopScale;
-  const shopD = 5.0 * shopScale;
-  const wallH = 3.5 * shopScale;
-  const wallT = 0.18;
-  const doorW = 1.5 * shopScale;
-  const doorH = 2.2 * shopScale;
-  
-  // Shop counter
-  const counter = new THREE.Mesh(new THREE.BoxGeometry(shopW, 0.3, 0.8), counterMat);
-  counter.position.set(0, 0.15, -shopD * 0.3);
-  shop.add(counter);
-  
-  // Shop shelves
-  const shelf = new THREE.Mesh(new THREE.BoxGeometry(shopW * 0.8, 0.1, 0.05), shelfMat);
-  shelf.position.set(0, wallH * 0.3, -shopD * 0.3);
-  shop.add(shelf);
-  
-  // Shop floor
-  const floor = new THREE.Mesh(new THREE.BoxGeometry(shopW, 0.2, shopD), wallMat);
-  floor.position.y = 0.08;
-  floor.receiveShadow = true;
-  shop.add(floor);
-  
-  // Back wall
-  const back = new THREE.Mesh(new THREE.BoxGeometry(shopW, wallH, wallT), wallMat);
-  back.position.set(0, wallH * 0.5 + 0.1, -shopD * 0.5 + wallT * 0.5);
-  shop.add(back);
-  
-  // Side walls
-  const left = new THREE.Mesh(new THREE.BoxGeometry(wallT, wallH, shopD), wallMat);
-  left.position.set(-shopW * 0.5 + wallT * 0.5, wallH * 0.5 + 0.1, 0);
-  shop.add(left);
-  const right = left.clone();
-  right.position.x = shopW * 0.5 - wallT * 0.5;
-  shop.add(right);
-  
-  // Front wall with door
-  const frontSideW = (shopW - doorW) * 0.5;
-  const frontLeft = new THREE.Mesh(new THREE.BoxGeometry(frontSideW, wallH, wallT), wallMat);
-  frontLeft.position.set(-(doorW * 0.5 + frontSideW * 0.5), wallH * 0.5 + 0.1, shopD * 0.5 - wallT * 0.5);
-  shop.add(frontLeft);
-  const frontRight = frontLeft.clone();
-  frontRight.position.x = -frontLeft.position.x;
-  shop.add(frontRight);
-  const frontTop = new THREE.Mesh(new THREE.BoxGeometry(doorW, wallH - doorH, wallT), wallMat);
-  frontTop.position.set(0, doorH + (wallH - doorH) * 0.5 + 0.1, shopD * 0.5 - wallT * 0.5);
-  shop.add(frontTop);
-  
-  // Door panel
-  const doorPanel = new THREE.Mesh(new THREE.BoxGeometry(doorW - 0.12, doorH - 0.08, 0.08), doorMat);
-  doorPanel.position.set(0, doorH * 0.5 + 0.04, shopD * 0.5 + 0.04);
-  shop.add(doorPanel);
-  
-  // Shop sign
-  const sign = new THREE.Mesh(new THREE.BoxGeometry(shopW * 0.8, 0.2, 0.05), signMat);
-  sign.position.set(0, wallH * 0.9, shopD * 0.5 + 0.1);
-  shop.add(sign);
-  
-  // Canopy
-  const canopy = new THREE.Mesh(new THREE.BoxGeometry(shopW * 1.2, 0.2, shopD * 0.6), canopyMat);
-  canopy.position.set(0, wallH + 0.1, -shopD * 0.3);
-  shop.add(canopy);
-
-  if (vendor) {
-    vendor.position.set(0, 0.1, -1.9);
-    shop.add(vendor);
-  }
-  
-  return shop;
-}
-
-function createMarketStall(x, z, yaw = 0, options = {}) {
-  const stall = new THREE.Group();
-  stall.position.set(x, 1.35, z);
-  stall.rotation.y = yaw;
-  
-  const stallMat = new THREE.MeshStandardMaterial({ color: 0x8b7355, roughness: 0.88 });
-  const canopyMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.92 });
-  const counterMat = new THREE.MeshStandardMaterial({ color: 0x8b6914, roughness: 0.85 });
-  const shelfMat = new THREE.MeshStandardMaterial({ color: 0x6b4a2e, roughness: 0.84 });
-  
-  const stallScale = 1.0;
-  const stallW = 6.0 * stallScale;
-  const stallD = 4.0 * stallScale;
-  const wallH = 2.5 * stallScale;
-  const wallT = 0.15;
-  
-  // Stall counter
-  const counter = new THREE.Mesh(new THREE.BoxGeometry(stallW, 0.25, 0.6), counterMat);
-  counter.position.set(0, 0.125, -stallD * 0.2);
-  stall.add(counter);
-  
-  // Stall shelves
-  const shelf1 = new THREE.Mesh(new THREE.BoxGeometry(stallW * 0.7, 0.08, 0.04), shelfMat);
-  shelf1.position.set(0, wallH * 0.25, -stallD * 0.2);
-  stall.add(shelf1);
-  const shelf2 = shelf1.clone();
-  shelf2.position.y = wallH * 0.5;
-  stall.add(shelf2);
-  
-  // Stall canopy
-  const canopy = new THREE.Mesh(new THREE.BoxGeometry(stallW * 1.1, 0.15, stallD * 0.8), canopyMat);
-  canopy.position.set(0, wallH + 0.1, -stallD * 0.2);
-  stall.add(canopy);
-  
-  // Stall floor
-  const floor = new THREE.Mesh(new THREE.BoxGeometry(stallW, 0.15, stallD), stallMat);
-  floor.position.y = 0.075;
-  floor.receiveShadow = true;
-  stall.add(floor);
-  
-  return stall;
-}
-
-function addWoodHouse(x, z, yaw = 0, options = {}) {
-  const collisions = options?.collisions !== false;
-  const house = new THREE.Group();
-  house.position.set(x, 1.35, z);
-  house.rotation.y = yaw;
-  const wallMat = new THREE.MeshStandardMaterial({ color: 0x7b4f2d, roughness: 0.88 });
-  const trimMat = new THREE.MeshStandardMaterial({ color: 0x5b3a24, roughness: 0.9 });
-  const roofMat = new THREE.MeshStandardMaterial({ color: 0x4e3423, roughness: 0.9 });
-  const stoneMat = new THREE.MeshStandardMaterial({ color: 0x6b7280, roughness: 0.92 });
-  const brickMat = new THREE.MeshStandardMaterial({ color: 0x92400e, roughness: 0.85 });
-  const doorMat = new THREE.MeshStandardMaterial({ color: 0x3f2510, roughness: 0.82 });
-
-  const houseScale = 1.18;
-  const houseW = 9.4 * houseScale;
-  const houseD = 8.0 * houseScale;
-  const wallH = 3.2 * houseScale;
-  const wallT = 0.22;
-  const doorW = 1.9 * houseScale;
-  const doorH = 2.45 * houseScale;
-  const floor = new THREE.Mesh(new THREE.BoxGeometry(houseW, 0.2, houseD), wallMat);
-  floor.position.y = 0.08;
-  floor.receiveShadow = true;
-  house.add(floor);
-
-  const back = new THREE.Mesh(new THREE.BoxGeometry(houseW, wallH, wallT), wallMat);
-  back.position.set(0, wallH * 0.5 + 0.1, -houseD * 0.5 + wallT * 0.5);
-  const left = new THREE.Mesh(new THREE.BoxGeometry(wallT, wallH, houseD), wallMat);
-  left.position.set(-houseW * 0.5 + wallT * 0.5, wallH * 0.5 + 0.1, 0);
-  const right = left.clone();
-  right.position.x = houseW * 0.5 - wallT * 0.5;
-
-  const frontSideW = (houseW - doorW) * 0.5;
-  const frontLeft = new THREE.Mesh(new THREE.BoxGeometry(frontSideW, wallH, wallT), wallMat);
-  frontLeft.position.set(-(doorW * 0.5 + frontSideW * 0.5), wallH * 0.5 + 0.1, houseD * 0.5 - wallT * 0.5);
-  const frontRight = frontLeft.clone();
-  frontRight.position.x = -frontLeft.position.x;
-  const frontTop = new THREE.Mesh(new THREE.BoxGeometry(doorW, wallH - doorH, wallT), wallMat);
-  frontTop.position.set(0, doorH + (wallH - doorH) * 0.5 + 0.1, houseD * 0.5 - wallT * 0.5);
-
-  house.add(back, left, right, frontLeft, frontRight, frontTop);
-
-  const doorPanel = new THREE.Mesh(new THREE.BoxGeometry(doorW - 0.14, doorH - 0.08, 0.08), doorMat);
-  doorPanel.position.set(0, doorH * 0.5 + 0.04, houseD * 0.5 + 0.04);
-  house.add(doorPanel);
-  const handleMat = new THREE.MeshStandardMaterial({ color: 0xfbbf24, roughness: 0.3, metalness: 0.8 });
-  const handle = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 8), handleMat);
-  handle.position.set(doorW * 0.28, doorH * 0.48, houseD * 0.5 + 0.12);
-  house.add(handle);
-
-  const frameTop = new THREE.Mesh(new THREE.BoxGeometry(doorW + 0.24, 0.12, 0.12), trimMat);
-  frameTop.position.set(0, doorH + 0.16, houseD * 0.5 + 0.02);
-  const frameLeft = new THREE.Mesh(new THREE.BoxGeometry(0.1, doorH, 0.12), trimMat);
-  frameLeft.position.set(-doorW * 0.5 - 0.06, doorH * 0.5 + 0.1, houseD * 0.5 + 0.02);
-  const frameRight = frameLeft.clone();
-  frameRight.position.x = doorW * 0.5 + 0.06;
-  house.add(frameTop, frameLeft, frameRight);
-
-  const winW = 1.4;
-  const winH = 1.5;
-  const winY = wallH * 0.5 + 0.35;
-  const leftWin1 = createHouseWindow(winW, winH);
-  leftWin1.position.set(-houseW * 0.5 - 0.02, winY, -houseD * 0.22);
-  leftWin1.rotation.y = -Math.PI * 0.5;
-  const leftWin2 = createHouseWindow(winW, winH);
-  leftWin2.position.set(-houseW * 0.5 - 0.02, winY, houseD * 0.22);
-  leftWin2.rotation.y = -Math.PI * 0.5;
-  house.add(leftWin1, leftWin2);
-
-  const rightWin1 = createHouseWindow(winW, winH);
-  rightWin1.position.set(houseW * 0.5 + 0.02, winY, -houseD * 0.22);
-  rightWin1.rotation.y = Math.PI * 0.5;
-  const rightWin2 = createHouseWindow(winW, winH);
-  rightWin2.position.set(houseW * 0.5 + 0.02, winY, houseD * 0.22);
-  rightWin2.rotation.y = Math.PI * 0.5;
-  house.add(rightWin1, rightWin2);
-
-  const backWin = createHouseWindow(2.0, winH);
-  backWin.position.set(0, winY, -houseD * 0.5 - 0.02);
-  backWin.rotation.y = Math.PI;
-  house.add(backWin);
-
-  const frontWin1 = createHouseWindow(1.1, 1.2);
-  frontWin1.position.set(-(doorW * 0.5 + frontSideW * 0.5), winY, houseD * 0.5 + 0.02);
-  house.add(frontWin1);
-  const frontWin2 = createHouseWindow(1.1, 1.2);
-  frontWin2.position.set((doorW * 0.5 + frontSideW * 0.5), winY, houseD * 0.5 + 0.02);
-  house.add(frontWin2);
-
-  const postSize = 0.18;
-  const postH = wallH + 0.16;
-  const corners = [
-    [-houseW * 0.5, -houseD * 0.5],
-    [houseW * 0.5, -houseD * 0.5],
-    [-houseW * 0.5, houseD * 0.5],
-    [houseW * 0.5, houseD * 0.5]
-  ];
-  for (const [cx, cz] of corners) {
-    const post = new THREE.Mesh(new THREE.BoxGeometry(postSize, postH, postSize), trimMat);
-    post.position.set(cx, postH * 0.5 + 0.1, cz);
-    post.castShadow = true;
-    house.add(post);
-  }
-
-  const foundationH = 0.28;
-  const foundation = new THREE.Mesh(
-    new THREE.BoxGeometry(houseW + 0.3, foundationH, houseD + 0.3),
-    stoneMat
-  );
-  foundation.position.y = 0.14 - foundationH * 0.5 + 0.12;
-  foundation.receiveShadow = true;
-  house.add(foundation);
-
-  const eave = new THREE.Mesh(
-    new THREE.BoxGeometry(houseW + 0.12, 0.12, houseD + 0.12),
-    trimMat
-  );
-  eave.position.set(0, wallH + 0.12, 0);
-  eave.castShadow = true;
-  eave.receiveShadow = true;
-
-  const roof = new THREE.Mesh(
-    new THREE.ConeGeometry(Math.max(houseW, houseD) * 0.68, 2.45 * houseScale, 4),
-    roofMat
-  );
-  roof.position.set(0, wallH + 1.34 * houseScale, 0);
-  roof.rotation.y = Math.PI * 0.25;
-  roof.castShadow = true;
-  roof.receiveShadow = true;
-
-  const roofPeak = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.1 * houseScale, 0.14 * houseScale, 0.46 * houseScale, 8),
-    trimMat
-  );
-  roofPeak.position.set(0, wallH + 2.74 * houseScale, 0);
-  roofPeak.castShadow = true;
-  roofPeak.receiveShadow = true;
-
-  house.add(eave, roof, roofPeak);
-
-  const chimneyW = 0.7;
-  const chimneyD = 0.7;
-  const chimneyH = 2.8;
-  const chimneyBase = new THREE.Group();
-  const chimneyBody = new THREE.Mesh(new THREE.BoxGeometry(chimneyW, chimneyH, chimneyD), brickMat);
-  chimneyBody.castShadow = true;
-  chimneyBase.add(chimneyBody);
-  const chimneyCap = new THREE.Mesh(
-    new THREE.BoxGeometry(chimneyW + 0.2, 0.12, chimneyD + 0.2),
-    stoneMat
-  );
-  chimneyCap.position.y = chimneyH * 0.5 + 0.06;
-  chimneyCap.castShadow = true;
-  chimneyBase.add(chimneyCap);
-  for (let i = 0; i < 4; i++) {
-    const band = new THREE.Mesh(
-      new THREE.BoxGeometry(chimneyW + 0.04, 0.06, chimneyD + 0.04),
-      stoneMat
-    );
-    band.position.y = -chimneyH * 0.5 + 0.5 + i * 0.7;
-    chimneyBase.add(band);
-  }
-  chimneyBase.position.set(houseW * 0.22, wallH + 1.6, -houseD * 0.15);
-  house.add(chimneyBase);
-
-  const porchDepth = 2.2;
-  const porchW = doorW + 2.4;
-  const porchFloor = new THREE.Mesh(
-    new THREE.BoxGeometry(porchW, 0.14, porchDepth),
-    new THREE.MeshStandardMaterial({ color: 0x6b5340, roughness: 0.88 })
-  );
-  porchFloor.position.set(0, 0.02, houseD * 0.5 + porchDepth * 0.5 - 0.05);
-  porchFloor.receiveShadow = true;
-  house.add(porchFloor);
-  const porchRoof = new THREE.Mesh(
-    new THREE.BoxGeometry(porchW + 0.3, 0.1, porchDepth + 0.2),
-    roofMat
-  );
-  porchRoof.position.set(0, doorH + 0.5, houseD * 0.5 + porchDepth * 0.5 - 0.05);
-  porchRoof.castShadow = true;
-  house.add(porchRoof);
-  const porchPostH = doorH + 0.35;
-  const porchPostPositions = [
-    [-porchW * 0.5 + 0.12, 0, houseD * 0.5 + porchDepth - 0.15],
-    [porchW * 0.5 - 0.12, 0, houseD * 0.5 + porchDepth - 0.15]
-  ];
-  for (const [px, py, pz] of porchPostPositions) {
-    const post = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.09, 0.11, porchPostH, 8),
-      trimMat
-    );
-    post.position.set(px, porchPostH * 0.5 + 0.1, pz);
-    post.castShadow = true;
-    house.add(post);
-    const postBase = new THREE.Mesh(
-      new THREE.BoxGeometry(0.28, 0.18, 0.28),
-      stoneMat
-    );
-    postBase.position.set(px, 0.12, pz);
-    house.add(postBase);
-  }
-  const stepW = porchW * 0.6;
-  for (let i = 0; i < 3; i++) {
-    const step = new THREE.Mesh(
-      new THREE.BoxGeometry(stepW, 0.12, 0.35),
-      stoneMat
-    );
-    step.position.set(0, -0.06 - i * 0.12, houseD * 0.5 + porchDepth + 0.15 + i * 0.35);
-    step.receiveShadow = true;
-    house.add(step);
-  }
-  const railH = 0.7;
-  const railMat = trimMat;
-  for (const side of [-1, 1]) {
-    const rail = new THREE.Mesh(
-      new THREE.BoxGeometry(0.06, railH, porchDepth - 0.3),
-      railMat
-    );
-    rail.position.set(side * (porchW * 0.5 - 0.12), railH * 0.5 + 0.14, houseD * 0.5 + porchDepth * 0.5 - 0.05);
-    house.add(rail);
-    const topBar = new THREE.Mesh(
-      new THREE.BoxGeometry(0.08, 0.06, porchDepth - 0.3),
-      railMat
-    );
-    topBar.position.set(side * (porchW * 0.5 - 0.12), railH + 0.18, houseD * 0.5 + porchDepth * 0.5 - 0.05);
-    house.add(topBar);
-  }
-
-  const flowerBoxMat = new THREE.MeshStandardMaterial({ color: 0x5b3a24, roughness: 0.85 });
-  const flowerMat = new THREE.MeshStandardMaterial({ color: 0xf472b6, roughness: 0.7 });
-  const leafMat = new THREE.MeshStandardMaterial({ color: 0x22c55e, roughness: 0.7 });
-  const boxPositions = [
-    [-(doorW * 0.5 + frontSideW * 0.5), winY - winH * 0.5 - 0.28, houseD * 0.5 + 0.22],
-    [(doorW * 0.5 + frontSideW * 0.5), winY - winH * 0.5 - 0.28, houseD * 0.5 + 0.22]
-  ];
-  for (const [bx, by, bz] of boxPositions) {
-    const box = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.18, 0.22), flowerBoxMat);
-    box.position.set(bx, by, bz);
-    house.add(box);
-    for (let fi = 0; fi < 4; fi++) {
-      const flower = new THREE.Mesh(new THREE.SphereGeometry(0.09, 6, 6), flowerMat);
-      flower.position.set(bx - 0.4 + fi * 0.26, by + 0.16, bz);
-      house.add(flower);
-      const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.14, 4), leafMat);
-      stem.position.set(bx - 0.4 + fi * 0.26, by + 0.07, bz);
-      house.add(stem);
-    }
-  }
-
-  const ridgeMat = new THREE.MeshStandardMaterial({ color: 0x3d2b1f, roughness: 0.9 });
-  for (let i = 0; i < 3; i++) {
-    const ridge = new THREE.Mesh(
-      new THREE.BoxGeometry(houseW * 0.6 - i * 1.2, 0.04, 0.04),
-      ridgeMat
-    );
-    const ridgeY = wallH + 0.6 + i * 0.9;
-    ridge.position.set(0, ridgeY, houseD * 0.25 - i * 0.15);
-    house.add(ridge);
-    const ridge2 = ridge.clone();
-    ridge2.position.z = -(houseD * 0.25 - i * 0.15);
-    house.add(ridge2);
-  }
-
-  house.children.forEach((m) => {
-    m.castShadow = true;
-    m.receiveShadow = true;
-  });
-  scene.add(house);
-  if (collisions) {
-    addWallCollisionFromMesh(back, 'house');
-    addWallCollisionFromMesh(left, 'house');
-    addWallCollisionFromMesh(right, 'house');
-    addWallCollisionFromMesh(frontLeft, 'house');
-    addWallCollisionFromMesh(frontRight, 'house');
-    addWallCollisionFromMesh(frontTop, 'house');
-  }
-}
-
-function addStoreBuilding(x, z, yaw = 0, options = {}) {
-  const collisions = options?.collisions !== false;
-  const store = new THREE.Group();
-  store.position.set(x, 1.35, z);
-  store.rotation.y = yaw;
-
-  const wallMat = new THREE.MeshStandardMaterial({ color: 0xf5f0e6, roughness: 0.85 });
-  const trimMat = new THREE.MeshStandardMaterial({ color: 0x8b7355, roughness: 0.88 });
-  const roofMat = new THREE.MeshStandardMaterial({ color: 0x3d2b1f, roughness: 0.9 });
-  const awningMat = new THREE.MeshStandardMaterial({ color: 0xdc2626, roughness: 0.8 });
-  const windowMat = new THREE.MeshStandardMaterial({ color: 0x93c5fd, roughness: 0.2, metalness: 0.1 });
-  const signMat = new THREE.MeshStandardMaterial({ color: 0x1e3a5a, roughness: 0.7 });
-
-  const storeScale = 1.5;
-  const storeW = 7.2 * storeScale;
-  const storeD = 5.8 * storeScale;
-  const wallH = 4.2 * storeScale;
-  const wallT = 0.28;
-
-  const floor = new THREE.Mesh(new THREE.BoxGeometry(storeW, 0.15, storeD), trimMat);
-  floor.position.y = 0.08;
-  floor.receiveShadow = true;
-  store.add(floor);
-
-  const back = new THREE.Mesh(new THREE.BoxGeometry(storeW, wallH, wallT), wallMat);
-  back.position.set(0, wallH * 0.5 + 0.1, -storeD * 0.5 + wallT * 0.5);
-  store.add(back);
-
-  const left = new THREE.Mesh(new THREE.BoxGeometry(wallT, wallH, storeD), wallMat);
-  left.position.set(-storeW * 0.5 + wallT * 0.5, wallH * 0.5 + 0.1, 0);
-  store.add(left);
-
-  const right = left.clone();
-  right.position.x = storeW * 0.5 - wallT * 0.5;
-  store.add(right);
-
-  const frontWallH = wallH * 0.7;
-  const doorW = 2.2 * storeScale;
-  const doorH = 3.1 * storeScale;
-  const sideWallW = (storeW - doorW) * 0.5;
-
-  const frontWallLeft = new THREE.Mesh(new THREE.BoxGeometry(sideWallW, frontWallH, wallT), wallMat);
-  frontWallLeft.position.set(-(doorW * 0.5 + sideWallW * 0.5), frontWallH * 0.5 + 0.1, storeD * 0.5 - wallT * 0.5);
-  store.add(frontWallLeft);
-  const frontWallRight = frontWallLeft.clone();
-  frontWallRight.position.x = doorW * 0.5 + sideWallW * 0.5;
-  store.add(frontWallRight);
-
-  const doorTopH = frontWallH - doorH;
-  const doorTop = new THREE.Mesh(new THREE.BoxGeometry(doorW, doorTopH, wallT), wallMat);
-  doorTop.position.set(0, doorH + doorTopH * 0.5 + 0.1, storeD * 0.5 - wallT * 0.5);
-  store.add(doorTop);
-
-  const doorMat = new THREE.MeshStandardMaterial({ color: 0x4a3728, roughness: 0.85 });
-  const doorPanel = new THREE.Mesh(new THREE.BoxGeometry(doorW - 0.16, doorH - 0.1, 0.1), doorMat);
-  doorPanel.position.set(0, doorH * 0.5 + 0.1, storeD * 0.5 + 0.04);
-  store.add(doorPanel);
-
-  const handleMat = new THREE.MeshStandardMaterial({ color: 0xfbbf24, roughness: 0.3, metalness: 0.8 });
-  const handle = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 8), handleMat);
-  handle.position.set(doorW * 0.32, doorH * 0.56, storeD * 0.5 + 0.14);
-  store.add(handle);
-
-  const upperFrontWallH = wallH * 0.35;
-  const upperFrontWallLeft = new THREE.Mesh(new THREE.BoxGeometry(sideWallW, upperFrontWallH, wallT), wallMat);
-  upperFrontWallLeft.position.set(-(doorW * 0.5 + sideWallW * 0.5), frontWallH + upperFrontWallH * 0.5 + 0.1, storeD * 0.5 - wallT * 0.5);
-  store.add(upperFrontWallLeft);
-  const upperFrontWallRight = upperFrontWallLeft.clone();
-  upperFrontWallRight.position.x = doorW * 0.5 + sideWallW * 0.5;
-  store.add(upperFrontWallRight);
-  const upperFrontWallCenter = new THREE.Mesh(new THREE.BoxGeometry(doorW, upperFrontWallH, wallT), wallMat);
-  upperFrontWallCenter.position.set(0, frontWallH + upperFrontWallH * 0.5 + 0.1, storeD * 0.5 - wallT * 0.5);
-  store.add(upperFrontWallCenter);
-
-  const windowW = 2.8;
-  const windowH = 2.3;
-  const windowY = wallH * 0.42;
-  const windowX = storeW * 0.3;
-  const window1 = new THREE.Mesh(new THREE.BoxGeometry(windowW, windowH, 0.1), windowMat);
-  window1.position.set(-windowX, windowY, storeD * 0.5 + 0.04);
-  store.add(window1);
-  const window2 = window1.clone();
-  window2.position.x = windowX;
-  store.add(window2);
-
-  const windowFrameMat = new THREE.MeshStandardMaterial({ color: 0x5c4a38, roughness: 0.85 });
-  const winFrameT = 0.08;
-  for (const wx of [-windowX, windowX]) {
-    const frameL = new THREE.Mesh(new THREE.BoxGeometry(winFrameT, windowH + 0.2, 0.14), windowFrameMat);
-    frameL.position.set(wx - windowW * 0.5 - winFrameT * 0.5, windowY, storeD * 0.5 + 0.1);
-    store.add(frameL);
-    const frameR = frameL.clone();
-    frameR.position.x = wx + windowW * 0.5 + winFrameT * 0.5;
-    store.add(frameR);
-    const frameT = new THREE.Mesh(new THREE.BoxGeometry(windowW + winFrameT * 2, winFrameT, 0.14), windowFrameMat);
-    frameT.position.set(wx, windowY + windowH * 0.5 + winFrameT * 0.5, storeD * 0.5 + 0.1);
-    store.add(frameT);
-    const frameB = frameT.clone();
-    frameB.position.y = windowY - windowH * 0.5 - winFrameT * 0.5;
-    store.add(frameB);
-  }
-  const windowCrossMat = windowFrameMat;
-  for (const wx of [-windowX, windowX]) {
-    const crossH = new THREE.Mesh(new THREE.BoxGeometry(windowW - 0.2, 0.05, 0.12), windowCrossMat);
-    crossH.position.set(wx, windowY, storeD * 0.5 + 0.1);
-    store.add(crossH);
-    const crossV = new THREE.Mesh(new THREE.BoxGeometry(0.05, windowH - 0.2, 0.12), windowCrossMat);
-    crossV.position.set(wx, windowY, storeD * 0.5 + 0.1);
-    store.add(crossV);
-  }
-
-  const awningW = storeW * 0.85;
-  const awningD = 2.6;
-  const awningH = 0.16;
-  const awningBackY = wallH * 0.99;
-  const awningFrontY = awningBackY - 0.26;
-  const awningMidY = (awningBackY + awningFrontY) / 2;
-  const awningOut = storeD * 0.5 + 0.92;
-
-  const awningGeo = new THREE.BoxGeometry(awningW, awningH, awningD);
-  const awningSlanted = new THREE.Mesh(awningGeo, awningMat);
-  awningSlanted.rotation.x = -0.22;
-  awningSlanted.position.set(0, awningMidY, awningOut);
-  awningSlanted.castShadow = true;
-  store.add(awningSlanted);
-
-  for (let i = 0; i < 6; i++) {
-    const stripeGeo = new THREE.BoxGeometry(awningW * 0.15, awningH + 0.02, awningD * 0.95);
-    const stripeMat = i % 2 === 0 ? awningMat : new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.8 });
-    const stripe = new THREE.Mesh(stripeGeo, stripeMat);
-    stripe.rotation.x = -0.22;
-    stripe.position.set(-awningW * 0.43 + i * awningW * 0.175, awningMidY, awningOut);
-    stripe.castShadow = true;
-    store.add(stripe);
-  }
-
-  const supportMat = new THREE.MeshStandardMaterial({ color: 0x5c4a38, roughness: 0.85 });
-  const supportH = Math.max(0.4, awningBackY - 1.9);
-  const supportY = awningBackY - supportH * 0.5;
-  const supportZ = awningOut - awningD * 0.45;
-  for (const sx of [-awningW * 0.42, awningW * 0.42]) {
-    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, supportH, 8), supportMat);
-    post.position.set(sx, supportY, supportZ);
-    post.castShadow = true;
-    store.add(post);
-  }
-  const brace = new THREE.Mesh(new THREE.BoxGeometry(awningW * 0.9, 0.06, 0.06), supportMat);
-  brace.position.set(0, supportY + supportH * 0.48, supportZ - 0.02);
-  store.add(brace);
-  const frontFaceZ = storeD * 0.5 - wallT * 0.5 + 0.02;
-  const braceLen = awningOut - frontFaceZ + 0.24;
-  for (const sx of [-awningW * 0.36, awningW * 0.36]) {
-    const diag = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, braceLen), supportMat);
-    diag.rotation.x = -0.55;
-    diag.position.set(sx, awningBackY - 0.35, frontFaceZ + braceLen * 0.5 - 0.1);
-    diag.castShadow = true;
-    store.add(diag);
-  }
-
-  // Removed plain sign slab to avoid a blank panel on storefronts.
-
-  const postSize = 0.22;
-  const postH = wallH + 0.15;
-  const corners = [
-    [-storeW * 0.5, -storeD * 0.5],
-    [storeW * 0.5, -storeD * 0.5]
-  ];
-  for (const [cx, cz] of corners) {
-    const post = new THREE.Mesh(new THREE.BoxGeometry(postSize, postH, postSize), trimMat);
-    post.position.set(cx, postH * 0.5 + 0.1, cz);
-    post.castShadow = true;
-    store.add(post);
-  }
-
-  const foundationH = 0.35;
-  const foundation = new THREE.Mesh(
-    new THREE.BoxGeometry(storeW + 0.32, foundationH, storeD + 0.32),
-    trimMat
-  );
-  foundation.position.y = 0.11 - foundationH * 0.5 + 0.1;
-  foundation.receiveShadow = true;
-  store.add(foundation);
-
-  const roof = new THREE.Mesh(
-    new THREE.BoxGeometry(storeW + 0.14, 0.22, storeD + 0.14),
-    roofMat
-  );
-  roof.position.set(0, wallH + 0.07, 0);
-  roof.castShadow = true;
-  roof.receiveShadow = true;
-  store.add(roof);
-
-  store.children.forEach((m) => {
-    m.castShadow = true;
-    m.receiveShadow = true;
-  });
-  scene.add(store);
-  if (collisions) {
-    addWallCollisionFromMesh(back, 'store');
-    addWallCollisionFromMesh(left, 'store');
-    addWallCollisionFromMesh(right, 'store');
-  }
-}
-
-function addCliffAndWaterfall(x, z) {
-  const cliff = new THREE.Group();
-  cliff.position.set(x, 0, z);
-  cliff.scale.setScalar(0.84);
-  const cliffRockMeshes = [];
-  const rockMat = new THREE.MeshStandardMaterial({ color: 0x586069, roughness: 0.93 });
-  const faceMat = new THREE.MeshStandardMaterial({ color: 0x5f6872, roughness: 0.9 });
-  const mainRock = new THREE.Mesh(
-    new THREE.DodecahedronGeometry(4.8, 0),
-    rockMat
-  );
-  mainRock.position.set(0, 3.6, 0);
-  mainRock.scale.set(2.6, 1.7, 2.0);
-  mainRock.castShadow = true;
-  mainRock.receiveShadow = true;
-  cliff.add(mainRock);
-  cliffRockMeshes.push(mainRock);
-
-  for (let i = 0; i < 11; i += 1) {
-    let rx = (Math.random() - 0.5) * 7.6;
-    let rz = (Math.random() - 0.5) * 3.7;
-    // Keep front faces clearer so waterfall stays visible.
-    if ((rx < 0 && rz < 1.2) || (rz > 0.1 && Math.abs(rx) < 2.2)) {
-      rx += 1.8;
-      rz -= 1.2;
-    }
-    const rock = new THREE.Mesh(
-      new THREE.DodecahedronGeometry(3.1 + Math.random() * 1.8, 0),
-      rockMat
-    );
-    rock.position.set(rx, 2.25 + Math.random() * 2.1, rz);
-    rock.scale.set(2.55, 1.45 + Math.random() * 0.95, 2.0);
-    rock.castShadow = true;
-    rock.receiveShadow = true;
-    cliff.add(rock);
-    cliffRockMeshes.push(rock);
-  }
-
-  const makeWaterfallFace = (localX, localY, localZ, yaw, w = 3.4, h = 8.6) => {
-    const normalX = Math.sin(yaw);
-    const normalZ = Math.cos(yaw);
-    const face = new THREE.Mesh(
-      new THREE.BoxGeometry(w + 0.65, h + 0.9, 0.7),
-      faceMat
-    );
-    face.position.set(localX, localY, localZ);
-    face.rotation.y = yaw;
-    face.castShadow = true;
-    face.receiveShadow = true;
-    cliff.add(face);
-
-    const stream = new THREE.Mesh(
-      new THREE.BoxGeometry(w, h, 0.92),
-      new THREE.MeshBasicMaterial({
-        color: 0x2ea9ff,
-        transparent: true,
-        opacity: 0.8,
-        side: THREE.DoubleSide,
-        depthTest: true,
-        depthWrite: false
-      })
-    );
-    // Slight outward offset; thickness keeps it visible from both camera sides.
-    stream.position.set(
-      localX + normalX * 0.16,
-      localY - 0.12,
-      localZ + normalZ * 0.16
-    );
-    stream.rotation.y = yaw;
-    stream.renderOrder = 20;
-    cliff.add(stream);
-
-    const streakMat = new THREE.MeshBasicMaterial({
-      color: 0xeaf7ff,
-      transparent: true,
-      opacity: 0.92,
-      depthTest: true,
-      depthWrite: false
-    });
-    for (let i = 0; i < 11; i += 1) {
-      const streak = new THREE.Mesh(new THREE.PlaneGeometry(0.12, 2.0 + Math.random() * 0.9), streakMat);
-      streak.position.set(
-        (Math.random() - 0.5) * (w - 0.6),
-        (Math.random() - 0.5) * (h - 0.8),
-        0.02
-      );
-      stream.add(streak);
-    }
-
-    const foam = new THREE.Mesh(
-      new THREE.CircleGeometry(1.35, 18),
-      new THREE.MeshBasicMaterial({
-        color: 0xe8f7ff,
-        transparent: true,
-        opacity: 0.74,
-        depthTest: true,
-        depthWrite: false
-      })
-    );
-    foam.rotation.x = -Math.PI / 2;
-    foam.position.set(
-      localX + normalX * 0.42,
-      0.1,
-      localZ + normalZ * 0.42
-    );
-    foam.renderOrder = 21;
-    cliff.add(foam);
-  };
-
-  // Main waterfall: one-sided and only visible from the requested front angle.
-  const guaranteedFall = new THREE.Group();
-  // Centered on the target rock face, with face-matching yaw.
-  const guaranteedYaw = -0.62;
-  guaranteedFall.position.set(2.45, 4.28, 2.25);
-  guaranteedFall.rotation.y = guaranteedYaw + Math.PI;
-  const guaranteedFlowTexture = createWaterfallFlowTexture();
-  const guaranteedSheet = new THREE.Mesh(
-    new THREE.PlaneGeometry(6.2, 9.3),
-    new THREE.MeshBasicMaterial({
-      color: 0xa8e8ff,
-      map: guaranteedFlowTexture,
-      transparent: true,
-      opacity: 0.9,
-      side: THREE.FrontSide,
-      depthTest: false,
-      depthWrite: false
-    })
-  );
-  // Keep waterfall attached just outside the cliff face (not inside).
-  guaranteedSheet.position.z = 6;
-  guaranteedSheet.renderOrder = 40;
-  guaranteedFall.add(guaranteedSheet);
-
-  const guaranteedCoreTexture = guaranteedFlowTexture.clone();
-  guaranteedCoreTexture.repeat.set(0.62, 2.15);
-  guaranteedCoreTexture.offset.x = 0.19;
-  const guaranteedCoreSheet = new THREE.Mesh(
-    new THREE.PlaneGeometry(3.1, 9.1),
-    new THREE.MeshBasicMaterial({
-      color: 0xffffff,
-      map: guaranteedCoreTexture,
-      transparent: true,
-      opacity: 0.42,
-      side: THREE.FrontSide,
-      depthTest: false,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending
-    })
-  );
-  guaranteedCoreSheet.position.set(0, 0.05, 6.04);
-  guaranteedCoreSheet.renderOrder = 41;
-  guaranteedFall.add(guaranteedCoreSheet);
-
-  const edgeVeils = [];
-  for (const side of [-1, 1]) {
-    const edgeTexture = guaranteedFlowTexture.clone();
-    edgeTexture.repeat.set(0.34, 2.15);
-    edgeTexture.offset.x = side < 0 ? 0.03 : 0.63;
-    const veil = new THREE.Mesh(
-      new THREE.PlaneGeometry(1.55, 9.0),
-      new THREE.MeshBasicMaterial({
-        color: 0xc9f2ff,
-        map: edgeTexture,
-        transparent: true,
-        opacity: 0.36,
-        side: THREE.FrontSide,
-        depthTest: false,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending
-      })
-    );
-    veil.position.set(side * 2.72, -0.02, 6.03);
-    veil.rotation.y = side * 0.14;
-    veil.renderOrder = 41;
-    guaranteedFall.add(veil);
-    edgeVeils.push(veil);
-  }
-
-  const guaranteedStreakMat = new THREE.MeshBasicMaterial({
-    color: 0xeaf7ff,
-    transparent: true,
-    opacity: 0.92,
-    side: THREE.FrontSide,
-    depthTest: false,
-    depthWrite: false
-  });
-  const guaranteedStreaks = [];
-  for (let i = 0; i < 24; i += 1) {
-    const minY = -4.3;
-    const maxY = 4.2;
-    const streak = new THREE.Mesh(
-      new THREE.PlaneGeometry(0.09 + Math.random() * 0.08, 1.3 + Math.random() * 1.9),
-      guaranteedStreakMat
-    );
-    streak.position.set((Math.random() - 0.5) * 5.4, THREE.MathUtils.lerp(minY, maxY, Math.random()), 6.06 + Math.random() * 0.03);
-    streak.userData.baseX = streak.position.x;
-    streak.userData.minY = minY;
-    streak.userData.maxY = maxY;
-    streak.userData.speed = 2.3 + Math.random() * 2.2;
-    streak.userData.swayPhase = Math.random() * Math.PI * 2;
-    streak.userData.swayAmp = 0.03 + Math.random() * 0.07;
-    streak.renderOrder = 41;
-    guaranteedFall.add(streak);
-    guaranteedStreaks.push(streak);
-  }
-  cliff.add(guaranteedFall);
-
-  const guaranteedLipFoam = new THREE.Mesh(
-    new THREE.PlaneGeometry(6.05, 0.42),
-    new THREE.MeshBasicMaterial({
-      color: 0xf4fcff,
-      transparent: true,
-      opacity: 0.58,
-      side: THREE.FrontSide,
-      depthTest: false,
-      depthWrite: false
-    })
-  );
-  guaranteedLipFoam.position.set(0, 4.58, 5.98);
-  guaranteedLipFoam.renderOrder = 43;
-  guaranteedFall.add(guaranteedLipFoam);
-
-  const guaranteedFoam = new THREE.Mesh(
-    new THREE.CircleGeometry(3.1, 24, Math.PI, Math.PI),
-    new THREE.MeshBasicMaterial({
-      color: 0xe9f8ff,
-      transparent: true,
-      opacity: 0.8,
-      side: THREE.FrontSide,
-      depthTest: false,
-      depthWrite: false
-    })
-  );
-  guaranteedFoam.rotation.x = -Math.PI / 2;
-  guaranteedFoam.rotation.z = 0;
-  // Put foam at the middle/base of the waterfall and match its width.
-  guaranteedFoam.position.set(0, -4.55, 6);
-  guaranteedFoam.renderOrder = 42;
-  guaranteedFall.add(guaranteedFoam);
-
-  const splashDrops = [];
-  const splashGroup = new THREE.Group();
-  splashGroup.position.set(0, -4.5, 6.08);
-  for (let i = 0; i < 18; i += 1) {
-    const drop = new THREE.Mesh(
-      new THREE.PlaneGeometry(0.22, 0.22),
-      new THREE.MeshBasicMaterial({
-        color: 0xf2fbff,
-        transparent: true,
-        opacity: 0.5,
-        side: THREE.FrontSide,
-        depthTest: false,
-        depthWrite: false
-      })
-    );
-    drop.userData.phase = Math.random();
-    drop.userData.speed = 0.9 + Math.random() * 1.2;
-    drop.userData.angle = Math.random() * Math.PI * 2;
-    drop.userData.radius = 0.2 + Math.random() * 0.3;
-    drop.userData.spread = 0.38 + Math.random() * 0.42;
-    drop.userData.lift = 0.14 + Math.random() * 0.28;
-    splashGroup.add(drop);
-    splashDrops.push(drop);
-  }
-  guaranteedFall.add(splashGroup);
-
-  const mistCurtain = new THREE.Mesh(
-    new THREE.PlaneGeometry(6.45, 1.85),
-    new THREE.MeshBasicMaterial({
-      color: 0xe6f7ff,
-      transparent: true,
-      opacity: 0.22,
-      side: THREE.FrontSide,
-      depthTest: false,
-      depthWrite: false
-    })
-  );
-  mistCurtain.position.set(0, -4.03, 6.26);
-  mistCurtain.renderOrder = 44;
-  guaranteedFall.add(mistCurtain);
-
-  const mistTexture = createWaterfallMistTexture();
-  const mistCount = 72;
-  const mistPositions = new Float32Array(mistCount * 3);
-  const mistData = [];
-  for (let i = 0; i < mistCount; i += 1) {
-    const idx = i * 3;
-    const side = Math.random() > 0.5 ? 1 : -1;
-    mistPositions[idx] = side * (0.22 + Math.random() * 0.64);
-    mistPositions[idx + 1] = Math.random() * 1.1;
-    mistPositions[idx + 2] = (Math.random() - 0.5) * 0.5;
-    mistData.push({
-      phase: Math.random(),
-      speed: 0.45 + Math.random() * 0.8,
-      angle: Math.random() * Math.PI * 2,
-      radius: 0.32 + Math.random() * 0.98,
-      spread: 0.64 + Math.random() * 1.6,
-      lift: 0.34 + Math.random() * 1.05,
-      drift: 0.35 + Math.random() * 0.9
-    });
-  }
-  const mistGeo = new THREE.BufferGeometry();
-  const mistAttr = new THREE.BufferAttribute(mistPositions, 3);
-  mistGeo.setAttribute('position', mistAttr);
-  const mistPoints = new THREE.Points(
-    mistGeo,
-    new THREE.PointsMaterial({
-      map: mistTexture,
-      color: 0xe9f8ff,
-      transparent: true,
-      opacity: 0.46,
-      size: 0.7,
-      sizeAttenuation: true,
-      side: THREE.FrontSide,
-      depthTest: false,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending
-    })
-  );
-  mistPoints.position.set(0, -4.46, 6.16);
-  mistPoints.renderOrder = 45;
-  guaranteedFall.add(mistPoints);
-
-  cliffWaterfallRoot = guaranteedFall;
-  cliffWaterfallFoam = guaranteedFoam;
-  cliffWaterfallState = {
-    flowTexture: guaranteedFlowTexture,
-    coreTexture: guaranteedCoreTexture,
-    sheet: guaranteedSheet,
-    coreSheet: guaranteedCoreSheet,
-    edgeVeils,
-    foam: guaranteedFoam,
-    lipFoam: guaranteedLipFoam,
-    streaks: guaranteedStreaks,
-    splashDrops,
-    splashGroup,
-    mistCurtain,
-    mistPoints,
-    mistData,
-    mistAttr
-  };
-
-  scene.add(cliff);
-  cliff.updateWorldMatrix(true, true);
-  // Build a tighter rock footprint so collision follows the visible cliff shape.
-  for (const rockMesh of cliffRockMeshes) {
-    addRockFootprintCollisionFromMesh(rockMesh, 'cliff', -0.05);
-  }
-}
-
-function populateMainIslandNature() {
-  const palmSpots = [
-    [worldLimit * 0.62, worldLimit * 0.2, 1.24],
-    [worldLimit * 0.34, -worldLimit * 0.42, 1.14],
-    [-worldLimit * 0.72, worldLimit * 0.3, 1.28],
-    [-worldLimit * 0.16, -worldLimit * 0.56, 1.1],
-    [worldLimit * 0.04, worldLimit * 0.61, 1.05]
-  ];
-  palmSpots.forEach(([x, z, s]) => addPalm(x, z, s));
-  addBush(worldLimit * 0.44, worldLimit * 0.28, 0.74);
-  addBush(-worldLimit * 0.26, worldLimit * 0.44, 0.72);
-  addBush(worldLimit * 0.14, -worldLimit * 0.36, 0.7);
-
-  for (let i = 0; i < 120; i += 1) {
-    const angle = (i / 120) * Math.PI * 2;
-    const radius = worldLimit * (0.1 + Math.random() * 0.78);
-    const x = Math.cos(angle) * radius + (Math.random() - 0.5) * 2.8;
-    const z = Math.sin(angle) * radius + (Math.random() - 0.5) * 2.8;
-    addGrassTuft(x, z, 0.8 + Math.random() * 0.45, i % 3 ? 0x4f8a3f : 0x568f45);
-  }
-  addFlowerPatch(worldLimit * 0.22, worldLimit * 0.38, 18, 5.6);
-  addFlowerPatch(-worldLimit * 0.33, worldLimit * 0.12, 16, 5.1);
-  addFlowerPatch(worldLimit * 0.46, -worldLimit * 0.22, 14, 4.9);
-  addFlowerPatch(-worldLimit * 0.12, -worldLimit * 0.46, 13, 4.6);
-}
-
-function createVendorNpc({
-  shirtColor = 0x7c3aed,
-  skinColor = 0xe0b18f,
-  hairColor = 0x111827,
-  hatColor = null
-} = {}) {
-  const npc = new THREE.Group();
-  // Slightly taller than player-height silhouette so vendors stand clearly above stall surfaces.
-  const npcScale = 1.95;
-
-  const pantsMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.84 });
-  const shirtMat = new THREE.MeshStandardMaterial({ color: shirtColor, roughness: 0.8 });
-  const skinMat = new THREE.MeshStandardMaterial({ color: skinColor, roughness: 0.75 });
-  const hairMat = new THREE.MeshStandardMaterial({ color: hairColor, roughness: 0.78 });
-
-  const legGeo = new THREE.BoxGeometry(0.16 * npcScale, 0.92 * npcScale, 0.18 * npcScale);
-  const legL = new THREE.Mesh(legGeo, pantsMat);
-  legL.position.set(-0.13 * npcScale, 0.47 * npcScale, 0);
-  const legR = legL.clone();
-  legR.position.x = 0.13 * npcScale;
-
-  const hips = new THREE.Mesh(
-    new THREE.BoxGeometry(0.44 * npcScale, 0.2 * npcScale, 0.28 * npcScale),
-    pantsMat
-  );
-  hips.position.y = 0.97 * npcScale;
-
-  const torso = new THREE.Mesh(
-    new THREE.BoxGeometry(0.52 * npcScale, 1.08 * npcScale, 0.32 * npcScale),
-    shirtMat
-  );
-  torso.position.y = 1.52 * npcScale;
-
-  const shoulders = new THREE.Mesh(
-    new THREE.BoxGeometry(0.62 * npcScale, 0.15 * npcScale, 0.34 * npcScale),
-    shirtMat
-  );
-  shoulders.position.y = 1.98 * npcScale;
-
-  const neck = new THREE.Mesh(
-    new THREE.BoxGeometry(0.16 * npcScale, 0.12 * npcScale, 0.16 * npcScale),
-    skinMat
-  );
-  neck.position.y = 2.08 * npcScale;
-
-  const head = new THREE.Mesh(
-    new THREE.BoxGeometry(0.42 * npcScale, 0.52 * npcScale, 0.42 * npcScale),
-    skinMat
-  );
-  head.position.y = 2.32 * npcScale;
-
-  const hair = new THREE.Mesh(
-    new THREE.BoxGeometry(0.46 * npcScale, 0.18 * npcScale, 0.46 * npcScale),
-    hairMat
-  );
-  hair.position.y = 2.58 * npcScale;
-
-  const armGeo = new THREE.BoxGeometry(0.12 * npcScale, 0.82 * npcScale, 0.14 * npcScale);
-  const armL = new THREE.Mesh(armGeo, skinMat);
-  armL.position.set(-0.36 * npcScale, 1.52 * npcScale, 0);
-  const armR = armL.clone();
-  armR.position.x = 0.36 * npcScale;
-
-  const handGeo = new THREE.BoxGeometry(0.14 * npcScale, 0.17 * npcScale, 0.15 * npcScale);
-  const handL = new THREE.Mesh(handGeo, skinMat);
-  handL.position.set(-0.36 * npcScale, 1.03 * npcScale, 0);
-  const handR = handL.clone();
-  handR.position.x = 0.36 * npcScale;
-
-  const eyeMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.2 });
-  const eyeL = new THREE.Mesh(new THREE.BoxGeometry(0.05 * npcScale, 0.05 * npcScale, 0.02 * npcScale), eyeMat);
-  eyeL.position.set(-0.1 * npcScale, 2.35 * npcScale, 0.22 * npcScale);
-  const eyeR = eyeL.clone();
-  eyeR.position.x = 0.1 * npcScale;
-  const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.14 * npcScale, 0.025 * npcScale, 0.02 * npcScale), eyeMat);
-  mouth.position.set(0, 2.22 * npcScale, 0.22 * npcScale);
-
-  npc.add(
-    legL, legR,
-    hips, torso, shoulders, neck,
-    head, hair,
-    armL, armR, handL, handR,
-    eyeL, eyeR, mouth
-  );
-
-  if (hatColor !== null) {
-    const hat = new THREE.Mesh(
-      new THREE.BoxGeometry(0.5 * npcScale, 0.13 * npcScale, 0.5 * npcScale),
-      new THREE.MeshStandardMaterial({ color: hatColor, roughness: 0.78 })
-    );
-    hat.position.y = 2.72 * npcScale;
-    npc.add(hat);
-  }
-
-  npc.traverse((obj) => {
-    if (obj.isMesh) {
-      obj.castShadow = true;
-      obj.receiveShadow = true;
-    }
-  });
-  return npc;
-}
-
-function createVendorStall({
-  label = 'Shop',
-  signColor = '#2d3748',
-  canopyA = 0x4f46e5,
-  canopyB = 0xf8fafc,
-  vendor = null
-} = {}) {
-  const stall = new THREE.Group();
-  const width = 4.6;
-  const depth = 2.8;
-  const postHeight = 4.05;
-  const roofY = 4.36;
-
-  const woodMat = new THREE.MeshStandardMaterial({ color: 0x4a2f1f, roughness: 0.9 });
-  const trimMat = new THREE.MeshStandardMaterial({ color: 0x2f1e14, roughness: 0.92 });
-
-  for (const px of [-1, 1]) {
-    for (const pz of [-1, 1]) {
-      const post = new THREE.Mesh(new THREE.BoxGeometry(0.2, postHeight, 0.2), woodMat);
-      post.position.set(px * (width * 0.5 - 0.14), postHeight * 0.5, pz * (depth * 0.5 - 0.14));
-      stall.add(post);
-    }
-  }
-
-  const roof = new THREE.Mesh(new THREE.BoxGeometry(width + 0.52, 0.16, depth + 0.34), trimMat);
-  roof.position.y = roofY;
-  stall.add(roof);
-
-  const stripeCount = 6;
-  for (let i = 0; i < stripeCount; i += 1) {
-    const stripe = new THREE.Mesh(
-      new THREE.BoxGeometry((width + 0.36) / stripeCount, 0.11, 0.6),
-      new THREE.MeshStandardMaterial({ color: i % 2 ? canopyA : canopyB, roughness: 0.72 })
-    );
-    const x = -((width + 0.36) * 0.5) + (i + 0.5) * ((width + 0.36) / stripeCount);
-    stripe.position.set(x, roofY - 0.14, depth * 0.5 + 0.04);
-    stall.add(stripe);
-  }
-
-  const counterTop = new THREE.Mesh(new THREE.BoxGeometry(width - 0.44, 0.15, 0.78), woodMat);
-  counterTop.position.set(0, 1.74, depth * 0.24);
-  const counterFront = new THREE.Mesh(new THREE.BoxGeometry(width - 0.58, 0.7, 0.12), woodMat);
-  counterFront.position.set(0, 1.39, depth * 0.58);
-  const counterRail = new THREE.Mesh(new THREE.BoxGeometry(width - 0.2, 0.12, 0.14), trimMat);
-  counterRail.position.set(0, 2.07, depth * 0.58);
-  stall.add(counterTop, counterFront, counterRail);
-
-  const sideRailL = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.64, depth - 0.62), woodMat);
-  sideRailL.position.set(-(width * 0.5 - 0.24), 1.44, 0);
-  const sideRailR = sideRailL.clone();
-  sideRailR.position.x = width * 0.5 - 0.24;
-  stall.add(sideRailL, sideRailR);
-
-  const sign = makeTextSign(label, 3.28, 0.62, signColor, '#ecfeff');
-  sign.position.set(0, roofY + 0.72, depth * 0.5 + 0.15);
-  sign.rotation.x = -0.14;
-  stall.add(sign);
-
-  if (vendor) {
-    vendor.position.set(0, 0, -0.08);
-    stall.add(vendor);
-  }
-
-  stall.traverse((obj) => {
-    if (obj.isMesh) {
-      obj.castShadow = true;
-      obj.receiveShadow = true;
-    }
-  });
-
-  return stall;
-}
-
-function addMineArea() {
-  const mine = new THREE.Group();
-  mine.position.set(MINE_POS.x, 0, MINE_POS.z);
-
-  const floor = new THREE.Mesh(
-    new THREE.CircleGeometry(MINE_RADIUS, 68),
-    new THREE.MeshStandardMaterial({ color: 0x3b3b3b, roughness: 0.95 })
-  );
-  floor.rotation.x = -Math.PI / 2;
-  floor.position.y = 1.34;
-  floor.receiveShadow = true;
-  mine.add(floor);
-
-  const ring = new THREE.Mesh(
-    new THREE.RingGeometry(MINE_RADIUS - 2.8, MINE_RADIUS, 72),
-    new THREE.MeshStandardMaterial({ color: 0x2f241a, roughness: 0.95 })
-  );
-  ring.rotation.x = -Math.PI / 2;
-  ring.position.y = 1.335;
-  mine.add(ring);
-
-  const caveShellMat = new THREE.MeshStandardMaterial({
-    color: 0x151b26,
-    roughness: 0.98,
-    metalness: 0.02,
-    side: THREE.DoubleSide
-  });
-  const caveWall = new THREE.Mesh(
-    new THREE.CylinderGeometry(MINE_RADIUS + 5.2, MINE_RADIUS + 3.3, MINE_CEILING_Y - 1.2, 88, 1, true),
-    caveShellMat
-  );
-  caveWall.position.y = MINE_CEILING_Y * 0.55;
-  caveWall.castShadow = true;
-  caveWall.receiveShadow = true;
-  mine.add(caveWall);
-
-  const caveRoof = new THREE.Mesh(
-    new THREE.CircleGeometry(MINE_RADIUS + 5.4, 84),
-    new THREE.MeshStandardMaterial({ color: 0x131826, roughness: 0.98, metalness: 0.02, side: THREE.DoubleSide })
-  );
-  caveRoof.rotation.x = Math.PI / 2;
-  caveRoof.position.y = MINE_CEILING_Y;
-  caveRoof.castShadow = true;
-  caveRoof.receiveShadow = true;
-  mine.add(caveRoof);
-
-  for (let i = 0; i < 40; i += 1) {
-    const angle = (i / 40) * Math.PI * 2 + (Math.random() - 0.5) * 0.28;
-    const radius = MINE_RADIUS * (0.14 + Math.random() * 0.78);
-    const spike = new THREE.Mesh(
-      new THREE.ConeGeometry(0.42 + Math.random() * 0.82, 1.4 + Math.random() * 2.2, 8),
-      new THREE.MeshStandardMaterial({ color: 0x202838, roughness: 0.94 })
-    );
-    spike.position.set(
-      Math.cos(angle) * radius,
-      MINE_CEILING_Y - 0.48 - Math.random() * 1.8,
-      Math.sin(angle) * radius
-    );
-    spike.rotation.x = Math.PI;
-    spike.rotation.y = Math.random() * Math.PI * 2;
-    spike.castShadow = true;
-    mine.add(spike);
-  }
-
-  const rockMat = new THREE.MeshStandardMaterial({ color: 0x4b5563, roughness: 0.9 });
-  for (let i = 0; i < 48; i += 1) {
-    const angle = (i / 48) * Math.PI * 2;
-    const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(1.9 + Math.random() * 1.5, 0), rockMat);
-    const radius = MINE_RADIUS - 6.8 + Math.random() * 5.4;
-    rock.position.set(Math.cos(angle) * radius, 2.2 + Math.random() * 2.8, Math.sin(angle) * radius);
-    rock.scale.set(1.3 + Math.random() * 1.2, 1.4 + Math.random() * 1.5, 1.3 + Math.random() * 1.2);
-    rock.castShadow = true;
-    rock.receiveShadow = true;
-    mine.add(rock);
-  }
-  const wallColliderCount = 88;
-  for (let i = 0; i < wallColliderCount; i += 1) {
-    const angle = (i / wallColliderCount) * Math.PI * 2;
-    addWorldCollider(
-      MINE_POS.x + Math.cos(angle) * MINE_ROCK_WALL_RADIUS,
-      MINE_POS.z + Math.sin(angle) * MINE_ROCK_WALL_RADIUS,
-      1.5,
-      'mine-wall'
-    );
-  }
-
-  const mineAmbient = new THREE.AmbientLight(0x8b9ec6, 0.42);
-  mine.add(mineAmbient);
-  const mineFillLight = new THREE.PointLight(0x8dd5ff, 1.9, MINE_RADIUS * 2.6, 2);
-  mineFillLight.position.set(0, 9.8, 0);
-  mine.add(mineFillLight);
-
-  const centralCrystal = new THREE.Mesh(
-    new THREE.OctahedronGeometry(1.9, 0),
-    new THREE.MeshStandardMaterial({
-      color: 0x93c5fd,
-      emissive: 0x1d4ed8,
-      emissiveIntensity: 1.45,
-      roughness: 0.28,
-      metalness: 0.05
-    })
-  );
-  centralCrystal.position.set(0, 3.2, 0);
-  centralCrystal.rotation.y = Math.PI * 0.14;
-  centralCrystal.castShadow = true;
-  mine.add(centralCrystal);
-  mineCentralCrystalMesh = centralCrystal;
-  const centralCrystalLight = new THREE.PointLight(0x60a5fa, 2.3, 34, 2);
-  centralCrystalLight.position.set(0, 3.5, 0);
-  mine.add(centralCrystalLight);
-
-  const caveLampBulbMat = new THREE.MeshStandardMaterial({
-    color: 0xffd89c,
-    emissive: 0x8a5d1f,
-    emissiveIntensity: 1.35,
-    roughness: 0.56
-  });
-  const caveLampStoneMat = new THREE.MeshStandardMaterial({ color: 0x303948, roughness: 0.95 });
-  const caveLampCount = 10;
-  const caveLampRadius = MINE_RADIUS - 9.8;
-  for (let i = 0; i < caveLampCount; i += 1) {
-    const angle = (i / caveLampCount) * Math.PI * 2 + Math.PI / 6;
-    const x = Math.cos(angle) * caveLampRadius;
-    const z = Math.sin(angle) * caveLampRadius;
-    const lampStone = new THREE.Mesh(new THREE.DodecahedronGeometry(0.85, 0), caveLampStoneMat);
-    lampStone.position.set(x, 2.0, z);
-    lampStone.castShadow = true;
-    lampStone.receiveShadow = true;
-    const lampBulb = new THREE.Mesh(new THREE.SphereGeometry(0.28, 14, 12), caveLampBulbMat);
-    lampBulb.position.set(x, 2.7, z);
-    const lampLight = new THREE.PointLight(0xffca7c, 2.3, 32, 2);
-    lampLight.position.set(x, 2.86, z);
-    mine.add(lampStone, lampBulb, lampLight);
-  }
-
-  const exitPortal = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.84, 0.84, 0.12, 24),
-    new THREE.MeshStandardMaterial({
-      color: 0x67e8f9,
-      emissive: 0x0891b2,
-      emissiveIntensity: 1.2,
-      roughness: 0.32
-    })
-  );
-  exitPortal.rotation.x = -Math.PI / 2;
-  exitPortal.position.set(MINE_EXIT_POS.x - MINE_POS.x, 1.42, MINE_EXIT_POS.z - MINE_POS.z);
-  mine.add(exitPortal);
-  mineExitMesh = exitPortal;
-
-  const oreDefs = [
-    {
-      resource: 'stone',
-      color: ORE_RESOURCE_COLORS.stone,
-      reward: 1,
-      cooldownMs: 5200,
-      positions: [
-        [-26, -18], [-22, -7], [-18, 11], [-12, -22], [-7, -12], [-1, 16], [6, -17], [11, 8], [16, -6], [22, 12], [28, 3], [-14, 22]
-      ]
-    },
-    {
-      resource: 'iron',
-      color: ORE_RESOURCE_COLORS.iron,
-      reward: 2,
-      cooldownMs: 7600,
-      positions: [[-24, 8], [-16, -25], [-9, -15], [-2, 24], [8, -11], [14, 4], [19, 18], [25, -12], [4, 20]]
-    },
-    {
-      resource: 'gold',
-      color: ORE_RESOURCE_COLORS.gold,
-      reward: 3,
-      cooldownMs: 10400,
-      positions: [[-28, 15], [-12, 26], [3, 28], [14, -22], [24, 6], [20, 23], [-4, -26]]
-    },
-    {
-      resource: 'diamond',
-      color: ORE_RESOURCE_COLORS.diamond,
-      reward: 1,
-      cooldownMs: 15600,
-      positions: [[-30, -5], [-8, 4], [0, 0], [18, 14], [30, 10]]
-    }
-  ];
-
-  oreDefs.forEach((def) => {
-    def.positions.forEach(([x, z], idx) => {
-      const mesh = new THREE.Mesh(
-        new THREE.DodecahedronGeometry(def.resource === 'diamond' ? 0.95 : 0.85, 0),
-        new THREE.MeshStandardMaterial({
-          color: def.color,
-          emissive: def.resource === 'diamond' ? 0x0891b2 : 0x000000,
-          emissiveIntensity: def.resource === 'diamond' ? 0.8 : 0
-        })
-      );
-      mesh.position.set(x, 1.86, z);
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      mine.add(mesh);
-      oreNodes.push({
-        id: `${def.resource}-${idx}`,
-        resource: def.resource,
-        colorHex: def.color,
-        reward: def.reward,
-        cooldownMs: def.cooldownMs,
-        mesh,
-        readyAt: 0,
-        baseY: 1.86,
-        baseScale: 1,
-        breaking: false,
-        breakStartAt: 0,
-        breakEndAt: 0
-      });
-    });
-  });
-
-  scene.add(mine);
-  mineGroup = mine;
-  mineGroup.visible = false;
-
-  const mineEntrance = new THREE.Group();
-  mineEntrance.position.set(MINE_ENTRY_POS.x, 0, MINE_ENTRY_POS.z);
-  const rockMatOuter = new THREE.MeshStandardMaterial({ color: 0xb9a79a, roughness: 0.96 });
-  const rockMatMid = new THREE.MeshStandardMaterial({ color: 0x8f7f74, roughness: 0.95 });
-  const caveDarkMat = new THREE.MeshStandardMaterial({ color: 0x2b2f3a, roughness: 0.98 });
-  const woodMat = new THREE.MeshStandardMaterial({ color: 0xbb6f3b, roughness: 0.86 });
-  const railMat = new THREE.MeshStandardMaterial({ color: 0x7c838f, roughness: 0.62, metalness: 0.38 });
-  const tieMat = new THREE.MeshStandardMaterial({ color: 0x8d5a34, roughness: 0.9 });
-
-  const rockBase = new THREE.Mesh(new THREE.DodecahedronGeometry(2.6, 0), rockMatOuter);
-  rockBase.position.set(0, 3.8, 0.75);
-  rockBase.scale.set(2.8, 2.4, 1.92);
-  mineEntrance.add(rockBase);
-
-  const rockLeft = new THREE.Mesh(new THREE.DodecahedronGeometry(1.45, 0), rockMatMid);
-  rockLeft.position.set(-2.45, 2.85, 2.45);
-  rockLeft.scale.set(1.55, 1.2, 1.15);
-  mineEntrance.add(rockLeft);
-  const rockRight = rockLeft.clone();
-  rockRight.position.x = 2.45;
-  mineEntrance.add(rockRight);
-
-  const rockBottom = new THREE.Mesh(new THREE.DodecahedronGeometry(1.55, 0), rockMatOuter);
-  rockBottom.position.set(0, 1.42, 2.62);
-  rockBottom.scale.set(2.1, 0.7, 1.15);
-  mineEntrance.add(rockBottom);
-
-  const caveOuter = new THREE.Mesh(new THREE.CylinderGeometry(1.45, 1.7, 3.6, 16, 1, false, 0, Math.PI), caveDarkMat);
-  caveOuter.rotation.y = Math.PI * 0.5;
-  caveOuter.position.set(0, 3.0, 3.1);
-  mineEntrance.add(caveOuter);
-
-  const caveVoid = new THREE.Mesh(
-    new THREE.PlaneGeometry(2.4, 2.8),
-    new THREE.MeshBasicMaterial({ color: 0x0b0f17, side: THREE.DoubleSide })
-  );
-  caveVoid.position.set(0, 2.95, 3.9);
-  mineEntrance.add(caveVoid);
-
-  const postL = new THREE.Mesh(new THREE.BoxGeometry(0.27, 3.25, 0.22), woodMat);
-  postL.position.set(-1.14, 3.05, 4.52);
-  const postR = postL.clone();
-  postR.position.x = 1.14;
-  const beam = new THREE.Mesh(new THREE.BoxGeometry(2.68, 0.3, 0.24), woodMat);
-  beam.position.set(0, 4.62, 4.52);
-  const signText = makeTextSign('MINE', 2.25, 0.48, '#c27a45', '#4a1d12');
-  signText.position.set(0, 4.62, 4.68);
-  mineEntrance.add(postL, postR, beam, signText);
-
-  const doorWoodMat = new THREE.MeshStandardMaterial({ color: 0x7b4a26, roughness: 0.9 });
-  const doorWoodDarkMat = new THREE.MeshStandardMaterial({ color: 0x5f3b22, roughness: 0.92 });
-  const doorMetalMat = new THREE.MeshStandardMaterial({ color: 0x6b7280, roughness: 0.52, metalness: 0.44 });
-
-  const doorFrameLeft = new THREE.Mesh(new THREE.BoxGeometry(0.2, 3.28, 0.22), woodMat);
-  doorFrameLeft.position.set(-1.34, 2.96, 5.22);
-  const doorFrameRight = doorFrameLeft.clone();
-  doorFrameRight.position.x = 1.34;
-  const doorFrameTop = new THREE.Mesh(new THREE.BoxGeometry(3.02, 0.22, 0.22), woodMat);
-  doorFrameTop.position.set(0, 4.5, 5.22);
-  mineEntrance.add(doorFrameLeft, doorFrameRight, doorFrameTop);
-
-  function makeMineDoor(side = 1) {
-    const door = new THREE.Group();
-    const panel = new THREE.Mesh(new THREE.BoxGeometry(1.2, 2.82, 0.11), doorWoodMat);
-    door.add(panel);
-
-    for (const y of [0.88, 0, -0.88]) {
-      const strap = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.11, 0.12), doorMetalMat);
-      strap.position.set(0, y, 0.01);
-      door.add(strap);
-    }
-
-    const brace = new THREE.Mesh(new THREE.BoxGeometry(0.14, 2.4, 0.08), doorWoodDarkMat);
-    brace.rotation.z = side * 0.52;
-    brace.position.set(-side * 0.07, 0, 0.02);
-    door.add(brace);
-
-    for (const y of [0.72, -0.72]) {
-      const hinge = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.2, 0.08), doorMetalMat);
-      hinge.position.set(side * 0.48, y, 0.03);
-      door.add(hinge);
-    }
-
-    const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.2, 10), doorMetalMat);
-    handle.rotation.z = Math.PI / 2;
-    handle.position.set(-side * 0.31, 0.05, 0.08);
-    door.add(handle);
-
-    door.position.set(side * 0.66, 2.98, 5.28);
-    door.rotation.y = side * 0.34;
-    return door;
-  }
-
-  mineEntrance.add(makeMineDoor(-1), makeMineDoor(1));
-
-  for (const side of [-1, 1]) {
-    const hook = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.4), doorMetalMat);
-    hook.position.set(side * 1.2, 3.82, 5.34);
-    const lantern = new THREE.Mesh(
-      new THREE.BoxGeometry(0.24, 0.34, 0.24),
-      new THREE.MeshStandardMaterial({ color: 0xf4d58d, emissive: 0x7c5a1d, emissiveIntensity: 0.5, roughness: 0.55 })
-    );
-    lantern.position.set(side * 1.2, 3.58, 5.41);
-    const lanternLight = new THREE.PointLight(0xffd68a, 0.85, 8, 2);
-    lanternLight.position.set(side * 1.2, 3.6, 5.42);
-    mineEntrance.add(hook, lantern, lanternLight);
-  }
-
-  const leftRail = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.08, 8.6), railMat);
-  leftRail.position.set(-0.57, 1.16, 8.0);
-  const rightRail = leftRail.clone();
-  rightRail.position.x = 0.57;
-  mineEntrance.add(leftRail, rightRail);
-  for (let i = 0; i < 12; i += 1) {
-    const tie = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.08, 0.2), tieMat);
-    tie.position.set(0, 1.12, 4.55 + i * 0.72);
-    mineEntrance.add(tie);
-  }
-
-  const cart = new THREE.Group();
-  cart.position.set(0, 1.2, 9.05);
-  const cartWoodMat = new THREE.MeshStandardMaterial({ color: 0x7a4b2a, roughness: 0.88 });
-  const cartMetalMat = new THREE.MeshStandardMaterial({ color: 0x6b7280, roughness: 0.54, metalness: 0.36 });
-  const cartBed = new THREE.Mesh(new THREE.BoxGeometry(1.18, 0.3, 1.5), cartWoodMat);
-  cartBed.position.y = 0.22;
-  const cartSideL = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.52, 1.5), cartWoodMat);
-  cartSideL.position.set(-0.54, 0.44, 0);
-  const cartSideR = cartSideL.clone();
-  cartSideR.position.x = 0.54;
-  const cartFront = new THREE.Mesh(new THREE.BoxGeometry(1.18, 0.52, 0.1), cartWoodMat);
-  cartFront.position.set(0, 0.44, 0.7);
-  const cartBack = cartFront.clone();
-  cartBack.position.z = -0.7;
-  cart.add(cartBed, cartSideL, cartSideR, cartFront, cartBack);
-
-  const wheelGeo = new THREE.CylinderGeometry(0.17, 0.17, 0.11, 14);
-  const wheelOffsets = [
-    [-0.43, 0, -0.52],
-    [0.43, 0, -0.52],
-    [-0.43, 0, 0.52],
-    [0.43, 0, 0.52]
-  ];
-  for (const [x, y, z] of wheelOffsets) {
-    const wheel = new THREE.Mesh(wheelGeo, cartMetalMat);
-    wheel.rotation.z = Math.PI / 2;
-    wheel.position.set(x, y, z);
-    cart.add(wheel);
-  }
-  mineEntrance.add(cart);
-
-  mineEntrance.traverse((obj) => {
-    if (obj.isMesh) {
-      obj.castShadow = true;
-      obj.receiveShadow = true;
-    }
-  });
-  mineEntrance.rotation.y = MINE_ENTRY_YAW;
-  scene.add(mineEntrance);
-  mineEntranceMesh = mineEntrance;
-
-  const mineStallVendorScale = 0.65;
-  const mineStallVendorY = VENDOR_STAND_Y - 0.05;
-  const mineStallVendorZ = -1.0;
-
-  const mineShopVendor = createVendorNpc({
-    shirtColor: 0xb45309,
-    skinColor: 0xd6a581,
-    hairColor: 0x1f2937,
-    hatColor: 0x111827
-  });
-  mineShopVendor.scale.setScalar(mineStallVendorScale);
-  const mineShopStall = createVendorStall({
-    label: 'Pickaxes',
-    signColor: '#2f2417',
-    canopyA: 0xf59e0b,
-    canopyB: 0xfef3c7,
-    vendor: mineShopVendor
-  });
-  mineShopStall.position.set(
-    MINE_SHOP_NPC_POS.x - MINE_POS.x,
-    0,
-    MINE_SHOP_NPC_POS.z - MINE_POS.z
-  );
-  mineShopVendor.position.set(0, mineStallVendorY, mineStallVendorZ);
-  mineShopStall.rotation.y = Math.atan2(-mineShopStall.position.x, -mineShopStall.position.z);
-  mine.add(mineShopStall);
-  mineShopNpcMesh = mineShopVendor;
-  addWorldCollider(MINE_SHOP_NPC_POS.x, MINE_SHOP_NPC_POS.z, 1.04, 'npc');
-
-  const oreTraderVendor = createVendorNpc({
-    shirtColor: 0x7c2d12,
-    skinColor: 0xd6a581,
-    hairColor: 0x111827,
-    hatColor: 0x334155
-  });
-  oreTraderVendor.scale.setScalar(mineStallVendorScale);
-  const oreTraderStall = createVendorStall({
-    label: 'Ore Trader',
-    signColor: '#2b2f3a',
-    canopyA: 0x94a3b8,
-    canopyB: 0xf8fafc,
-    vendor: oreTraderVendor
-  });
-  oreTraderStall.position.set(
-    MINE_ORE_TRADER_POS.x - MINE_POS.x,
-    0,
-    MINE_ORE_TRADER_POS.z - MINE_POS.z
-  );
-  oreTraderVendor.position.set(0, mineStallVendorY, mineStallVendorZ);
-  oreTraderStall.rotation.y = Math.atan2(-oreTraderStall.position.x, -oreTraderStall.position.z);
-  mine.add(oreTraderStall);
-  mineOreTraderNpcMesh = oreTraderVendor;
-  addWorldCollider(MINE_ORE_TRADER_POS.x, MINE_ORE_TRADER_POS.z, 1.04, 'npc');
-
-  const questVendor = createVendorNpc({
-    shirtColor: 0x7c3aed,
-    skinColor: 0xe0b18f,
-    hairColor: 0x0f172a,
-    hatColor: 0x1e293b
-  });
-  questVendor.scale.setScalar(mineStallVendorScale);
-  const questStall = createVendorStall({
-    label: 'Quests',
-    signColor: '#2f2a3b',
-    canopyA: 0x8b5cf6,
-    canopyB: 0xf5f3ff,
-    vendor: questVendor
-  });
-  questStall.position.set(
-    QUEST_NPC_POS.x - MINE_POS.x,
-    0,
-    QUEST_NPC_POS.z - MINE_POS.z
-  );
-  questVendor.position.set(0, mineStallVendorY, mineStallVendorZ);
-  questStall.rotation.y = Math.atan2(-questStall.position.x, -questStall.position.z);
-  mine.add(questStall);
-  questNpcMesh = questVendor;
-  addWorldCollider(QUEST_NPC_POS.x, QUEST_NPC_POS.z, 1.04, 'npc');
-}
-
-function addMainHouseRoomInterior() {
-  const room = new THREE.Group();
-  const floorY = GROUND_Y;
-  const wallHeight = 4.8;
-  const wallThickness = 0.28;
-  const halfDepth = HOUSE_ROOM_PLAY_RADIUS - 0.7;
-  const halfWidth = HOUSE_ROOM_PLAY_RADIUS - 0.6;
-  const doorWidth = 3.6;
-  const wallCenterY = floorY + wallHeight * 0.5;
-  const wallPaint = HOME_ROOM_WALL_OPTIONS.sand?.color || '#d9c4a3';
-  const floorPaint = HOME_ROOM_FLOOR_OPTIONS.oak?.color || '#7d5a3a';
-
-  const wallMat = new THREE.MeshStandardMaterial({ color: wallPaint, roughness: 0.86 });
-  const floorMat = new THREE.MeshStandardMaterial({ color: floorPaint, roughness: 0.92 });
-  const trimMat = new THREE.MeshStandardMaterial({ color: 0x5b3a24, roughness: 0.9 });
-  const baseboardMat = new THREE.MeshStandardMaterial({ color: 0x4a2e1c, roughness: 0.85 });
-  const crownMat = new THREE.MeshStandardMaterial({ color: 0x6b4a2e, roughness: 0.82 });
-  const glassMat = new THREE.MeshStandardMaterial({ color: 0xa8d4f0, roughness: 0.15, metalness: 0.1, transparent: true, opacity: 0.35 });
-  const frameMat = new THREE.MeshStandardMaterial({ color: 0x3d2b1f, roughness: 0.78 });
-  const doorFrameMat = new THREE.MeshStandardMaterial({ color: 0x5a3d28, roughness: 0.82 });
-  const shelfMat = new THREE.MeshStandardMaterial({ color: 0x6b4a2e, roughness: 0.84 });
-  const bracketMat = new THREE.MeshStandardMaterial({ color: 0x8b6914, roughness: 0.5, metalness: 0.35 });
-  const sconceShadeMat = new THREE.MeshStandardMaterial({ color: 0xfef3c7, roughness: 0.55, side: THREE.DoubleSide });
-  const chainMat = new THREE.MeshStandardMaterial({ color: 0x71717a, roughness: 0.4, metalness: 0.6 });
-  const brassMat = new THREE.MeshStandardMaterial({ color: 0xc69332, roughness: 0.28, metalness: 0.82 });
-  const linenMat = new THREE.MeshStandardMaterial({ color: 0xf4ead0, roughness: 0.72, side: THREE.DoubleSide });
-  const sofaMat = new THREE.MeshStandardMaterial({ color: 0xd4c7b5, roughness: 0.84 });
-  const sofaAccentMat = new THREE.MeshStandardMaterial({ color: 0xb98b66, roughness: 0.82 });
-  const artCanvasMat = new THREE.MeshStandardMaterial({ color: 0x60a5fa, roughness: 0.72 });
-  const curtainMat = new THREE.MeshStandardMaterial({ color: 0x9f6f48, roughness: 0.9 });
-  const accentPanelMat = new THREE.MeshStandardMaterial({ color: 0x8b5a3c, roughness: 0.88 });
-  const deskTopMat = new THREE.MeshStandardMaterial({ color: 0x6f4a2f, roughness: 0.84 });
-  const deskBaseMat = new THREE.MeshStandardMaterial({ color: 0x4a2f1f, roughness: 0.88 });
-  const paperMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.92 });
-  const bulbMat = new THREE.MeshStandardMaterial({
-    color: 0xfff7db,
-    emissive: 0xffd27a,
-    emissiveIntensity: 0.8,
-    roughness: 0.24,
-    metalness: 0.04
-  });
-
-  houseRoomWallMaterial = wallMat;
-  houseRoomFloorMaterial = floorMat;
-  const roomCenterX = HOUSE_ROOM_BASE.x;
-  const roomCenterZ = HOUSE_ROOM_BASE.z;
-  const backWallInnerZ = HOUSE_ROOM_BASE.z - halfDepth + wallThickness + 0.12;
-  const workspaceCenterX = HOUSE_ROOM_WORKSHOP_POS.x + 0.15;
-  const workspaceWallZ = backWallInnerZ + 0.02;
-  const workspaceDeskZ = workspaceWallZ + 1.34;
-  const bedroomCenterX = roomCenterX + halfWidth - 3.45;
-  const bedroomCenterZ = roomCenterZ - 2.75;
-  const bedsideZ = bedroomCenterZ - 2.55;
-  const loungeCenterX = roomCenterX + 1.1;
-  const loungeCenterZ = roomCenterZ + 0.95;
-  const readingCornerX = roomCenterX + halfWidth - 2.85;
-  const readingCornerZ = roomCenterZ + 0.3;
-
-  const floor = new THREE.Mesh(new THREE.BoxGeometry(halfWidth * 2, 0.22, halfDepth * 2), floorMat);
-  floor.position.set(HOUSE_ROOM_BASE.x, floorY - 0.11, HOUSE_ROOM_BASE.z);
-  floor.receiveShadow = true;
-  room.add(floor);
-
-  const ceiling = new THREE.Mesh(new THREE.BoxGeometry(halfWidth * 2, 0.18, halfDepth * 2), trimMat);
-  ceiling.position.set(HOUSE_ROOM_BASE.x, floorY + wallHeight + 0.1, HOUSE_ROOM_BASE.z);
-  ceiling.receiveShadow = true;
-  room.add(ceiling);
-
-  const backWall = new THREE.Mesh(new THREE.BoxGeometry(halfWidth * 2, wallHeight, wallThickness), wallMat);
-  backWall.position.set(HOUSE_ROOM_BASE.x, wallCenterY, HOUSE_ROOM_BASE.z - halfDepth + wallThickness * 0.5);
-  const leftWall = new THREE.Mesh(new THREE.BoxGeometry(wallThickness, wallHeight, halfDepth * 2), wallMat);
-  leftWall.position.set(HOUSE_ROOM_BASE.x - halfWidth + wallThickness * 0.5, wallCenterY, HOUSE_ROOM_BASE.z);
-  const rightWall = leftWall.clone();
-  rightWall.position.x = HOUSE_ROOM_BASE.x + halfWidth - wallThickness * 0.5;
-
-  const frontSideWidth = (halfWidth * 2 - doorWidth) * 0.5;
-  const frontLeftWall = new THREE.Mesh(new THREE.BoxGeometry(frontSideWidth, wallHeight, wallThickness), wallMat);
-  frontLeftWall.position.set(
-    HOUSE_ROOM_BASE.x - (doorWidth * 0.5 + frontSideWidth * 0.5),
-    wallCenterY,
-    HOUSE_ROOM_BASE.z + halfDepth - wallThickness * 0.5
-  );
-  const frontRightWall = frontLeftWall.clone();
-  frontRightWall.position.x = HOUSE_ROOM_BASE.x + (doorWidth * 0.5 + frontSideWidth * 0.5);
-  const frontTopWall = new THREE.Mesh(new THREE.BoxGeometry(doorWidth, wallHeight * 0.4, wallThickness), wallMat);
-  frontTopWall.position.set(
-    HOUSE_ROOM_BASE.x,
-    floorY + wallHeight - (wallHeight * 0.4) * 0.5,
-    HOUSE_ROOM_BASE.z + halfDepth - wallThickness * 0.5
-  );
-  room.add(backWall, leftWall, rightWall, frontLeftWall, frontRightWall, frontTopWall);
-
-  const baseboardHeight = 0.14;
-  const baseboardInset = wallThickness * 0.5 + 0.02;
-  const crownHeight = 0.12;
-  const crownY = floorY + wallHeight - crownHeight * 0.5;
-  const baseY = floorY + baseboardHeight * 0.5;
-  const wallLenX = halfWidth * 2 - wallThickness;
-  const wallLenZ = halfDepth * 2 - wallThickness;
-
-  const bbBack = new THREE.Mesh(new THREE.BoxGeometry(wallLenX, baseboardHeight, 0.06), baseboardMat);
-  bbBack.position.set(HOUSE_ROOM_BASE.x, baseY, HOUSE_ROOM_BASE.z - halfDepth + baseboardInset);
-  const bbLeft = new THREE.Mesh(new THREE.BoxGeometry(0.06, baseboardHeight, wallLenZ), baseboardMat);
-  bbLeft.position.set(HOUSE_ROOM_BASE.x - halfWidth + baseboardInset, baseY, HOUSE_ROOM_BASE.z);
-  const bbRight = bbLeft.clone();
-  bbRight.position.x = HOUSE_ROOM_BASE.x + halfWidth - baseboardInset;
-  const bbFrontL = new THREE.Mesh(new THREE.BoxGeometry(frontSideWidth - 0.1, baseboardHeight, 0.06), baseboardMat);
-  bbFrontL.position.set(frontLeftWall.position.x, baseY, HOUSE_ROOM_BASE.z + halfDepth - baseboardInset);
-  const bbFrontR = bbFrontL.clone();
-  bbFrontR.position.x = frontRightWall.position.x;
-  room.add(bbBack, bbLeft, bbRight, bbFrontL, bbFrontR);
-
-  const crBack = new THREE.Mesh(new THREE.BoxGeometry(wallLenX, crownHeight, 0.06), crownMat);
-  crBack.position.set(HOUSE_ROOM_BASE.x, crownY, HOUSE_ROOM_BASE.z - halfDepth + baseboardInset);
-  const crLeft = new THREE.Mesh(new THREE.BoxGeometry(0.06, crownHeight, wallLenZ), crownMat);
-  crLeft.position.set(HOUSE_ROOM_BASE.x - halfWidth + baseboardInset, crownY, HOUSE_ROOM_BASE.z);
-  const crRight = crLeft.clone();
-  crRight.position.x = HOUSE_ROOM_BASE.x + halfWidth - baseboardInset;
-  const crFrontL = new THREE.Mesh(new THREE.BoxGeometry(frontSideWidth - 0.1, crownHeight, 0.06), crownMat);
-  crFrontL.position.set(frontLeftWall.position.x, crownY, HOUSE_ROOM_BASE.z + halfDepth - baseboardInset);
-  const crFrontR = crFrontL.clone();
-  crFrontR.position.x = frontRightWall.position.x;
-  room.add(crBack, crLeft, crRight, crFrontL, crFrontR);
-
-  const chairRailHeight = 1.92;
-  const chairRailBack = new THREE.Mesh(new THREE.BoxGeometry(wallLenX, 0.09, 0.08), crownMat);
-  chairRailBack.position.set(HOUSE_ROOM_BASE.x, floorY + chairRailHeight, HOUSE_ROOM_BASE.z - halfDepth + baseboardInset + 0.02);
-  const chairRailLeft = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.09, wallLenZ), crownMat);
-  chairRailLeft.position.set(HOUSE_ROOM_BASE.x - halfWidth + baseboardInset + 0.02, floorY + chairRailHeight, HOUSE_ROOM_BASE.z);
-  const chairRailRight = chairRailLeft.clone();
-  chairRailRight.position.x = HOUSE_ROOM_BASE.x + halfWidth - baseboardInset - 0.02;
-  room.add(chairRailBack, chairRailLeft, chairRailRight);
-
-  for (const beamOffset of [-3.4, 3.4]) {
-    const beam = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.26, halfDepth * 2 - 0.7), trimMat);
-    beam.position.set(HOUSE_ROOM_BASE.x + beamOffset, floorY + wallHeight - 0.11, HOUSE_ROOM_BASE.z - 0.1);
-    room.add(beam);
-  }
-
-  const interiorFrontFaceZ = HOUSE_ROOM_BASE.z + halfDepth - wallThickness;
-  const doorFrameDepth = 0.12;
-  const doorFrameThick = 0.18;
-  const doorFrameH = wallHeight * 0.82;
-  const doorFrameY = floorY + doorFrameH * 0.5;
-  const doorFrameZ = interiorFrontFaceZ + doorFrameDepth * 0.5 + 0.01;
-
-  const dfLeft = new THREE.Mesh(new THREE.BoxGeometry(doorFrameThick, doorFrameH, doorFrameDepth), doorFrameMat);
-  dfLeft.position.set(HOUSE_ROOM_BASE.x - doorWidth * 0.5 - doorFrameThick * 0.5, doorFrameY, doorFrameZ);
-  const dfRight = dfLeft.clone();
-  dfRight.position.x = HOUSE_ROOM_BASE.x + doorWidth * 0.5 + doorFrameThick * 0.5;
-  const dfTop = new THREE.Mesh(new THREE.BoxGeometry(doorWidth + doorFrameThick * 2, doorFrameThick, doorFrameDepth), doorFrameMat);
-  dfTop.position.set(HOUSE_ROOM_BASE.x, floorY + doorFrameH + doorFrameThick * 0.5, doorFrameZ);
-  room.add(dfLeft, dfRight, dfTop);
-
-  const doorLeafMat = new THREE.MeshStandardMaterial({ color: 0x4b2f1d, roughness: 0.78 });
-  const doorGlassMat = new THREE.MeshStandardMaterial({
-    color: 0xc8e6fb,
-    roughness: 0.08,
-    metalness: 0.08,
-    transparent: true,
-    opacity: 0.42
-  });
-  const doorHandleMat = new THREE.MeshStandardMaterial({ color: 0xd3a64f, roughness: 0.32, metalness: 0.68 });
-  const doorLeafW = doorWidth * 0.5 - 0.14;
-  const doorLeafH = doorFrameH - 0.18;
-  const doorLeafT = 0.08;
-  const doorPanelZ = interiorFrontFaceZ + doorLeafT * 0.5 + 0.012;
-
-  function createInteriorDoorLeaf(side = -1) {
-    const leaf = new THREE.Group();
-    const panel = new THREE.Group();
-    panel.position.x = (side === -1 ? 1 : -1) * doorLeafW * 0.5;
-    const slab = new THREE.Mesh(new THREE.BoxGeometry(doorLeafW, doorLeafH, doorLeafT), doorLeafMat);
-    slab.position.y = doorLeafH * 0.5;
-    const railTop = new THREE.Mesh(new THREE.BoxGeometry(doorLeafW - 0.16, 0.12, 0.02), trimMat);
-    railTop.position.set(0, doorLeafH - 0.3, doorLeafT * 0.5 + 0.02);
-    const railMid = railTop.clone();
-    railMid.position.y = doorLeafH * 0.54;
-    const railBot = railTop.clone();
-    railBot.position.y = 0.42;
-    const stileL = new THREE.Mesh(new THREE.BoxGeometry(0.12, doorLeafH - 0.2, 0.02), trimMat);
-    stileL.position.set(-doorLeafW * 0.5 + 0.14, doorLeafH * 0.5, doorLeafT * 0.5 + 0.02);
-    const stileR = stileL.clone();
-    stileR.position.x = doorLeafW * 0.5 - 0.14;
-    const glass = new THREE.Mesh(new THREE.BoxGeometry(doorLeafW - 0.42, doorLeafH * 0.32, 0.02), doorGlassMat);
-    glass.position.set(0, doorLeafH * 0.7, doorLeafT * 0.5 + 0.03);
-    const lowerPanel = new THREE.Mesh(new THREE.BoxGeometry(doorLeafW - 0.42, doorLeafH * 0.24, 0.02), trimMat);
-    lowerPanel.position.set(0, doorLeafH * 0.27, doorLeafT * 0.5 + 0.03);
-    const handle = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 10), doorHandleMat);
-    handle.position.set((side === -1 ? 1 : -1) * (doorLeafW * 0.5 - 0.18), doorLeafH * 0.48, doorLeafT * 0.5 + 0.05);
-    panel.add(slab, railTop, railMid, railBot, stileL, stileR, glass, lowerPanel, handle);
-    leaf.add(panel);
-    return leaf;
-  }
-
-  const leftDoorLeaf = createInteriorDoorLeaf(-1);
-  leftDoorLeaf.position.set(HOUSE_ROOM_BASE.x - doorWidth * 0.5 + 0.02, floorY, doorPanelZ);
-  leftDoorLeaf.rotation.y = Math.PI * 0.09;
-  const rightDoorLeaf = createInteriorDoorLeaf(1);
-  rightDoorLeaf.position.set(HOUSE_ROOM_BASE.x + doorWidth * 0.5 - 0.02, floorY, doorPanelZ);
-  rightDoorLeaf.rotation.y = -Math.PI * 0.09;
-
-  const transom = new THREE.Mesh(
-    new THREE.BoxGeometry(doorWidth - 0.2, 0.46, 0.05),
-    doorGlassMat
-  );
-  transom.position.set(HOUSE_ROOM_BASE.x, floorY + doorFrameH - 0.34, interiorFrontFaceZ + 0.04);
-  const transomBar = new THREE.Mesh(
-    new THREE.BoxGeometry(0.08, 0.46, 0.06),
-    trimMat
-  );
-  transomBar.position.copy(transom.position);
-  const threshold = new THREE.Mesh(
-    new THREE.BoxGeometry(doorWidth + 0.12, 0.04, 0.22),
-    new THREE.MeshStandardMaterial({ color: 0x4b5563, roughness: 0.88 })
-  );
-  threshold.position.set(HOUSE_ROOM_BASE.x, floorY + 0.03, interiorFrontFaceZ + 0.08);
-  room.add(leftDoorLeaf, rightDoorLeaf, transom, transomBar, threshold);
-
-  const doorStep = new THREE.Mesh(
-    new THREE.BoxGeometry(doorWidth + 0.6, 0.06, 0.5),
-    new THREE.MeshStandardMaterial({ color: 0x6b7280, roughness: 0.9 })
-  );
-  doorStep.position.set(HOUSE_ROOM_BASE.x, floorY + 0.02, HOUSE_ROOM_BASE.z + halfDepth + 0.15);
-  doorStep.receiveShadow = true;
-  room.add(doorStep);
-
-  const welcomeRugBorder = new THREE.Mesh(
-    new THREE.BoxGeometry(doorWidth - 0.2, 0.025, 1.0),
-    new THREE.MeshStandardMaterial({ color: 0x7c2d12, roughness: 0.92 })
-  );
-  welcomeRugBorder.position.set(HOUSE_ROOM_BASE.x, floorY + 0.015, HOUSE_ROOM_BASE.z + halfDepth - 1.4);
-  welcomeRugBorder.receiveShadow = true;
-  const welcomeRug = new THREE.Mesh(
-    new THREE.BoxGeometry(doorWidth - 0.6, 0.03, 0.7),
-    new THREE.MeshStandardMaterial({ color: 0x166534, roughness: 0.88 })
-  );
-  welcomeRug.position.set(HOUSE_ROOM_BASE.x, floorY + 0.02, HOUSE_ROOM_BASE.z + halfDepth - 1.4);
-  welcomeRug.receiveShadow = true;
-  room.add(welcomeRugBorder, welcomeRug);
-
-  const rugBorder = new THREE.Mesh(
-    new THREE.BoxGeometry(5.6, 0.035, 4.2),
-    new THREE.MeshStandardMaterial({ color: 0x7c2d12, roughness: 0.88 })
-  );
-  rugBorder.position.set(loungeCenterX, floorY + 0.005, loungeCenterZ);
-  rugBorder.receiveShadow = true;
-  const rug = new THREE.Mesh(
-    new THREE.BoxGeometry(5.0, 0.05, 3.7),
-    new THREE.MeshStandardMaterial({ color: 0x1d4ed8, roughness: 0.78 })
-  );
-  rug.position.set(loungeCenterX, floorY + 0.01, loungeCenterZ);
-  rug.receiveShadow = true;
-  const rugAccent = new THREE.Mesh(
-    new THREE.BoxGeometry(2.0, 0.045, 1.4),
-    new THREE.MeshStandardMaterial({ color: 0xfde68a, roughness: 0.82 })
-  );
-  rugAccent.position.set(loungeCenterX, floorY + 0.018, loungeCenterZ);
-  rugAccent.receiveShadow = true;
-  room.add(rugBorder, rug, rugAccent);
-
-  const ambientLight = new THREE.AmbientLight(0xe2e8f0, 0.38);
-  const wallLightL = new THREE.PointLight(0xfef3c7, 0.58, 12, 2);
-  wallLightL.position.set(roomCenterX - 5.2, floorY + 3.34, backWallInnerZ + 0.34);
-  const wallLightR = wallLightL.clone();
-  wallLightR.position.x = roomCenterX + 5.2;
-  const doorFillLight = new THREE.PointLight(0xfef3c7, 0.34, 7.5, 2);
-  doorFillLight.position.set(roomCenterX, floorY + 3.1, roomCenterZ + halfDepth - 0.55);
-  const ceilingLampLight = new THREE.PointLight(0xfff4e0, 0.72, 13, 2);
-  ceilingLampLight.position.set(loungeCenterX, floorY + wallHeight - 0.58, loungeCenterZ);
-  room.add(ambientLight, wallLightL, wallLightR, doorFillLight, ceilingLampLight);
-
-  const sconceY = floorY + 3.3;
-  function createWallSconce() {
-    const sconce = new THREE.Group();
-    const backplate = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.06, 18), brassMat);
-    backplate.rotation.x = Math.PI * 0.5;
-    const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.04, 0.3, 10), bracketMat);
-    arm.rotation.x = Math.PI * 0.5;
-    arm.position.z = 0.14;
-    const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 0.1, 10), brassMat);
-    cup.position.z = 0.3;
-    const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.08, 12, 12), bulbMat);
-    bulb.position.z = 0.34;
-    const shade = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.34, 12), sconceShadeMat);
-    shade.rotation.x = Math.PI * 0.5;
-    shade.position.z = 0.41;
-    sconce.add(backplate, arm, cup, bulb, shade);
-    return sconce;
-  }
-
-  const sconceL = createWallSconce();
-  sconceL.position.set(HOUSE_ROOM_BASE.x - 5.2, sconceY, backWallInnerZ);
-  const sconceR = createWallSconce();
-  sconceR.position.set(HOUSE_ROOM_BASE.x + 5.2, sconceY, backWallInnerZ);
-  room.add(sconceL, sconceR);
-
-  const ceilingCanopy = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 0.08, 12), brassMat);
-  ceilingCanopy.position.set(loungeCenterX, floorY + wallHeight + 0.04, loungeCenterZ);
-  const ceilingLampChain = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.018, 0.018, 0.5, 6),
-    chainMat
-  );
-  ceilingLampChain.position.set(loungeCenterX, floorY + wallHeight - 0.18, loungeCenterZ);
-  const ceilingLampShade = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.36, 0.48, 0.36, 18, 1, true),
-    linenMat
-  );
-  ceilingLampShade.position.set(loungeCenterX, floorY + wallHeight - 0.5, loungeCenterZ);
-  const ceilingLampTrim = new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.025, 8, 18), brassMat);
-  ceilingLampTrim.position.set(loungeCenterX, floorY + wallHeight - 0.68, loungeCenterZ);
-  ceilingLampTrim.rotation.x = Math.PI * 0.5;
-  const ceilingBulb = new THREE.Mesh(new THREE.SphereGeometry(0.1, 14, 14), bulbMat);
-  ceilingBulb.position.set(loungeCenterX, floorY + wallHeight - 0.6, loungeCenterZ);
-  room.add(ceilingCanopy, ceilingLampChain, ceilingLampShade, ceilingLampTrim, ceilingBulb);
-
-  const entryLantern = new THREE.Group();
-  const entryBracket = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.16), brassMat);
-  const entryLanternBody = new THREE.Mesh(
-    new THREE.BoxGeometry(0.34, 0.46, 0.28),
-    new THREE.MeshStandardMaterial({ color: 0xfef3c7, transparent: true, opacity: 0.28, roughness: 0.18, metalness: 0.08 })
-  );
-  entryLanternBody.position.z = 0.08;
-  const entryBulb = new THREE.Mesh(new THREE.SphereGeometry(0.08, 12, 12), bulbMat);
-  entryBulb.position.z = 0.08;
-  entryLantern.add(entryBracket, entryLanternBody, entryBulb);
-  entryLantern.position.set(roomCenterX, floorY + 3.15, roomCenterZ + halfDepth - 0.34);
-  room.add(entryLantern);
-
-  const workspacePanel = new THREE.Mesh(
-    new THREE.BoxGeometry(4.3, 2.9, 0.1),
-    accentPanelMat
-  );
-  workspacePanel.position.set(workspaceCenterX, floorY + 2.12, workspaceWallZ);
-  const workspaceShelf = new THREE.Mesh(
-    new THREE.BoxGeometry(3.15, 0.08, 0.28),
-    shelfMat
-  );
-  workspaceShelf.position.set(workspaceCenterX, floorY + 2.28, workspaceWallZ + 0.18);
-  const pegRail = new THREE.Mesh(
-    new THREE.BoxGeometry(3.1, 0.08, 0.12),
-    baseboardMat
-  );
-  pegRail.position.set(workspaceCenterX, floorY + 2.86, workspaceWallZ + 0.08);
-  room.add(workspacePanel, workspaceShelf, pegRail);
-
-  for (const hookOffset of [-0.78, -0.26, 0.26, 0.78]) {
-    const hook = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.18, 8), brassMat);
-    hook.rotation.x = Math.PI * 0.5;
-    hook.position.set(workspaceCenterX + hookOffset, floorY + 2.7, workspaceWallZ + 0.1);
-    room.add(hook);
-  }
-
-  const workshopSign = makeTextSign('Workspace', 2.7, 0.58, '#0f172a', '#f8fafc');
-  workshopSign.position.set(workspaceCenterX, floorY + 3.22, workspaceWallZ + 0.06);
-  room.add(workshopSign);
-
-  function createHouseRoomMarker({
-    ringRadius = 0.92,
-    ringColor = 0x7dd3fc,
-    emissiveColor = 0x0369a1,
-    iconType = 'exit'
-  } = {}) {
-    const marker = new THREE.Group();
-    const ring = new THREE.Mesh(
-      new THREE.TorusGeometry(ringRadius, 0.08, 10, 28),
-      new THREE.MeshStandardMaterial({
-        color: ringColor,
-        emissive: emissiveColor,
-        emissiveIntensity: 0.82,
-        roughness: 0.22,
-        metalness: 0.08
-      })
-    );
-    ring.rotation.x = Math.PI * 0.5;
-    const plate = new THREE.Mesh(
-      new THREE.CylinderGeometry(ringRadius * 0.68, ringRadius * 0.68, 0.04, 22),
-      new THREE.MeshStandardMaterial({
-        color: 0x10314d,
-        emissive: emissiveColor,
-        emissiveIntensity: 0.18,
-        roughness: 0.28,
-        transparent: true,
-        opacity: 0.82
-      })
-    );
-    plate.rotation.x = Math.PI * 0.5;
-    plate.position.y = 0.005;
-    const glow = new THREE.PointLight(ringColor, 0.46, 5.4, 2);
-    glow.position.y = 0.95;
-    const icon = new THREE.Group();
-
-    if (iconType === 'exit') {
-      const frame = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.54, 0.08), trimMat);
-      frame.position.y = 0.98;
-      const voidCut = new THREE.Mesh(
-        new THREE.BoxGeometry(0.2, 0.34, 0.1),
-        new THREE.MeshStandardMaterial({
-          color: ringColor,
-          emissive: emissiveColor,
-          emissiveIntensity: 0.9,
-          roughness: 0.18,
-          transparent: true,
-          opacity: 0.84
-        })
-      );
-      voidCut.position.set(-0.03, 0.96, 0.03);
-      const arrow = new THREE.Mesh(
-        new THREE.ConeGeometry(0.12, 0.22, 3),
-        new THREE.MeshStandardMaterial({
-          color: ringColor,
-          emissive: emissiveColor,
-          emissiveIntensity: 0.92,
-          roughness: 0.2
-        })
-      );
-      arrow.rotation.z = -Math.PI * 0.5;
-      arrow.position.set(0.18, 0.96, 0.02);
-      icon.add(frame, voidCut, arrow);
-    } else {
-      const board = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.08, 0.22), deskTopMat);
-      board.position.y = 0.94;
-      const legL = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.26, 0.06), deskBaseMat);
-      legL.position.set(-0.16, 0.76, 0);
-      const legR = legL.clone();
-      legR.position.x = 0.16;
-      const tool = new THREE.Mesh(
-        new THREE.BoxGeometry(0.08, 0.28, 0.08),
-        new THREE.MeshStandardMaterial({
-          color: ringColor,
-          emissive: emissiveColor,
-          emissiveIntensity: 0.88,
-          roughness: 0.24
-        })
-      );
-      tool.position.set(0, 1.18, 0);
-      const toolHead = new THREE.Mesh(
-        new THREE.BoxGeometry(0.24, 0.08, 0.08),
-        new THREE.MeshStandardMaterial({
-          color: ringColor,
-          emissive: emissiveColor,
-          emissiveIntensity: 0.88,
-          roughness: 0.24
-        })
-      );
-      toolHead.position.set(0, 1.28, 0);
-      icon.add(board, legL, legR, tool, toolHead);
-    }
-
-    marker.add(ring, plate, icon, glow);
-    marker.userData.ring = ring;
-    marker.userData.icon = icon;
-    marker.userData.glow = glow;
-    return marker;
-  }
-
-  houseRoomExitMarker = createHouseRoomMarker({
-    ringRadius: 0.94,
-    ringColor: 0x7dd3fc,
-    emissiveColor: 0x0369a1,
-    iconType: 'exit'
-  });
-  houseRoomExitMarker.position.set(HOUSE_ROOM_EXIT_POS.x, floorY + 0.02, HOUSE_ROOM_EXIT_POS.z);
-  room.add(houseRoomExitMarker);
-
-  houseRoomWorkshopMarker = createHouseRoomMarker({
-    ringRadius: 0.72,
-    ringColor: 0x5eead4,
-    emissiveColor: 0x0f766e,
-    iconType: 'workshop'
-  });
-  houseRoomWorkshopMarker.position.set(HOUSE_ROOM_WORKSHOP_POS.x, floorY + 0.02, HOUSE_ROOM_WORKSHOP_POS.z);
-  room.add(houseRoomWorkshopMarker);
-
-  const winFrameDepth = wallThickness + 0.14;
-  const winFrameThick = 0.1;
-  const winGlassMat = glassMat;
-  const winFrameX = halfWidth - 0.5;
-  const winFrameY = floorY + 2.7;
-  const winFrameW = 1.6;
-  const winFrameH = 1.3;
-
-  function addWindowFrame(group, wx, wz, rotY) {
-    const wGroup = new THREE.Group();
-    const glass = new THREE.Mesh(new THREE.BoxGeometry(winFrameW - 0.2, winFrameH - 0.2, 0.04), winGlassMat);
-    glass.position.y = winFrameY;
-    wGroup.add(glass);
-    const topBar = new THREE.Mesh(new THREE.BoxGeometry(winFrameW, winFrameThick, winFrameDepth), frameMat);
-    topBar.position.y = winFrameY + winFrameH * 0.5;
-    const botBar = topBar.clone();
-    botBar.position.y = winFrameY - winFrameH * 0.5;
-    const leftBar = new THREE.Mesh(new THREE.BoxGeometry(winFrameThick, winFrameH, winFrameDepth), frameMat);
-    leftBar.position.set(-winFrameW * 0.5, winFrameY, 0);
-    const rightBar = leftBar.clone();
-    rightBar.position.x = winFrameW * 0.5;
-    const hDiv = new THREE.Mesh(new THREE.BoxGeometry(winFrameW - 0.12, 0.05, winFrameDepth * 0.6), frameMat);
-    hDiv.position.y = winFrameY;
-    const vDiv = new THREE.Mesh(new THREE.BoxGeometry(0.05, winFrameH - 0.12, winFrameDepth * 0.6), frameMat);
-    vDiv.position.y = winFrameY;
-    const sill = new THREE.Mesh(new THREE.BoxGeometry(winFrameW + 0.2, 0.06, 0.3), frameMat);
-    sill.position.set(0, winFrameY - winFrameH * 0.5 - 0.04, 0.18);
-    wGroup.add(topBar, botBar, leftBar, rightBar, hDiv, vDiv, sill);
-    wGroup.position.set(wx, 0, wz);
-    wGroup.rotation.y = rotY;
-    group.add(wGroup);
-  }
-
-  addWindowFrame(room, HOUSE_ROOM_BASE.x - winFrameX, HOUSE_ROOM_BASE.z - 1.2, Math.PI / 2);
-  addWindowFrame(room, HOUSE_ROOM_BASE.x + winFrameX, HOUSE_ROOM_BASE.z - 1.2, -Math.PI / 2);
-
-  function addCurtain(wx, wz, rotY, direction) {
-    const curtainRod = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.95, 10), brassMat);
-    curtainRod.rotation.z = Math.PI * 0.5;
-    curtainRod.rotation.y = rotY;
-    curtainRod.position.set(wx, floorY + 3.52, wz);
-    room.add(curtainRod);
-    for (const side of [-1, 1]) {
-      const panel = new THREE.Mesh(new THREE.BoxGeometry(0.54, 1.7, 0.08), curtainMat);
-      panel.position.set(
-        wx + Math.cos(rotY) * side * 0.08 + direction * side * 0.5,
-        floorY + 2.66,
-        wz - Math.sin(rotY) * side * 0.08
-      );
-      panel.rotation.y = rotY;
-      room.add(panel);
-    }
-  }
-
-  addCurtain(HOUSE_ROOM_BASE.x - winFrameX + 0.12, HOUSE_ROOM_BASE.z - 1.2, Math.PI / 2, 1);
-  addCurtain(HOUSE_ROOM_BASE.x + winFrameX - 0.12, HOUSE_ROOM_BASE.z - 1.2, -Math.PI / 2, -1);
-
-  const shelfWidth = 2.4;
-  const shelfDepth = 0.32;
-  const shelfY = floorY + 2.1;
-  const shelfZ = HOUSE_ROOM_BASE.z - halfDepth + wallThickness + shelfDepth * 0.5 + 0.04;
-  const shelfBoard = new THREE.Mesh(new THREE.BoxGeometry(shelfWidth, 0.08, shelfDepth), shelfMat);
-  shelfBoard.position.set(HOUSE_ROOM_BASE.x, shelfY, shelfZ);
-  shelfBoard.castShadow = true;
-  shelfBoard.receiveShadow = true;
-
-  const bookColors = [0xdc2626, 0x2563eb, 0x16a34a];
-  const bookGroup = new THREE.Group();
-  bookColors.forEach((c, i) => {
-    const book = new THREE.Mesh(
-      new THREE.BoxGeometry(0.18, 0.3, 0.22),
-      new THREE.MeshStandardMaterial({ color: c, roughness: 0.85 })
-    );
-    book.position.set(HOUSE_ROOM_BASE.x - 0.65 + i * 0.22, shelfY + 0.2, shelfZ);
-    bookGroup.add(book);
-  });
-  const bowl1 = new THREE.Mesh(
-    new THREE.TorusGeometry(0.1, 0.04, 6, 12, Math.PI),
-    new THREE.MeshStandardMaterial({ color: 0x92400e, roughness: 0.7 })
-  );
-  bowl1.position.set(HOUSE_ROOM_BASE.x + 0.55, shelfY + 0.07, shelfZ);
-  bowl1.rotation.x = Math.PI / 2;
-  const bowl2 = bowl1.clone();
-  bowl2.position.x = HOUSE_ROOM_BASE.x + 0.85;
-  bowl2.scale.setScalar(0.75);
-  room.add(shelfBoard, bookGroup, bowl1, bowl2);
-
-  const paintingW = 1.5;
-  const paintingH = 1.0;
-  const paintFrameThick = 0.1;
-  const paintingY = floorY + 3.5;
-  const paintingZ = HOUSE_ROOM_BASE.z - halfDepth + wallThickness + 0.08;
-  const paintGroup = new THREE.Group();
-  const paintCanvas = new THREE.Mesh(
-    new THREE.BoxGeometry(paintingW - paintFrameThick * 2, paintingH - paintFrameThick * 2, 0.04),
-    new THREE.MeshStandardMaterial({ color: 0x86efac, roughness: 0.92 })
-  );
-  paintCanvas.position.y = paintingY;
-  paintGroup.add(paintCanvas);
-  const pfTop = new THREE.Mesh(
-    new THREE.BoxGeometry(paintingW, paintFrameThick, 0.1),
-    new THREE.MeshStandardMaterial({ color: 0xb8860b, roughness: 0.5, metalness: 0.25 })
-  );
-  pfTop.position.y = paintingY + paintingH * 0.5;
-  const pfBot = pfTop.clone();
-  pfBot.position.y = paintingY - paintingH * 0.5;
-  const pfLeft = new THREE.Mesh(
-    new THREE.BoxGeometry(paintFrameThick, paintingH, 0.1),
-    pfTop.material
-  );
-  pfLeft.position.set(-paintingW * 0.5, paintingY, 0);
-  const pfRight = pfLeft.clone();
-  pfRight.position.x = paintingW * 0.5;
-  paintGroup.add(pfTop, pfBot, pfLeft, pfRight);
-  paintGroup.position.set(HOUSE_ROOM_BASE.x, 0, paintingZ);
-  room.add(paintGroup);
-
-  houseRoomFurnitureMeshes.clear();
-  const addFurniture = (id, mesh) => {
-    mesh.visible = false;
-    room.add(mesh);
-    houseRoomFurnitureMeshes.set(id, mesh);
-  };
-
-  const bed = new THREE.Group();
-  const bedFrame = new THREE.Mesh(
-    new THREE.BoxGeometry(3.4, 0.42, 2.2),
-    new THREE.MeshStandardMaterial({ color: 0x6b3f22, roughness: 0.88 })
-  );
-  bedFrame.position.y = 0.24;
-  bedFrame.castShadow = true;
-  const bedMattress = new THREE.Mesh(
-    new THREE.BoxGeometry(3.16, 0.28, 1.95),
-    new THREE.MeshStandardMaterial({ color: 0xe5e7eb, roughness: 0.8 })
-  );
-  bedMattress.position.y = 0.58;
-  const bedPillow = new THREE.Mesh(
-    new THREE.BoxGeometry(0.9, 0.2, 1.7),
-    new THREE.MeshStandardMaterial({ color: 0xbfdbfe, roughness: 0.76 })
-  );
-  bedPillow.position.set(1.15, 0.77, 0);
-  const bedBlanket = new THREE.Mesh(
-    new THREE.BoxGeometry(2.1, 0.12, 1.82),
-    new THREE.MeshStandardMaterial({ color: 0x2563eb, roughness: 0.82 })
-  );
-  bedBlanket.position.set(-0.12, 0.75, 0);
-  const bedHeadboard = new THREE.Mesh(
-    new THREE.BoxGeometry(0.12, 1.2, 2.2),
-    new THREE.MeshStandardMaterial({ color: 0x5a3118, roughness: 0.85 })
-  );
-  bedHeadboard.position.set(1.65, 0.84, 0);
-  const bedFootboard = new THREE.Mesh(
-    new THREE.BoxGeometry(0.1, 0.6, 2.2),
-    new THREE.MeshStandardMaterial({ color: 0x5a3118, roughness: 0.85 })
-  );
-  bedFootboard.position.set(-1.65, 0.54, 0);
-  const bedThrow = new THREE.Mesh(
-    new THREE.BoxGeometry(0.62, 0.08, 1.82),
-    new THREE.MeshStandardMaterial({ color: 0xfde68a, roughness: 0.76 })
-  );
-  bedThrow.position.set(-0.92, 0.82, 0);
-  bed.add(bedFrame, bedMattress, bedPillow, bedBlanket, bedHeadboard, bedFootboard, bedThrow);
-  bed.position.set(bedroomCenterX, floorY, bedroomCenterZ);
-  bed.rotation.y = -Math.PI * 0.5;
-  addFurniture('bed', bed);
-
-  const nightstand = new THREE.Group();
-  const nsTop = new THREE.Mesh(
-    new THREE.BoxGeometry(0.65, 0.08, 0.55),
-    new THREE.MeshStandardMaterial({ color: 0x5b3a24, roughness: 0.86 })
-  );
-  nsTop.position.y = 0.68;
-  for (const sx of [-1, 1]) {
-    for (const sz of [-1, 1]) {
-      const leg = new THREE.Mesh(
-        new THREE.BoxGeometry(0.06, 0.6, 0.06),
-        new THREE.MeshStandardMaterial({ color: 0x4a2f1f, roughness: 0.88 })
-      );
-      leg.position.set(sx * 0.24, 0.34, sz * 0.18);
-      nightstand.add(leg);
-    }
-  }
-  const nsDrawer = new THREE.Mesh(
-    new THREE.BoxGeometry(0.5, 0.12, 0.02),
-    new THREE.MeshStandardMaterial({ color: 0x3d2515, roughness: 0.82 })
-  );
-  nsDrawer.position.set(0, 0.48, 0.27);
-  const nsKnob = new THREE.Mesh(
-    new THREE.SphereGeometry(0.03, 6, 6),
-    new THREE.MeshStandardMaterial({ color: 0xd4a44a, roughness: 0.3, metalness: 0.5 })
-  );
-  nsKnob.position.set(0, 0.48, 0.29);
-  const nsBook = new THREE.Mesh(
-    new THREE.BoxGeometry(0.26, 0.06, 0.18),
-    new THREE.MeshStandardMaterial({ color: 0x1d4ed8, roughness: 0.82 })
-  );
-  nsBook.position.set(-0.12, 0.75, -0.04);
-  const nsCup = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.06, 0.05, 0.12, 10),
-    new THREE.MeshStandardMaterial({ color: 0xe5e7eb, roughness: 0.78 })
-  );
-  nsCup.position.set(0.14, 0.78, 0);
-  nightstand.add(nsTop, nsDrawer, nsKnob, nsBook, nsCup);
-  nightstand.position.set(bedroomCenterX, floorY, bedsideZ);
-  room.add(nightstand);
-
-  const table = new THREE.Group();
-  const tableTop = new THREE.Mesh(
-    new THREE.BoxGeometry(2.7, 0.16, 1.34),
-    deskTopMat
-  );
-  tableTop.position.y = 1.08;
-  table.add(tableTop);
-  for (const sx of [-1, 1]) {
-    for (const sz of [-1, 1]) {
-      const leg = new THREE.Mesh(
-        new THREE.BoxGeometry(0.12, 0.95, 0.12),
-        deskBaseMat
-      );
-      leg.position.set(sx * 1.1, 0.54, sz * 0.5);
-      table.add(leg);
-    }
-  }
-  const tableBackRail = new THREE.Mesh(
-    new THREE.BoxGeometry(2.7, 0.14, 0.12),
-    deskBaseMat
-  );
-  tableBackRail.position.set(0, 1.2, -0.61);
-  const drawerStack = new THREE.Mesh(
-    new THREE.BoxGeometry(0.62, 0.92, 1.02),
-    deskBaseMat
-  );
-  drawerStack.position.set(-0.88, 0.55, 0);
-  const drawerFaceTop = new THREE.Mesh(new THREE.BoxGeometry(0.54, 0.22, 0.04), trimMat);
-  drawerFaceTop.position.set(-0.88, 0.72, 0.5);
-  const drawerFaceBottom = drawerFaceTop.clone();
-  drawerFaceBottom.position.y = 0.38;
-  const deskMatTop = new THREE.Mesh(
-    new THREE.BoxGeometry(1.16, 0.025, 0.64),
-    new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.42 })
-  );
-  deskMatTop.position.set(0.38, 1.17, 0.08);
-  const paperStack = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.04, 0.34), paperMat);
-  paperStack.position.set(0.84, 1.19, -0.12);
-  const toolCup = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.1, 0.09, 0.18, 12),
-    new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.48, metalness: 0.32 })
-  );
-  toolCup.position.set(0.98, 1.22, 0.38);
-  const chair = new THREE.Group();
-  const chairSeat = new THREE.Mesh(
-    new THREE.BoxGeometry(0.62, 0.1, 0.62),
-    new THREE.MeshStandardMaterial({ color: 0x92400e, roughness: 0.76 })
-  );
-  chairSeat.position.y = 0.6;
-  const chairBack = new THREE.Mesh(
-    new THREE.BoxGeometry(0.62, 0.64, 0.08),
-    new THREE.MeshStandardMaterial({ color: 0xa16207, roughness: 0.78 })
-  );
-  chairBack.position.set(0, 0.98, -0.27);
-  const chairSupport = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.06, 0.08, 0.46, 10),
-    new THREE.MeshStandardMaterial({ color: 0x71717a, roughness: 0.42, metalness: 0.52 })
-  );
-  chairSupport.position.y = 0.3;
-  const chairBase = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.26, 0.22, 0.05, 12),
-    deskBaseMat
-  );
-  chairBase.position.y = 0.03;
-  chair.add(chairSeat, chairBack, chairSupport, chairBase);
-  chair.position.set(0.48, 0, 1.18);
-  table.add(
-    tableBackRail,
-    drawerStack,
-    drawerFaceTop,
-    drawerFaceBottom,
-    deskMatTop,
-    paperStack,
-    toolCup,
-    chair
-  );
-  table.position.set(workspaceCenterX, floorY, workspaceDeskZ);
-  table.castShadow = true;
-  addFurniture('table', table);
-
-  const lamp = new THREE.Group();
-  const lampBase = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.22, 0.26, 0.08, 12),
-    new THREE.MeshStandardMaterial({ color: 0x71717a, roughness: 0.45, metalness: 0.5 })
-  );
-  lampBase.position.y = 0.08;
-  const lampStem = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.035, 0.05, 1.3, 12),
-    new THREE.MeshStandardMaterial({ color: 0x6b7280, roughness: 0.48, metalness: 0.52 })
-  );
-  lampStem.position.y = 0.74;
-  const lampArm = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.03, 0.035, 0.82, 10),
-    new THREE.MeshStandardMaterial({ color: 0x6b7280, roughness: 0.48, metalness: 0.52 })
-  );
-  lampArm.position.set(0.24, 1.48, 0);
-  lampArm.rotation.z = -Math.PI * 0.34;
-  const lampShade = new THREE.Mesh(
-    new THREE.ConeGeometry(0.26, 0.42, 14),
-    new THREE.MeshStandardMaterial({ color: 0xfef3c7, roughness: 0.54 })
-  );
-  lampShade.position.set(0.44, 1.74, 0);
-  lampShade.rotation.x = Math.PI;
-  lampShade.rotation.z = -Math.PI * 0.1;
-  const lampBulb = new THREE.Mesh(new THREE.SphereGeometry(0.08, 12, 12), bulbMat);
-  lampBulb.position.set(0.44, 1.58, 0);
-  const lampGlow = new THREE.PointLight(0xfef3c7, 0.75, 9, 2);
-  lampGlow.position.set(0.44, 1.58, 0);
-  lamp.add(lampBase, lampStem, lampArm, lampShade, lampBulb, lampGlow);
-  lamp.position.set(readingCornerX, floorY, readingCornerZ);
-  lamp.rotation.y = Math.PI * 0.14;
-  addFurniture('lamp', lamp);
-
-  const plant = new THREE.Group();
-  const pot = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.25, 0.3, 0.4, 12),
-    new THREE.MeshStandardMaterial({ color: 0x9a3412, roughness: 0.82 })
-  );
-  pot.position.y = 0.22;
-  const potRim = new THREE.Mesh(
-    new THREE.TorusGeometry(0.26, 0.03, 6, 12),
-    new THREE.MeshStandardMaterial({ color: 0x7c2d12, roughness: 0.8 })
-  );
-  potRim.position.y = 0.42;
-  potRim.rotation.x = Math.PI / 2;
-  const leaves = new THREE.Mesh(
-    new THREE.DodecahedronGeometry(0.42, 1),
-    new THREE.MeshStandardMaterial({ color: 0x22c55e, roughness: 0.7 })
-  );
-  leaves.position.y = 0.82;
-  const trunk = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.06, 0.08, 0.48, 6),
-    new THREE.MeshStandardMaterial({ color: 0x6b4f2a, roughness: 0.85 })
-  );
-  trunk.position.y = 0.56;
-  plant.add(pot, potRim, trunk, leaves);
-  plant.position.set(roomCenterX - halfWidth + 2.45, floorY, roomCenterZ + 2.1);
-  addFurniture('plant', plant);
-
-  const sofa = new THREE.Group();
-  const sofaBase = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.36, 1.1), sofaMat);
-  sofaBase.position.y = 0.42;
-  const sofaBack = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.78, 0.18), sofaMat);
-  sofaBack.position.set(0, 0.86, -0.46);
-  const sofaArmL = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.6, 1.02), sofaAccentMat);
-  sofaArmL.position.set(-1.2, 0.6, 0);
-  const sofaArmR = sofaArmL.clone();
-  sofaArmR.position.x = 1.2;
-  const sofaCushion = new THREE.Mesh(new THREE.BoxGeometry(2.3, 0.14, 0.92), linenMat);
-  sofaCushion.position.y = 0.6;
-  for (const sx of [-1, 1]) {
-    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.26, 0.08), deskBaseMat);
-    leg.position.set(sx * 1.1, 0.13, -0.36);
-    sofa.add(leg);
-    const legBack = leg.clone();
-    legBack.position.z = 0.36;
-    sofa.add(legBack);
-  }
-  sofa.add(sofaBase, sofaBack, sofaArmL, sofaArmR, sofaCushion);
-  sofa.position.set(loungeCenterX - 2.2, floorY, loungeCenterZ + 0.75);
-  sofa.rotation.y = Math.PI * 0.5;
-  addFurniture('sofa', sofa);
-
-  const coffeeTable = new THREE.Group();
-  const coffeeTop = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.08, 0.76), deskTopMat);
-  coffeeTop.position.y = 0.46;
-  coffeeTable.add(coffeeTop);
-  for (const sx of [-1, 1]) {
-    for (const sz of [-1, 1]) {
-      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.4, 0.08), deskBaseMat);
-      leg.position.set(sx * 0.52, 0.2, sz * 0.26);
-      coffeeTable.add(leg);
-    }
-  }
-  coffeeTable.position.set(loungeCenterX - 0.6, floorY, loungeCenterZ + 0.45);
-  addFurniture('coffee-table', coffeeTable);
-
-  const bookshelf = new THREE.Group();
-  const shelfBody = new THREE.Mesh(new THREE.BoxGeometry(1.5, 2.3, 0.34), shelfMat);
-  shelfBody.position.y = 1.15;
-  bookshelf.add(shelfBody);
-  const shelfSlots = [-0.65, 0, 0.65];
-  shelfSlots.forEach((offsetY) => {
-    const shelf = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.08, 0.3), deskBaseMat);
-    shelf.position.set(0, 1.15 + offsetY, 0.02);
-    bookshelf.add(shelf);
-  });
-  const bookPalette = [0x2563eb, 0x16a34a, 0xdc2626, 0xf59e0b];
-  bookPalette.forEach((color, i) => {
-    const book = new THREE.Mesh(
-      new THREE.BoxGeometry(0.16, 0.3, 0.22),
-      new THREE.MeshStandardMaterial({ color, roughness: 0.75 })
-    );
-    book.position.set(-0.5 + i * 0.32, 1.62, 0.08);
-    bookshelf.add(book);
-  });
-  bookshelf.position.set(roomCenterX - halfWidth + 1.05, floorY, roomCenterZ - 1.6);
-  bookshelf.rotation.y = Math.PI * 0.5;
-  addFurniture('bookshelf', bookshelf);
-
-  const dresser = new THREE.Group();
-  const dresserBody = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.9, 0.62), deskBaseMat);
-  dresserBody.position.y = 0.55;
-  const dresserTop = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.08, 0.7), deskTopMat);
-  dresserTop.position.y = 1.02;
-  dresser.add(dresserBody, dresserTop);
-  for (let i = 0; i < 3; i += 1) {
-    const drawer = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.18, 0.04), accentPanelMat);
-    drawer.position.set(0, 0.3 + i * 0.24, 0.34);
-    dresser.add(drawer);
-  }
-  dresser.position.set(roomCenterX + halfWidth - 1.4, floorY, roomCenterZ + 1.45);
-  dresser.rotation.y = -Math.PI * 0.5;
-  addFurniture('dresser', dresser);
-
-  const bedroomRug = new THREE.Group();
-  const rugBase = new THREE.Mesh(
-    new THREE.BoxGeometry(3.1, 0.035, 2.1),
-    new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.82 })
-  );
-  rugBase.position.y = 0.02;
-  const rugInset = new THREE.Mesh(
-    new THREE.BoxGeometry(2.4, 0.03, 1.5),
-    new THREE.MeshStandardMaterial({ color: 0xcbd5f5, roughness: 0.8 })
-  );
-  rugInset.position.y = 0.035;
-  bedroomRug.add(rugBase, rugInset);
-  bedroomRug.position.set(bedroomCenterX, floorY, bedroomCenterZ);
-  addFurniture('rug', bedroomRug);
-
-  const wallArt = new THREE.Group();
-  const artFrame = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.05, 0.08), accentPanelMat);
-  artFrame.position.y = 2.55;
-  const artCanvas = new THREE.Mesh(new THREE.BoxGeometry(1.36, 0.8, 0.04), artCanvasMat);
-  artCanvas.position.y = 2.55;
-  artCanvas.position.z = 0.04;
-  wallArt.add(artFrame, artCanvas);
-  wallArt.position.set(roomCenterX - halfWidth + 0.12, floorY, roomCenterZ + 1.2);
-  wallArt.rotation.y = Math.PI * 0.5;
-  addFurniture('wallart', wallArt);
-
-  const readingChair = new THREE.Group();
-  const readingSeat = new THREE.Mesh(
-    new THREE.BoxGeometry(1.0, 0.2, 1.04),
-    new THREE.MeshStandardMaterial({ color: 0xe7d7bd, roughness: 0.86 })
-  );
-  readingSeat.position.y = 0.48;
-  const readingBack = new THREE.Mesh(
-    new THREE.BoxGeometry(1.0, 1.0, 0.16),
-    new THREE.MeshStandardMaterial({ color: 0xd6c2a1, roughness: 0.84 })
-  );
-  readingBack.position.set(0, 1.02, -0.44);
-  const readingArmL = new THREE.Mesh(
-    new THREE.BoxGeometry(0.14, 0.66, 0.92),
-    new THREE.MeshStandardMaterial({ color: 0xc8b38d, roughness: 0.84 })
-  );
-  readingArmL.position.set(-0.46, 0.72, 0);
-  const readingArmR = readingArmL.clone();
-  readingArmR.position.x = 0.46;
-  const chairCushion = new THREE.Mesh(
-    new THREE.BoxGeometry(0.86, 0.12, 0.88),
-    new THREE.MeshStandardMaterial({ color: 0x92400e, roughness: 0.8 })
-  );
-  chairCushion.position.y = 0.6;
-  for (const sx of [-1, 1]) {
-    for (const sz of [-1, 1]) {
-      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.44, 0.08), deskBaseMat);
-      leg.position.set(sx * 0.34, 0.2, sz * 0.28);
-      readingChair.add(leg);
-    }
-  }
-  readingChair.add(readingSeat, readingBack, readingArmL, readingArmR, chairCushion);
-  readingChair.position.set(readingCornerX - 0.62, floorY, readingCornerZ + 0.04);
-  readingChair.rotation.y = Math.PI * 0.3;
-  room.add(readingChair);
-
-  const readingSideTable = new THREE.Group();
-  const readingSideTop = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.32, 0.08, 16), deskTopMat);
-  readingSideTop.position.y = 0.6;
-  const readingSideBase = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.11, 0.56, 12), bracketMat);
-  readingSideBase.position.y = 0.28;
-  const readingSideFoot = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.28, 0.05, 14), deskBaseMat);
-  readingSideFoot.position.y = 0.03;
-  const readingBook = new THREE.Mesh(
-    new THREE.BoxGeometry(0.28, 0.05, 0.2),
-    new THREE.MeshStandardMaterial({ color: 0x1d4ed8, roughness: 0.82 })
-  );
-  readingBook.position.set(-0.06, 0.67, 0.04);
-  const readingMug = nsCup.clone();
-  readingMug.position.set(0.1, 0.7, -0.04);
-  readingSideTable.add(readingSideTop, readingSideBase, readingSideFoot, readingBook, readingMug);
-  readingSideTable.position.set(readingCornerX - 1.58, floorY, readingCornerZ - 0.62);
-  room.add(readingSideTable);
-
-  const blanketBench = new THREE.Group();
-  const benchTop = new THREE.Mesh(new THREE.BoxGeometry(1.65, 0.12, 0.52), deskTopMat);
-  benchTop.position.y = 0.5;
-  blanketBench.add(benchTop);
-  for (const sx of [-1, 1]) {
-    for (const sz of [-1, 1]) {
-      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.42, 0.08), deskBaseMat);
-      leg.position.set(sx * 0.66, 0.22, sz * 0.18);
-      blanketBench.add(leg);
-    }
-  }
-  blanketBench.position.set(bedroomCenterX - 2.2, floorY, bedroomCenterZ);
-  room.add(blanketBench);
-
-  room.traverse((obj) => {
-    if (!obj?.isMesh) return;
-    obj.castShadow = true;
-    obj.receiveShadow = true;
-  });
-
-   scene.add(room);
-   room.visible = false;
-   houseRoomGroup = room;
-   addWallCollisionFromMesh(backWall, 'house-room');
-   addWallCollisionFromMesh(leftWall, 'house-room');
-   addWallCollisionFromMesh(rightWall, 'house-room');
-   addWallCollisionFromMesh(frontLeftWall, 'house-room');
-   addWallCollisionFromMesh(frontRightWall, 'house-room');
-   addWallCollisionFromMesh(frontTopWall, 'house-room');
-   addWorldCollider(bedroomCenterX, bedsideZ, 0.44, 'house-room');
-   addWorldCollider(readingCornerX - 0.62, readingCornerZ + 0.04, 0.74, 'house-room');
-   addWorldCollider(readingCornerX - 1.58, readingCornerZ - 0.62, 0.34, 'house-room');
-   addWorldCollider(bedroomCenterX - 2.2, bedroomCenterZ, 0.7, 'house-room');
-   applyHomeRoomVisuals();
-}
-
-function addFishingShopInterior() {
-   const shop = new THREE.Group();
-   const floorY = GROUND_Y;
-   const wallHeight = 7.4;
-   const wallThickness = 0.28;
-   const halfDepth = SHOP_INTERIOR_HALF_DEPTH;
-   const halfWidth = SHOP_INTERIOR_HALF_WIDTH;
-   const doorWidth = 3.6;
-   const doorHeight = 3.9;
-   const wallCenterY = floorY + wallHeight * 0.5;
-   const wallPaint = '#0ea5e9';
-   const floorPaint = '#5b4a3a';
-
-   const wallMat = new THREE.MeshStandardMaterial({ color: wallPaint, roughness: 0.86 });
-   const floorMat = new THREE.MeshStandardMaterial({ color: floorPaint, roughness: 0.92 });
-   const trimMat = new THREE.MeshStandardMaterial({ color: 0x3b2f24, roughness: 0.88 });
-
-   const floor = new THREE.Mesh(new THREE.BoxGeometry(halfWidth * 2, 0.22, halfDepth * 2), floorMat);
-   floor.position.set(FISHING_SHOP_BASE.x, floorY - 0.11, FISHING_SHOP_BASE.z);
-   floor.receiveShadow = true;
-   shop.add(floor);
-
-   const ceiling = new THREE.Mesh(new THREE.BoxGeometry(halfWidth * 2, 0.18, halfDepth * 2), trimMat);
-   ceiling.position.set(FISHING_SHOP_BASE.x, floorY + wallHeight + 0.1, FISHING_SHOP_BASE.z);
-   ceiling.receiveShadow = true;
-   shop.add(ceiling);
-
-   const backWall = new THREE.Mesh(new THREE.BoxGeometry(halfWidth * 2, wallHeight, wallThickness), wallMat);
-   backWall.position.set(FISHING_SHOP_BASE.x, wallCenterY, FISHING_SHOP_BASE.z - halfDepth + wallThickness * 0.5);
-   shop.add(backWall);
-
-   const leftWall = new THREE.Mesh(new THREE.BoxGeometry(wallThickness, wallHeight, halfDepth * 2), wallMat);
-   leftWall.position.set(FISHING_SHOP_BASE.x - halfWidth + wallThickness * 0.5, wallCenterY, FISHING_SHOP_BASE.z);
-   shop.add(leftWall);
-
-   const rightWall = leftWall.clone();
-   rightWall.position.x = FISHING_SHOP_BASE.x + halfWidth - wallThickness * 0.5;
-   shop.add(rightWall);
-
-   const frontSideWidth = (halfWidth * 2 - doorWidth) * 0.5;
-   const frontLeftWall = new THREE.Mesh(new THREE.BoxGeometry(frontSideWidth, wallHeight, wallThickness), wallMat);
-   frontLeftWall.position.set(
-     FISHING_SHOP_BASE.x - (doorWidth * 0.5 + frontSideWidth * 0.5),
-     wallCenterY,
-     FISHING_SHOP_BASE.z + halfDepth - wallThickness * 0.5
-   );
-   shop.add(frontLeftWall);
-
-   const frontRightWall = frontLeftWall.clone();
-   frontRightWall.position.x = FISHING_SHOP_BASE.x + (doorWidth * 0.5 + frontSideWidth * 0.5);
-   shop.add(frontRightWall);
-
-   const frontTopHeight = wallHeight - doorHeight;
-   const frontTopWall = new THREE.Mesh(new THREE.BoxGeometry(doorWidth, frontTopHeight, wallThickness), wallMat);
-   frontTopWall.position.set(
-     FISHING_SHOP_BASE.x,
-     floorY + doorHeight + frontTopHeight * 0.5,
-     FISHING_SHOP_BASE.z + halfDepth - wallThickness * 0.5
-   );
-   shop.add(frontTopWall);
-
-   const counterMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.82 });
-   const shelfMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.78 });
-   const accentMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.38, metalness: 0.2 });
-   const ropeMat = new THREE.MeshStandardMaterial({ color: 0x8b6b4f, roughness: 0.9 });
-   const rugMat = new THREE.MeshStandardMaterial({ color: 0x0ea5e9, roughness: 0.85 });
-   const barrelMat = new THREE.MeshStandardMaterial({ color: 0x6b4a2e, roughness: 0.86 });
-   const netMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.7, transparent: true, opacity: 0.5, side: THREE.DoubleSide });
-
-   const frameLeft = new THREE.Mesh(new THREE.BoxGeometry(0.18, doorHeight + 0.12, 0.16), trimMat);
-   frameLeft.position.set(FISHING_SHOP_BASE.x - doorWidth * 0.5 + 0.09, floorY + (doorHeight + 0.12) * 0.5, FISHING_SHOP_BASE.z + halfDepth - wallThickness);
-   shop.add(frameLeft);
-   const frameRight = frameLeft.clone();
-   frameRight.position.x = FISHING_SHOP_BASE.x + doorWidth * 0.5 - 0.09;
-   shop.add(frameRight);
-   const frameTop = new THREE.Mesh(new THREE.BoxGeometry(doorWidth + 0.18, 0.18, 0.16), trimMat);
-   frameTop.position.set(FISHING_SHOP_BASE.x, floorY + doorHeight + 0.08, FISHING_SHOP_BASE.z + halfDepth - wallThickness);
-   shop.add(frameTop);
-
-   const counter = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.8, 1.1), counterMat);
-   counter.position.set(FISHING_SHOP_COUNTER_POS.x, floorY + 0.4, FISHING_SHOP_COUNTER_POS.z);
-   counter.castShadow = true;
-   counter.receiveShadow = true;
-   shop.add(counter);
-
-   const counterTop = new THREE.Mesh(new THREE.BoxGeometry(4.1, 0.1, 1.0), shelfMat);
-   counterTop.position.set(FISHING_SHOP_COUNTER_POS.x, floorY + 0.86, FISHING_SHOP_COUNTER_POS.z);
-   shop.add(counterTop);
-
-   const rodRack = new THREE.Mesh(new THREE.BoxGeometry(6.2, 0.18, 0.22), shelfMat);
-   rodRack.position.set(FISHING_SHOP_BASE.x, floorY + 3.1, FISHING_SHOP_BASE.z - halfDepth + 0.6);
-   shop.add(rodRack);
-   for (let i = -2; i <= 2; i += 1) {
-     const rod = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.9, 0.08), accentMat);
-     rod.position.set(FISHING_SHOP_BASE.x + i * 0.7, floorY + 2.1, FISHING_SHOP_BASE.z - halfDepth + 1.0);
-     shop.add(rod);
-   }
-
-   const vendor = createVendorNpc({
-     shirtColor: 0x0ea5e9,
-     skinColor: 0xd6a581,
-     hairColor: 0x1f2937,
-     hatColor: 0x0f172a
-   });
-   vendor.scale.setScalar(0.7);
-   vendor.position.set(FISHING_SHOP_BASE.x, floorY, FISHING_SHOP_BASE.z - halfDepth + 1.4);
-   vendor.rotation.y = 0;
-   shop.add(vendor);
-
-   const sign = makeTextSign('Fishing Rods', 3.6, 0.6, '#0b2940', '#ecfeff');
-   sign.position.set(FISHING_SHOP_BASE.x, floorY + 3.6, FISHING_SHOP_BASE.z - halfDepth + 0.4);
-   shop.add(sign);
-
-   const buySign = makeTextSign('Buy Rods', 2.6, 0.5, '#0b2940', '#ecfeff');
-   buySign.position.set(FISHING_SHOP_BASE.x, floorY + 1.5, FISHING_SHOP_BASE.z - halfDepth + 0.5);
-   shop.add(buySign);
-
-   const doorMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.82 });
-   const exitDoor = new THREE.Mesh(new THREE.BoxGeometry(doorWidth - 0.28, doorHeight - 0.12, 0.16), doorMat);
-   exitDoor.position.set(FISHING_SHOP_BASE.x, floorY + (doorHeight - 0.12) * 0.5, FISHING_SHOP_BASE.z + halfDepth - wallThickness);
-   shop.add(exitDoor);
-   const exitDoorWindow = new THREE.Mesh(
-     new THREE.BoxGeometry(1.2, 0.72, 0.06),
-     new THREE.MeshStandardMaterial({ color: 0x93c5fd, roughness: 0.28, metalness: 0.08, transparent: true, opacity: 0.68 })
-   );
-   exitDoorWindow.position.set(FISHING_SHOP_BASE.x, floorY + 2.55, FISHING_SHOP_BASE.z + halfDepth - wallThickness - 0.06);
-   shop.add(exitDoorWindow);
-   const exitHandle = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 10), new THREE.MeshStandardMaterial({ color: 0xf8d17a, roughness: 0.25, metalness: 0.55 }));
-   exitHandle.position.set(FISHING_SHOP_BASE.x + 1.22, floorY + 1.55, FISHING_SHOP_BASE.z + halfDepth - wallThickness - 0.1);
-   shop.add(exitHandle);
-   const exitRing = new THREE.Mesh(
-     new THREE.TorusGeometry(0.9, 0.08, 12, 28),
-     new THREE.MeshStandardMaterial({ color: 0x7dd3fc, emissive: 0x0ea5e9, emissiveIntensity: 0.7, roughness: 0.3 })
-   );
-   exitRing.rotation.x = Math.PI * 0.5;
-   exitRing.position.set(FISHING_SHOP_EXIT_POS.x, floorY + 0.05, FISHING_SHOP_EXIT_POS.z);
-   shop.add(exitRing);
-   fishingShopExitMarker = exitRing;
-
-   const rug = new THREE.Mesh(new THREE.BoxGeometry(4.6, 0.03, 2.6), rugMat);
-   rug.position.set(FISHING_SHOP_BASE.x, floorY + 0.02, FISHING_SHOP_BASE.z - 0.4);
-   shop.add(rug);
-
-   const tackleShelf = new THREE.Mesh(new THREE.BoxGeometry(0.25, 1.4, 3.6), shelfMat);
-   tackleShelf.position.set(FISHING_SHOP_BASE.x + halfWidth - 0.5, floorY + 1.0, FISHING_SHOP_BASE.z + 0.6);
-   shop.add(tackleShelf);
-   for (let i = 0; i < 4; i += 1) {
-     const box = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.26, 0.5), accentMat);
-     box.position.set(FISHING_SHOP_BASE.x + halfWidth - 1.0, floorY + 0.4 + i * 0.35, FISHING_SHOP_BASE.z - 0.2 + i * 0.35);
-     shop.add(box);
-   }
-
-   const net = new THREE.Mesh(new THREE.PlaneGeometry(3.8, 2.2), netMat);
-   net.position.set(FISHING_SHOP_BASE.x + halfWidth - 0.2, floorY + 2.4, FISHING_SHOP_BASE.z - 0.8);
-   net.rotation.y = -Math.PI * 0.5;
-   shop.add(net);
-
-   const baitBench = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.42, 0.9), shelfMat);
-   baitBench.position.set(FISHING_SHOP_BASE.x - halfWidth + 1.7, floorY + 0.21, FISHING_SHOP_BASE.z + 1.5);
-   shop.add(baitBench);
-   for (let i = 0; i < 3; i += 1) {
-     const tackleBox = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.24, 0.38), accentMat);
-     tackleBox.position.set(FISHING_SHOP_BASE.x - halfWidth + 1.0 + i * 0.68, floorY + 0.56, FISHING_SHOP_BASE.z + 1.5);
-     shop.add(tackleBox);
-   }
-
-   const ceilingLight = new THREE.PointLight(0xfff4cc, 0.9, 9);
-   ceilingLight.position.set(FISHING_SHOP_BASE.x, floorY + wallHeight - 1.5, FISHING_SHOP_BASE.z);
-   shop.add(ceilingLight);
-   const rope = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.5, 6), ropeMat);
-   rope.position.set(FISHING_SHOP_BASE.x, floorY + wallHeight - 0.75, FISHING_SHOP_BASE.z);
-   shop.add(rope);
-
-   const wallLamp = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.2, 10), shelfMat);
-   wallLamp.rotation.z = Math.PI * 0.5;
-   wallLamp.position.set(FISHING_SHOP_BASE.x - halfWidth + 0.18, floorY + 2.5, FISHING_SHOP_BASE.z - 0.8);
-   shop.add(wallLamp);
-   const wallLampGlow = new THREE.PointLight(0xfff3c4, 0.6, 4.5);
-   wallLampGlow.position.set(FISHING_SHOP_BASE.x - halfWidth + 0.4, floorY + 2.5, FISHING_SHOP_BASE.z - 0.8);
-   shop.add(wallLampGlow);
-
-   shop.traverse((obj) => {
-     if (!obj?.isMesh) return;
-     obj.castShadow = true;
-     obj.receiveShadow = true;
-   });
-
-   scene.add(shop);
-  shop.visible = false;
-  fishingShopGroup = shop;
-  addWallCollisionFromMesh(backWall, 'fishing-shop');
-  addWallCollisionFromMesh(leftWall, 'fishing-shop');
-  addWallCollisionFromMesh(rightWall, 'fishing-shop');
-  addWallCollisionFromMesh(frontLeftWall, 'fishing-shop');
-  addWallCollisionFromMesh(frontRightWall, 'fishing-shop');
-   addWallCollisionFromMesh(frontTopWall, 'fishing-shop');
-   addWorldCollider(FISHING_SHOP_COUNTER_POS.x, FISHING_SHOP_COUNTER_POS.z, 2.2, 'fishing-shop');
-}
-
-function addMarketShopInterior() {
-   const shop = new THREE.Group();
-   const floorY = GROUND_Y;
-   const wallHeight = 7.4;
-   const wallThickness = 0.28;
-   const halfDepth = SHOP_INTERIOR_HALF_DEPTH;
-   const halfWidth = SHOP_INTERIOR_HALF_WIDTH;
-   const doorWidth = 3.6;
-   const doorHeight = 3.9;
-   const wallCenterY = floorY + wallHeight * 0.5;
-   const wallPaint = '#f59e0b';
-   const floorPaint = '#5b4a3a';
-
-   const wallMat = new THREE.MeshStandardMaterial({ color: wallPaint, roughness: 0.86 });
-   const floorMat = new THREE.MeshStandardMaterial({ color: floorPaint, roughness: 0.92 });
-   const trimMat = new THREE.MeshStandardMaterial({ color: 0x3b2f24, roughness: 0.88 });
-
-   const floor = new THREE.Mesh(new THREE.BoxGeometry(halfWidth * 2, 0.22, halfDepth * 2), floorMat);
-   floor.position.set(MARKET_SHOP_BASE.x, floorY - 0.11, MARKET_SHOP_BASE.z);
-   floor.receiveShadow = true;
-   shop.add(floor);
-
-   const ceiling = new THREE.Mesh(new THREE.BoxGeometry(halfWidth * 2, 0.18, halfDepth * 2), trimMat);
-   ceiling.position.set(MARKET_SHOP_BASE.x, floorY + wallHeight + 0.1, MARKET_SHOP_BASE.z);
-   ceiling.receiveShadow = true;
-   shop.add(ceiling);
-
-   const backWall = new THREE.Mesh(new THREE.BoxGeometry(halfWidth * 2, wallHeight, wallThickness), wallMat);
-   backWall.position.set(MARKET_SHOP_BASE.x, wallCenterY, MARKET_SHOP_BASE.z - halfDepth + wallThickness * 0.5);
-   shop.add(backWall);
-
-   const leftWall = new THREE.Mesh(new THREE.BoxGeometry(wallThickness, wallHeight, halfDepth * 2), wallMat);
-   leftWall.position.set(MARKET_SHOP_BASE.x - halfWidth + wallThickness * 0.5, wallCenterY, MARKET_SHOP_BASE.z);
-   shop.add(leftWall);
-
-   const rightWall = leftWall.clone();
-   rightWall.position.x = MARKET_SHOP_BASE.x + halfWidth - wallThickness * 0.5;
-   shop.add(rightWall);
-
-   const frontSideWidth = (halfWidth * 2 - doorWidth) * 0.5;
-   const frontLeftWall = new THREE.Mesh(new THREE.BoxGeometry(frontSideWidth, wallHeight, wallThickness), wallMat);
-   frontLeftWall.position.set(
-     MARKET_SHOP_BASE.x - (doorWidth * 0.5 + frontSideWidth * 0.5),
-     wallCenterY,
-     MARKET_SHOP_BASE.z + halfDepth - wallThickness * 0.5
-   );
-   shop.add(frontLeftWall);
-
-   const frontRightWall = frontLeftWall.clone();
-   frontRightWall.position.x = MARKET_SHOP_BASE.x + (doorWidth * 0.5 + frontSideWidth * 0.5);
-   shop.add(frontRightWall);
-
-   const frontTopHeight = wallHeight - doorHeight;
-   const frontTopWall = new THREE.Mesh(new THREE.BoxGeometry(doorWidth, frontTopHeight, wallThickness), wallMat);
-   frontTopWall.position.set(
-     MARKET_SHOP_BASE.x,
-     floorY + doorHeight + frontTopHeight * 0.5,
-     MARKET_SHOP_BASE.z + halfDepth - wallThickness * 0.5
-   );
-   shop.add(frontTopWall);
-
-   const counterMat = new THREE.MeshStandardMaterial({ color: 0x3b2f24, roughness: 0.84 });
-   const displayMat = new THREE.MeshStandardMaterial({ color: 0x92400e, roughness: 0.86 });
-   const accentMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.4, metalness: 0.2 });
-   const ropeMat = new THREE.MeshStandardMaterial({ color: 0x8b6b4f, roughness: 0.9 });
-   const rugMat = new THREE.MeshStandardMaterial({ color: 0xfbbf24, roughness: 0.85 });
-   const netMat = new THREE.MeshStandardMaterial({ color: 0xd1d5db, roughness: 0.7, transparent: true, opacity: 0.55, side: THREE.DoubleSide });
-
-   const frameLeft = new THREE.Mesh(new THREE.BoxGeometry(0.18, doorHeight + 0.12, 0.16), trimMat);
-   frameLeft.position.set(MARKET_SHOP_BASE.x - doorWidth * 0.5 + 0.09, floorY + (doorHeight + 0.12) * 0.5, MARKET_SHOP_BASE.z + halfDepth - wallThickness);
-   shop.add(frameLeft);
-   const frameRight = frameLeft.clone();
-   frameRight.position.x = MARKET_SHOP_BASE.x + doorWidth * 0.5 - 0.09;
-   shop.add(frameRight);
-   const frameTop = new THREE.Mesh(new THREE.BoxGeometry(doorWidth + 0.18, 0.18, 0.16), trimMat);
-   frameTop.position.set(MARKET_SHOP_BASE.x, floorY + doorHeight + 0.08, MARKET_SHOP_BASE.z + halfDepth - wallThickness);
-   shop.add(frameTop);
-
-   const counter = new THREE.Mesh(new THREE.BoxGeometry(4.4, 0.84, 1.2), counterMat);
-   counter.position.set(MARKET_SHOP_COUNTER_POS.x, floorY + 0.42, MARKET_SHOP_COUNTER_POS.z);
-   counter.castShadow = true;
-   counter.receiveShadow = true;
-   shop.add(counter);
-
-   const counterTop = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.1, 1.05), displayMat);
-   counterTop.position.set(MARKET_SHOP_COUNTER_POS.x, floorY + 0.92, MARKET_SHOP_COUNTER_POS.z);
-   shop.add(counterTop);
-
-   for (let i = -1; i <= 1; i += 1) {
-     const crate = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.42, 0.7), displayMat);
-     crate.position.set(MARKET_SHOP_BASE.x + i * 0.9, floorY + 0.21, MARKET_SHOP_BASE.z - 1.4);
-     shop.add(crate);
-     const fish = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.08, 12), accentMat);
-     fish.rotation.x = Math.PI / 2;
-     fish.position.set(MARKET_SHOP_BASE.x + i * 0.9, floorY + 0.48, MARKET_SHOP_BASE.z - 1.4);
-     shop.add(fish);
-   }
-
-   const vendor = createVendorNpc({
-     shirtColor: 0xa16207,
-     skinColor: 0xe0b18f,
-     hairColor: 0x111827,
-     hatColor: 0x3f2a1a
-   });
-   vendor.scale.setScalar(0.7);
-   vendor.position.set(MARKET_SHOP_BASE.x, floorY, MARKET_SHOP_BASE.z - halfDepth + 1.4);
-   vendor.rotation.y = 0;
-   shop.add(vendor);
-
-   const sign = makeTextSign('Fish Market', 3.6, 0.6, '#2f2417', '#fef3c7');
-   sign.position.set(MARKET_SHOP_BASE.x, floorY + 3.6, MARKET_SHOP_BASE.z - halfDepth + 0.4);
-   shop.add(sign);
-
-   const doorMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.82 });
-   const exitDoor = new THREE.Mesh(new THREE.BoxGeometry(doorWidth - 0.28, doorHeight - 0.12, 0.16), doorMat);
-   exitDoor.position.set(MARKET_SHOP_BASE.x, floorY + (doorHeight - 0.12) * 0.5, MARKET_SHOP_BASE.z + halfDepth - wallThickness);
-   shop.add(exitDoor);
-   const exitDoorWindow = new THREE.Mesh(
-     new THREE.BoxGeometry(1.2, 0.72, 0.06),
-     new THREE.MeshStandardMaterial({ color: 0xbfdbfe, roughness: 0.28, metalness: 0.08, transparent: true, opacity: 0.68 })
-   );
-   exitDoorWindow.position.set(MARKET_SHOP_BASE.x, floorY + 2.55, MARKET_SHOP_BASE.z + halfDepth - wallThickness - 0.06);
-   shop.add(exitDoorWindow);
-   const exitHandle = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 10), new THREE.MeshStandardMaterial({ color: 0xf8d17a, roughness: 0.25, metalness: 0.55 }));
-   exitHandle.position.set(MARKET_SHOP_BASE.x + 1.22, floorY + 1.55, MARKET_SHOP_BASE.z + halfDepth - wallThickness - 0.1);
-   shop.add(exitHandle);
-   const exitRing = new THREE.Mesh(
-     new THREE.TorusGeometry(0.9, 0.08, 12, 28),
-     new THREE.MeshStandardMaterial({ color: 0x86efac, emissive: 0x22c55e, emissiveIntensity: 0.7, roughness: 0.3 })
-   );
-   exitRing.rotation.x = Math.PI * 0.5;
-   exitRing.position.set(MARKET_SHOP_EXIT_POS.x, floorY + 0.05, MARKET_SHOP_EXIT_POS.z);
-   shop.add(exitRing);
-   marketShopExitMarker = exitRing;
-
-   const rug = new THREE.Mesh(new THREE.BoxGeometry(5.2, 0.03, 3.0), rugMat);
-   rug.position.set(MARKET_SHOP_BASE.x, floorY + 0.02, MARKET_SHOP_BASE.z - 0.2);
-   shop.add(rug);
-
-   const sideCounter = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.5, 1.4), counterMat);
-   sideCounter.position.set(MARKET_SHOP_BASE.x - 4.2, floorY + 0.25, MARKET_SHOP_BASE.z + 0.6);
-   shop.add(sideCounter);
-   const iceBin = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.22, 1.2), displayMat);
-   iceBin.position.set(MARKET_SHOP_BASE.x - 4.2, floorY + 0.52, MARKET_SHOP_BASE.z + 0.6);
-   shop.add(iceBin);
-
-   const net = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 2.0), netMat);
-   net.position.set(MARKET_SHOP_BASE.x + halfWidth - 0.2, floorY + 2.6, MARKET_SHOP_BASE.z + 0.6);
-   net.rotation.y = -Math.PI * 0.5;
-   shop.add(net);
-
-   for (let i = 0; i < 2; i += 1) {
-     const basket = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.4, 0.9), displayMat);
-     basket.position.set(MARKET_SHOP_BASE.x + 3.4, floorY + 0.2, MARKET_SHOP_BASE.z - 0.8 + i * 1.1);
-     shop.add(basket);
-     const fishPile = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.26, 0.1, 12), accentMat);
-     fishPile.rotation.x = Math.PI / 2;
-     fishPile.position.set(MARKET_SHOP_BASE.x + 3.4, floorY + 0.45, MARKET_SHOP_BASE.z - 0.8 + i * 1.1);
-     shop.add(fishPile);
-   }
-
-   const scalePole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.4, 8), counterMat);
-   scalePole.position.set(MARKET_SHOP_BASE.x - 1.6, floorY + 1.0, MARKET_SHOP_BASE.z - 0.4);
-   shop.add(scalePole);
-   const scaleBar = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.06, 0.06), counterMat);
-   scaleBar.position.set(MARKET_SHOP_BASE.x - 1.6, floorY + 1.6, MARKET_SHOP_BASE.z - 0.4);
-   shop.add(scaleBar);
-   const scaleHook = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.12, 10), accentMat);
-   scaleHook.position.set(MARKET_SHOP_BASE.x - 1.6, floorY + 1.45, MARKET_SHOP_BASE.z - 0.4);
-   shop.add(scaleHook);
-
-   const ceilingLight = new THREE.PointLight(0xfff1c2, 0.85, 10);
-   ceilingLight.position.set(MARKET_SHOP_BASE.x, floorY + wallHeight - 1.5, MARKET_SHOP_BASE.z);
-   shop.add(ceilingLight);
-   const rope = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.6, 6), ropeMat);
-   rope.position.set(MARKET_SHOP_BASE.x, floorY + wallHeight - 0.8, MARKET_SHOP_BASE.z);
-   shop.add(rope);
-
-   const sellSign = makeTextSign('Sell Your Fish', 3.2, 0.5, '#4c2a0f', '#fffbeb');
-   sellSign.position.set(MARKET_SHOP_BASE.x, floorY + 1.5, MARKET_SHOP_BASE.z - halfDepth + 0.5);
-   shop.add(sellSign);
-
-   shop.traverse((obj) => {
-     if (!obj?.isMesh) return;
-     obj.castShadow = true;
-     obj.receiveShadow = true;
-   });
-
-   scene.add(shop);
-   shop.visible = false;
-   marketShopGroup = shop;
-   addWallCollisionFromMesh(backWall, 'market-shop');
-   addWallCollisionFromMesh(leftWall, 'market-shop');
-   addWallCollisionFromMesh(rightWall, 'market-shop');
-   addWallCollisionFromMesh(frontLeftWall, 'market-shop');
-   addWallCollisionFromMesh(frontRightWall, 'market-shop');
-   addWallCollisionFromMesh(frontTopWall, 'market-shop');
-   addWorldCollider(MARKET_SHOP_COUNTER_POS.x, MARKET_SHOP_COUNTER_POS.z, 2.3, 'market-shop');
-}
-
-function addFurnitureShopInterior() {
-   const shop = new THREE.Group();
-   const floorY = GROUND_Y;
-   const wallHeight = 7.4;
-   const wallThickness = 0.28;
-   const halfDepth = SHOP_INTERIOR_HALF_DEPTH;
-   const halfWidth = SHOP_INTERIOR_HALF_WIDTH;
-   const doorWidth = 3.6;
-   const doorHeight = 3.9;
-   const wallCenterY = floorY + wallHeight * 0.5;
-   const wallPaint = '#8b5cf6';
-   const floorPaint = '#5b4a3a';
-
-   const wallMat = new THREE.MeshStandardMaterial({ color: wallPaint, roughness: 0.86 });
-   const floorMat = new THREE.MeshStandardMaterial({ color: floorPaint, roughness: 0.92 });
-   const trimMat = new THREE.MeshStandardMaterial({ color: 0x3b2f24, roughness: 0.88 });
-
-   const floor = new THREE.Mesh(new THREE.BoxGeometry(halfWidth * 2, 0.22, halfDepth * 2), floorMat);
-   floor.position.set(FURNITURE_SHOP_BASE.x, floorY - 0.11, FURNITURE_SHOP_BASE.z);
-   floor.receiveShadow = true;
-   shop.add(floor);
-
-   const ceiling = new THREE.Mesh(new THREE.BoxGeometry(halfWidth * 2, 0.18, halfDepth * 2), trimMat);
-   ceiling.position.set(FURNITURE_SHOP_BASE.x, floorY + wallHeight + 0.1, FURNITURE_SHOP_BASE.z);
-   ceiling.receiveShadow = true;
-   shop.add(ceiling);
-
-   const backWall = new THREE.Mesh(new THREE.BoxGeometry(halfWidth * 2, wallHeight, wallThickness), wallMat);
-   backWall.position.set(FURNITURE_SHOP_BASE.x, wallCenterY, FURNITURE_SHOP_BASE.z - halfDepth + wallThickness * 0.5);
-   shop.add(backWall);
-
-   const leftWall = new THREE.Mesh(new THREE.BoxGeometry(wallThickness, wallHeight, halfDepth * 2), wallMat);
-   leftWall.position.set(FURNITURE_SHOP_BASE.x - halfWidth + wallThickness * 0.5, wallCenterY, FURNITURE_SHOP_BASE.z);
-   shop.add(leftWall);
-
-   const rightWall = leftWall.clone();
-   rightWall.position.x = FURNITURE_SHOP_BASE.x + halfWidth - wallThickness * 0.5;
-   shop.add(rightWall);
-
-   const frontSideWidth = (halfWidth * 2 - doorWidth) * 0.5;
-   const frontLeftWall = new THREE.Mesh(new THREE.BoxGeometry(frontSideWidth, wallHeight, wallThickness), wallMat);
-   frontLeftWall.position.set(
-     FURNITURE_SHOP_BASE.x - (doorWidth * 0.5 + frontSideWidth * 0.5),
-     wallCenterY,
-     FURNITURE_SHOP_BASE.z + halfDepth - wallThickness * 0.5
-   );
-   shop.add(frontLeftWall);
-
-   const frontRightWall = frontLeftWall.clone();
-   frontRightWall.position.x = FURNITURE_SHOP_BASE.x + (doorWidth * 0.5 + frontSideWidth * 0.5);
-   shop.add(frontRightWall);
-
-   const frontTopHeight = wallHeight - doorHeight;
-   const frontTopWall = new THREE.Mesh(new THREE.BoxGeometry(doorWidth, frontTopHeight, wallThickness), wallMat);
-   frontTopWall.position.set(
-     FURNITURE_SHOP_BASE.x,
-     floorY + doorHeight + frontTopHeight * 0.5,
-     FURNITURE_SHOP_BASE.z + halfDepth - wallThickness * 0.5
-   );
-   shop.add(frontTopWall);
-
-   const counterMat = new THREE.MeshStandardMaterial({ color: 0x2f1e14, roughness: 0.84 });
-   const displayMat = new THREE.MeshStandardMaterial({ color: 0x6b4a2e, roughness: 0.86 });
-   const accentMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.38, metalness: 0.2 });
-   const rugMat = new THREE.MeshStandardMaterial({ color: 0x93c5fd, roughness: 0.85 });
-   const ropeMat = new THREE.MeshStandardMaterial({ color: 0x8b6b4f, roughness: 0.9 });
-
-   const frameLeft = new THREE.Mesh(new THREE.BoxGeometry(0.18, doorHeight + 0.12, 0.16), trimMat);
-   frameLeft.position.set(FURNITURE_SHOP_BASE.x - doorWidth * 0.5 + 0.09, floorY + (doorHeight + 0.12) * 0.5, FURNITURE_SHOP_BASE.z + halfDepth - wallThickness);
-   shop.add(frameLeft);
-   const frameRight = frameLeft.clone();
-   frameRight.position.x = FURNITURE_SHOP_BASE.x + doorWidth * 0.5 - 0.09;
-   shop.add(frameRight);
-   const frameTop = new THREE.Mesh(new THREE.BoxGeometry(doorWidth + 0.18, 0.18, 0.16), trimMat);
-   frameTop.position.set(FURNITURE_SHOP_BASE.x, floorY + doorHeight + 0.08, FURNITURE_SHOP_BASE.z + halfDepth - wallThickness);
-   shop.add(frameTop);
-
-   const counter = new THREE.Mesh(new THREE.BoxGeometry(4.6, 0.86, 1.2), counterMat);
-   counter.position.set(FURNITURE_SHOP_COUNTER_POS.x, floorY + 0.43, FURNITURE_SHOP_COUNTER_POS.z);
-   counter.castShadow = true;
-   counter.receiveShadow = true;
-   shop.add(counter);
-
-   const counterTop = new THREE.Mesh(new THREE.BoxGeometry(4.4, 0.1, 1.05), displayMat);
-   counterTop.position.set(FURNITURE_SHOP_COUNTER_POS.x, floorY + 0.96, FURNITURE_SHOP_COUNTER_POS.z);
-   shop.add(counterTop);
-
-   const sofa = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.5, 0.9), displayMat);
-   sofa.position.set(FURNITURE_SHOP_BASE.x - 2.6, floorY + 0.25, FURNITURE_SHOP_BASE.z - 0.6);
-   shop.add(sofa);
-   const sofaBack = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.6, 0.2), displayMat);
-   sofaBack.position.set(FURNITURE_SHOP_BASE.x - 2.6, floorY + 0.8, FURNITURE_SHOP_BASE.z - 1.0);
-   shop.add(sofaBack);
-
-   const sideTable = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.42, 0.72), displayMat);
-   sideTable.position.set(FURNITURE_SHOP_BASE.x + 2.3, floorY + 0.21, FURNITURE_SHOP_BASE.z - 0.55);
-   shop.add(sideTable);
-   const lampPole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.15, 8), counterMat);
-   lampPole.position.set(FURNITURE_SHOP_BASE.x + 2.3, floorY + 0.99, FURNITURE_SHOP_BASE.z - 0.55);
-   shop.add(lampPole);
-   const lampShade = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.34, 10), new THREE.MeshStandardMaterial({ color: 0xfef3c7, roughness: 0.5 }));
-   lampShade.position.set(FURNITURE_SHOP_BASE.x + 2.3, floorY + 1.72, FURNITURE_SHOP_BASE.z - 0.55);
-   shop.add(lampShade);
-   const lampLight = new THREE.PointLight(0xfff1c2, 0.75, 6);
-   lampLight.position.set(FURNITURE_SHOP_BASE.x + 2.3, floorY + 1.8, FURNITURE_SHOP_BASE.z - 0.55);
-   shop.add(lampLight);
-
-   const vendor = createVendorNpc({
-     shirtColor: 0xfb7185,
-     skinColor: 0xe0b18f,
-     hairColor: 0x3f2a1a,
-     hatColor: 0x7c2d12
-   });
-   vendor.scale.setScalar(0.7);
-   vendor.position.set(FURNITURE_SHOP_BASE.x, floorY, FURNITURE_SHOP_BASE.z - halfDepth + 1.4);
-   vendor.rotation.y = 0;
-   shop.add(vendor);
-
-   const sign = makeTextSign('Furniture', 3.6, 0.6, '#46271a', '#fffbeb');
-   sign.position.set(FURNITURE_SHOP_BASE.x, floorY + 3.6, FURNITURE_SHOP_BASE.z - halfDepth + 0.4);
-   shop.add(sign);
-
-   const doorMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.82 });
-   const exitDoor = new THREE.Mesh(new THREE.BoxGeometry(doorWidth - 0.28, doorHeight - 0.12, 0.16), doorMat);
-   exitDoor.position.set(FURNITURE_SHOP_BASE.x, floorY + (doorHeight - 0.12) * 0.5, FURNITURE_SHOP_BASE.z + halfDepth - wallThickness);
-   shop.add(exitDoor);
-   const exitDoorWindow = new THREE.Mesh(
-     new THREE.BoxGeometry(1.2, 0.72, 0.06),
-     new THREE.MeshStandardMaterial({ color: 0xbfdbfe, roughness: 0.28, metalness: 0.08, transparent: true, opacity: 0.68 })
-   );
-   exitDoorWindow.position.set(FURNITURE_SHOP_BASE.x, floorY + 2.55, FURNITURE_SHOP_BASE.z + halfDepth - wallThickness - 0.06);
-   shop.add(exitDoorWindow);
-   const exitHandle = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 10), new THREE.MeshStandardMaterial({ color: 0xf8d17a, roughness: 0.25, metalness: 0.55 }));
-   exitHandle.position.set(FURNITURE_SHOP_BASE.x + 1.22, floorY + 1.55, FURNITURE_SHOP_BASE.z + halfDepth - wallThickness - 0.1);
-   shop.add(exitHandle);
-   const exitRing = new THREE.Mesh(
-     new THREE.TorusGeometry(0.9, 0.08, 12, 28),
-     new THREE.MeshStandardMaterial({ color: 0xfda4af, emissive: 0xfb7185, emissiveIntensity: 0.7, roughness: 0.3 })
-   );
-   exitRing.rotation.x = Math.PI * 0.5;
-   exitRing.position.set(FURNITURE_SHOP_EXIT_POS.x, floorY + 0.05, FURNITURE_SHOP_EXIT_POS.z);
-   shop.add(exitRing);
-   furnitureShopExitMarker = exitRing;
-
-   const rug = new THREE.Mesh(new THREE.BoxGeometry(5.0, 0.03, 3.2), rugMat);
-   rug.position.set(FURNITURE_SHOP_BASE.x, floorY + 0.02, FURNITURE_SHOP_BASE.z - 0.2);
-   shop.add(rug);
-
-   const chairSeat = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.2, 0.9), displayMat);
-   chairSeat.position.set(FURNITURE_SHOP_BASE.x + 2.6, floorY + 0.25, FURNITURE_SHOP_BASE.z - 1.2);
-   shop.add(chairSeat);
-   const chairBack = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.9, 0.18), displayMat);
-   chairBack.position.set(FURNITURE_SHOP_BASE.x + 2.6, floorY + 0.75, FURNITURE_SHOP_BASE.z - 1.6);
-   shop.add(chairBack);
-
-   const bedBase = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.36, 1.4), displayMat);
-   bedBase.position.set(FURNITURE_SHOP_BASE.x - 3.6, floorY + 0.18, FURNITURE_SHOP_BASE.z + 0.8);
-   shop.add(bedBase);
-   const bedHead = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.7, 0.18), displayMat);
-   bedHead.position.set(FURNITURE_SHOP_BASE.x - 3.6, floorY + 0.55, FURNITURE_SHOP_BASE.z + 0.1);
-   shop.add(bedHead);
-
-   const tableTop = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.18, 1.2), displayMat);
-   tableTop.position.set(FURNITURE_SHOP_BASE.x + 0.6, floorY + 0.6, FURNITURE_SHOP_BASE.z + 1.6);
-   shop.add(tableTop);
-   for (let ix = -1; ix <= 1; ix += 2) {
-     for (let iz = -1; iz <= 1; iz += 2) {
-       const leg = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.7, 0.14), displayMat);
-       leg.position.set(FURNITURE_SHOP_BASE.x + 0.6 + ix * 0.7, floorY + 0.25, FURNITURE_SHOP_BASE.z + 1.6 + iz * 0.4);
-       shop.add(leg);
-     }
-   }
-
-   const shelf = new THREE.Mesh(new THREE.BoxGeometry(0.24, 2.2, 2.6), displayMat);
-   shelf.position.set(FURNITURE_SHOP_BASE.x + halfWidth - 0.5, floorY + 1.1, FURNITURE_SHOP_BASE.z - 0.4);
-   shop.add(shelf);
-   for (let i = 0; i < 4; i += 1) {
-     const book = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.2, 0.6), accentMat);
-     book.position.set(FURNITURE_SHOP_BASE.x + halfWidth - 1.0, floorY + 0.4 + i * 0.35, FURNITURE_SHOP_BASE.z - 1.2 + i * 0.35);
-     shop.add(book);
-   }
-
-   const ceilingLight = new THREE.PointLight(0xfff1c2, 0.8, 9);
-   ceilingLight.position.set(FURNITURE_SHOP_BASE.x, floorY + wallHeight - 1.5, FURNITURE_SHOP_BASE.z);
-   shop.add(ceilingLight);
-   const rope = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.6, 6), ropeMat);
-   rope.position.set(FURNITURE_SHOP_BASE.x, floorY + wallHeight - 0.8, FURNITURE_SHOP_BASE.z);
-   shop.add(rope);
-
-   const buySign = makeTextSign('Browse Furniture', 3.2, 0.5, '#2f1e14', '#fffbeb');
-   buySign.position.set(FURNITURE_SHOP_BASE.x, floorY + 1.5, FURNITURE_SHOP_BASE.z - halfDepth + 0.5);
-   shop.add(buySign);
-
-   shop.traverse((obj) => {
-     if (!obj?.isMesh) return;
-     obj.castShadow = true;
-     obj.receiveShadow = true;
-   });
-
-   scene.add(shop);
-   shop.visible = false;
-  furnitureShopGroup = shop;
-  addWallCollisionFromMesh(backWall, 'furniture-shop');
-  addWallCollisionFromMesh(leftWall, 'furniture-shop');
-  addWallCollisionFromMesh(rightWall, 'furniture-shop');
-  addWallCollisionFromMesh(frontLeftWall, 'furniture-shop');
-  addWallCollisionFromMesh(frontRightWall, 'furniture-shop');
-   addWallCollisionFromMesh(frontTopWall, 'furniture-shop');
-   addWorldCollider(FURNITURE_SHOP_COUNTER_POS.x, FURNITURE_SHOP_COUNTER_POS.z, 2.4, 'furniture-shop');
-}
 
 function applyRoomConfig(config) {
   if (!config || !Array.isArray(config.roomIds)) return;
@@ -6640,139 +2256,6 @@ function rebuildHouseHall() {
 socket.on('home:roomConfig', (payload) => {
   applyRoomConfig(payload || null);
 });
-
-function addHouseHallInterior() {
-  const hall = new THREE.Group();
-  const floorY = GROUND_Y;
-  const hallW = 13.4;
-  const wallH = 4.6;
-  const wallT = 0.25;
-  const baseX = HOUSE_HALL_BASE.x;
-  const baseZ = HOUSE_HALL_BASE.z;
-  const roomCount = Math.max(1, HOUSE_ROOM_SLOT_COUNT);
-  const rowCount = Math.ceil(roomCount / 2);
-  const rowSpacing = 7.0;
-  const hallDepthMargin = 10.0;
-  const hallD = Math.max(24.0, rowCount * rowSpacing + hallDepthMargin);
-
-  const wallMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.86 });
-  const floorMat = new THREE.MeshStandardMaterial({ color: 0x5b4a3a, roughness: 0.92 });
-  const trimMat = new THREE.MeshStandardMaterial({ color: 0x3b2f24, roughness: 0.88 });
-  const ceilingMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.9 });
-
-  const floor = new THREE.Mesh(new THREE.BoxGeometry(hallW, 0.2, hallD), floorMat);
-  floor.position.set(baseX, floorY, baseZ);
-  floor.receiveShadow = true;
-  hall.add(floor);
-
-  const ceiling = new THREE.Mesh(new THREE.BoxGeometry(hallW, 0.2, hallD), ceilingMat);
-  ceiling.position.set(baseX, floorY + wallH, baseZ);
-  hall.add(ceiling);
-
-  const ambientLight = new THREE.AmbientLight(0xcbd5e1, 0.34);
-  const hallLightA = new THREE.PointLight(0xfef3c7, 0.6, 16, 2);
-  hallLightA.position.set(baseX, floorY + 3.35, baseZ - hallD * 0.3);
-  const hallLightB = hallLightA.clone();
-  hallLightB.position.z = baseZ;
-  const hallLightC = hallLightA.clone();
-  hallLightC.position.z = baseZ + hallD * 0.3;
-  hall.add(ambientLight, hallLightA, hallLightB, hallLightC);
-
-  const backWall = new THREE.Mesh(new THREE.BoxGeometry(hallW, wallH, wallT), wallMat);
-  backWall.position.set(baseX, floorY + wallH * 0.5, baseZ - hallD * 0.5 + wallT * 0.5);
-  hall.add(backWall);
-
-  const leftWall = new THREE.Mesh(new THREE.BoxGeometry(wallT, wallH, hallD), wallMat);
-  leftWall.position.set(baseX - hallW * 0.5 + wallT * 0.5, floorY + wallH * 0.5, baseZ);
-  const rightWall = leftWall.clone();
-  rightWall.position.x = baseX + hallW * 0.5 - wallT * 0.5;
-  hall.add(leftWall, rightWall);
-
-  const doorW = 3.4;
-  const doorH = 3.2;
-  const frontSideW = (hallW - doorW) * 0.5;
-  const frontLeft = new THREE.Mesh(new THREE.BoxGeometry(frontSideW, wallH, wallT), wallMat);
-  frontLeft.position.set(baseX - (doorW * 0.5 + frontSideW * 0.5), floorY + wallH * 0.5, baseZ + hallD * 0.5 - wallT * 0.5);
-  const frontRight = frontLeft.clone();
-  frontRight.position.x = baseX + (doorW * 0.5 + frontSideW * 0.5);
-  const frontTop = new THREE.Mesh(new THREE.BoxGeometry(doorW, wallH - doorH, wallT), wallMat);
-  frontTop.position.set(baseX, floorY + doorH + (wallH - doorH) * 0.5, baseZ + hallD * 0.5 - wallT * 0.5);
-  hall.add(frontLeft, frontRight, frontTop);
-
-  addWallCollisionFromMesh(backWall, 'house-hall');
-  addWallCollisionFromMesh(leftWall, 'house-hall');
-  addWallCollisionFromMesh(rightWall, 'house-hall');
-  addWallCollisionFromMesh(frontLeft, 'house-hall');
-  addWallCollisionFromMesh(frontRight, 'house-hall');
-  addWallCollisionFromMesh(frontTop, 'house-hall');
-
-  const doorOffsets = Array.from({ length: rowCount }, (_, row) => {
-    return rowCount <= 1 ? 0 : (row - (rowCount - 1) / 2) * rowSpacing;
-  });
-  const doorX = hallW * 0.5 - 0.7;
-  const ringMat = new THREE.MeshStandardMaterial({
-    color: 0x7dd3fc,
-    emissive: 0x0ea5e9,
-    emissiveIntensity: 0.6,
-    roughness: 0.3
-  });
-
-  houseHallRoomDoors.length = 0;
-  for (let i = 0; i < HOUSE_ROOM_SLOT_COUNT; i += 1) {
-    const row = Math.floor(i / 2);
-    const isRight = i % 2 === 1;
-    const z = baseZ + doorOffsets[row];
-    const x = baseX + (isRight ? doorX : -doorX);
-
-    const post = new THREE.Mesh(new THREE.BoxGeometry(0.18, doorH, 0.18), trimMat);
-    const postL = post.clone();
-    postL.position.set(-0.7, doorH * 0.5, 0);
-    const postR = post.clone();
-    postR.position.set(0.7, doorH * 0.5, 0);
-    const header = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.18, 0.2), trimMat);
-    header.position.set(0, doorH + 0.05, 0);
-    const frame = new THREE.Group();
-    frame.add(postL, postR, header);
-    frame.position.set(x, floorY, z);
-    frame.rotation.y = isRight ? -Math.PI * 0.5 : Math.PI * 0.5;
-    hall.add(frame);
-
-    const sign = makeTextSign(`Room ${i + 1}`, 2.2, 0.5, '#1f2937', '#e2e8f0');
-    sign.position.set(x, floorY + doorH + 0.45, z);
-    sign.rotation.y = frame.rotation.y;
-    hall.add(sign);
-
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.6, 0.06, 10, 24), ringMat);
-    ring.rotation.x = Math.PI * 0.5;
-    ring.position.set(x, floorY + 0.05, z);
-    hall.add(ring);
-
-    houseHallRoomDoors.push({
-      id: HOUSE_ROOM_IDS[i],
-      position: new THREE.Vector3(x, 1.36, z),
-      ring,
-      sign
-    });
-  }
-
-  const exitRing = new THREE.Mesh(new THREE.TorusGeometry(0.9, 0.08, 12, 28), ringMat);
-  exitRing.rotation.x = Math.PI * 0.5;
-  const exitZ = baseZ + hallD * 0.5 - 1.5;
-  exitRing.position.set(baseX, floorY + 0.05, exitZ);
-  hall.add(exitRing);
-  houseHallExitMarker = exitRing;
-
-  hall.traverse((obj) => {
-    if (obj.isMesh) {
-      obj.castShadow = true;
-      obj.receiveShadow = true;
-    }
-  });
-
-  hall.visible = false;
-  scene.add(hall);
-  houseHallGroup = hall;
-}
 
 function addLandmarks() {
   addDock(ISLAND_DOCK_POS, ISLAND_DOCK_YAW, { segments: 17, plankLength: 3.2, plankWidth: 3.2, spacing: 1.2 });
@@ -7872,528 +3355,6 @@ function updateBeaconState(payload) {
   setBeaconVisual(Boolean(payload.active));
 }
 
-function makeExactBaconMesh() {
-  return null;
-}
-
-function makePlayerMesh(appearance) {
-  const exact = makeExactBaconMesh();
-  if (exact) {
-    return exact;
-  }
-
-  const UNIT = 0.52;
-  const rig = new THREE.Group();
-  rig.position.y = 0.56;
-
-  const hips = new THREE.Mesh(
-    new THREE.BoxGeometry(1.36 * UNIT, 0.86 * UNIT, 0.72 * UNIT),
-    new THREE.MeshStandardMaterial({ color: appearance.pants, roughness: 0.82 })
-  );
-  hips.position.y = 1.08 * UNIT;
-  hips.castShadow = true;
-
-  const torso = new THREE.Mesh(
-    new THREE.BoxGeometry(1.56 * UNIT, 1.62 * UNIT, 0.88 * UNIT),
-    new THREE.MeshStandardMaterial({ color: appearance.shirt, roughness: 0.68 })
-  );
-  torso.position.y = 2.46 * UNIT;
-  torso.castShadow = true;
-
-  const torsoStripe = new THREE.Mesh(
-    new THREE.BoxGeometry(1.32 * UNIT, 0.3 * UNIT, 0.08 * UNIT),
-    new THREE.MeshStandardMaterial({ color: 0xe5e7eb, roughness: 0.7 })
-  );
-  torsoStripe.position.set(0, 2.4 * UNIT, 0.49 * UNIT);
-  torsoStripe.castShadow = true;
-
-  const jacket = new THREE.Mesh(
-    new THREE.BoxGeometry(1.62 * UNIT, 1.66 * UNIT, 0.94 * UNIT),
-    new THREE.MeshStandardMaterial({ color: 0x14181e, roughness: 0.75 })
-  );
-  jacket.position.copy(torso.position);
-  jacket.castShadow = true;
-
-  const belt = new THREE.Mesh(
-    new THREE.BoxGeometry(1.4 * UNIT, 0.14 * UNIT, 0.82 * UNIT),
-    new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.72 })
-  );
-  belt.position.y = 1.76 * UNIT;
-  belt.castShadow = true;
-
-  const neck = new THREE.Mesh(
-    new THREE.BoxGeometry(0.38 * UNIT, 0.2 * UNIT, 0.28 * UNIT),
-    new THREE.MeshStandardMaterial({ color: appearance.skin, roughness: 0.9 })
-  );
-  neck.position.y = 3.52 * UNIT;
-  neck.castShadow = true;
-
-  const neckConnector = new THREE.Mesh(
-    new THREE.BoxGeometry(0.44 * UNIT, 0.18 * UNIT, 0.34 * UNIT),
-    new THREE.MeshStandardMaterial({ color: appearance.skin, roughness: 0.88 })
-  );
-  neckConnector.position.y = 3.72 * UNIT;
-  neckConnector.castShadow = true;
-
-  const head = new THREE.Mesh(
-    new THREE.BoxGeometry(1.12 * UNIT, 1.08 * UNIT, 1.02 * UNIT),
-    new THREE.MeshStandardMaterial({ color: appearance.skin, roughness: 0.88 })
-  );
-  head.position.y = 4.42 * UNIT;
-  head.castShadow = true;
-
-  const eyeMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.2 });
-  const leftEye = new THREE.Mesh(new THREE.SphereGeometry(0.06 * UNIT, 8, 8), eyeMat);
-  leftEye.position.set(-0.23 * UNIT, 4.56 * UNIT, 0.56 * UNIT);
-  const rightEye = leftEye.clone();
-  rightEye.position.x = 0.23 * UNIT;
-
-  const mouthSmile = new THREE.Mesh(new THREE.TorusGeometry(0.2 * UNIT, 0.03 * UNIT, 6, 12, Math.PI), eyeMat);
-  mouthSmile.rotation.set(Math.PI, 0, 0);
-  mouthSmile.position.set(0, 4.26 * UNIT, 0.56 * UNIT);
-
-  const mouthSerious = new THREE.Mesh(new THREE.BoxGeometry(0.34 * UNIT, 0.03 * UNIT, 0.02 * UNIT), eyeMat);
-  mouthSerious.position.set(0, 4.22 * UNIT, 0.56 * UNIT);
-
-  const mouthGrin = new THREE.Mesh(new THREE.TorusGeometry(0.24 * UNIT, 0.04 * UNIT, 6, 14, Math.PI), eyeMat);
-  mouthGrin.rotation.set(Math.PI, 0, 0);
-  mouthGrin.position.set(0, 4.24 * UNIT, 0.56 * UNIT);
-  const mouthSoft = new THREE.Mesh(new THREE.TorusGeometry(0.16 * UNIT, 0.025 * UNIT, 6, 12, Math.PI), eyeMat);
-  mouthSoft.rotation.set(Math.PI, 0, 0);
-  mouthSoft.position.set(0, 4.2 * UNIT, 0.56 * UNIT);
-
-  const leftEyeWink = new THREE.Mesh(new THREE.BoxGeometry(0.13 * UNIT, 0.03 * UNIT, 0.02 * UNIT), eyeMat);
-  leftEyeWink.position.set(-0.23 * UNIT, 4.56 * UNIT, 0.56 * UNIT);
-  const lashMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.25 });
-  const leftLashes = new THREE.Mesh(new THREE.BoxGeometry(0.16 * UNIT, 0.025 * UNIT, 0.02 * UNIT), lashMat);
-  leftLashes.position.set(-0.23 * UNIT, 4.65 * UNIT, 0.56 * UNIT);
-  const rightLashes = leftLashes.clone();
-  rightLashes.position.x = 0.23 * UNIT;
-
-  const leftArmPivot = new THREE.Group();
-  leftArmPivot.position.set(-0.86 * UNIT, 3.0 * UNIT, 0);
-  const leftArm = new THREE.Mesh(
-    new THREE.BoxGeometry(0.46 * UNIT, 1.4 * UNIT, 0.46 * UNIT),
-    new THREE.MeshStandardMaterial({ color: appearance.skin, roughness: 0.9 })
-  );
-  leftArm.position.y = -0.8 * UNIT;
-  leftArm.castShadow = true;
-  leftArmPivot.add(leftArm);
-  const leftSleeve = new THREE.Mesh(
-    new THREE.BoxGeometry(0.5 * UNIT, 0.42 * UNIT, 0.5 * UNIT),
-    new THREE.MeshStandardMaterial({ color: 0x14181e, roughness: 0.76 })
-  );
-  leftSleeve.position.y = -0.2 * UNIT;
-  leftArmPivot.add(leftSleeve);
-
-  const leftHand = new THREE.Mesh(
-    new THREE.BoxGeometry(0.36 * UNIT, 0.34 * UNIT, 0.32 * UNIT),
-    new THREE.MeshStandardMaterial({ color: appearance.skin, roughness: 0.88 })
-  );
-  leftHand.position.y = -1.7 * UNIT;
-  leftHand.castShadow = true;
-  leftArmPivot.add(leftHand);
-
-  const rightArmPivot = new THREE.Group();
-  rightArmPivot.position.set(0.86 * UNIT, 3.0 * UNIT, 0);
-  const rightArm = leftArm.clone();
-  rightArm.position.y = -0.8 * UNIT;
-  rightArmPivot.add(rightArm);
-  const rightSleeve = leftSleeve.clone();
-  rightArmPivot.add(rightSleeve);
-  const rightHand = leftHand.clone();
-  rightArmPivot.add(rightHand);
-
-  const heldTorch = createHeldTorchMesh(UNIT);
-  heldTorch.position.set(0.04 * UNIT, 0.14 * UNIT, 0.16 * UNIT);
-  heldTorch.rotation.set(-1.04, -0.06, -0.18);
-  heldTorch.visible = false;
-  leftHand.add(heldTorch);
-
-  const heldPickaxe = createHeldPickaxeMesh(UNIT);
-  heldPickaxe.position.set(0.14 * UNIT, 0.18 * UNIT, 0.12 * UNIT);
-  heldPickaxe.rotation.set(-1.08, 0.18, 0.42);
-  rightHand.add(heldPickaxe);
-
-  const heldFishingRod = createHeldFishingRodMesh(UNIT);
-  heldFishingRod.position.set(0.16 * UNIT, 0.22 * UNIT, 0.16 * UNIT);
-  heldFishingRod.rotation.set(-1.02, 0.18, 0.34);
-  heldFishingRod.visible = false;
-  rightHand.add(heldFishingRod);
-
-  const leftLegPivot = new THREE.Group();
-  leftLegPivot.position.set(-0.38 * UNIT, 1.02 * UNIT, 0);
-  const leftLeg = new THREE.Mesh(
-    new THREE.BoxGeometry(0.52 * UNIT, 1.8 * UNIT, 0.56 * UNIT),
-    new THREE.MeshStandardMaterial({ color: appearance.pants, roughness: 0.84 })
-  );
-  leftLeg.position.y = -1.02 * UNIT;
-  leftLeg.castShadow = true;
-  leftLegPivot.add(leftLeg);
-
-  const leftKnee = new THREE.Mesh(
-    new THREE.BoxGeometry(0.53 * UNIT, 0.2 * UNIT, 0.58 * UNIT),
-    new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.7 })
-  );
-  leftKnee.position.y = -0.94 * UNIT;
-  leftKnee.castShadow = true;
-  leftLegPivot.add(leftKnee);
-
-  const leftBoot = new THREE.Mesh(
-    new THREE.BoxGeometry(0.58 * UNIT, 0.4 * UNIT, 0.88 * UNIT),
-    new THREE.MeshStandardMaterial({ color: appearance.shoes, roughness: 0.68 })
-  );
-  leftBoot.position.set(0, -1.96 * UNIT, 0.14 * UNIT);
-  leftBoot.castShadow = true;
-  leftLegPivot.add(leftBoot);
-
-  const rightLegPivot = new THREE.Group();
-  rightLegPivot.position.set(0.38 * UNIT, 1.02 * UNIT, 0);
-  const rightLeg = leftLeg.clone();
-  rightLeg.position.y = -1.02 * UNIT;
-  rightLegPivot.add(rightLeg);
-  const rightKnee = leftKnee.clone();
-  rightLegPivot.add(rightKnee);
-  const rightBoot = leftBoot.clone();
-  rightLegPivot.add(rightBoot);
-
-  const hairMat = new THREE.MeshStandardMaterial({ color: appearance.hairColor, roughness: 0.6 });
-  const hairMatSoft = new THREE.MeshStandardMaterial({ color: appearance.hairColor, roughness: 0.72 });
-
-  const hairShort = new THREE.Group();
-  const shortCrown = new THREE.Mesh(new THREE.SphereGeometry(0.66 * UNIT, 18, 12), hairMat);
-  shortCrown.scale.set(1.0, 0.58, 0.96);
-  shortCrown.position.set(0, 5.08 * UNIT, -0.02 * UNIT);
-  shortCrown.castShadow = true;
-  const shortBack = new THREE.Mesh(new THREE.BoxGeometry(1.06 * UNIT, 0.34 * UNIT, 0.26 * UNIT), hairMatSoft);
-  shortBack.position.set(0, 4.85 * UNIT, -0.46 * UNIT);
-  shortBack.castShadow = true;
-  for (let i = -1; i <= 1; i += 1) {
-    const fringe = new THREE.Mesh(new THREE.BoxGeometry(0.22 * UNIT, 0.2 * UNIT, 0.16 * UNIT), hairMat);
-    fringe.position.set(i * 0.19 * UNIT, 4.84 * UNIT - Math.abs(i) * 0.01 * UNIT, 0.53 * UNIT);
-    fringe.castShadow = true;
-    hairShort.add(fringe);
-  }
-  hairShort.add(shortCrown, shortBack);
-
-  const hairSidePart = new THREE.Group();
-  const sideCrown = new THREE.Mesh(new THREE.SphereGeometry(0.68 * UNIT, 18, 12), hairMat);
-  sideCrown.scale.set(1.0, 0.6, 0.96);
-  sideCrown.position.set(0.04 * UNIT, 5.07 * UNIT, 0);
-  sideCrown.castShadow = true;
-  const partLine = new THREE.Mesh(new THREE.BoxGeometry(0.1 * UNIT, 0.02 * UNIT, 0.82 * UNIT), new THREE.MeshStandardMaterial({ color: 0xd1d5db, roughness: 0.3 }));
-  partLine.position.set(0.1 * UNIT, 5.26 * UNIT, -0.02 * UNIT);
-  const sideSweep = new THREE.Mesh(new THREE.BoxGeometry(0.44 * UNIT, 0.28 * UNIT, 0.2 * UNIT), hairMatSoft);
-  sideSweep.position.set(0.31 * UNIT, 4.93 * UNIT, 0.49 * UNIT);
-  sideSweep.rotation.y = -0.15;
-  sideSweep.castShadow = true;
-  const sideBang = new THREE.Mesh(new THREE.BoxGeometry(0.34 * UNIT, 0.34 * UNIT, 0.18 * UNIT), hairMatSoft);
-  sideBang.position.set(-0.28 * UNIT, 4.82 * UNIT, 0.54 * UNIT);
-  sideBang.rotation.y = 0.18;
-  sideBang.castShadow = true;
-  hairSidePart.add(sideCrown, partLine, sideSweep, sideBang);
-
-  const hairSpiky = new THREE.Group();
-  for (let i = -2; i <= 2; i += 1) {
-    const spike = new THREE.Mesh(new THREE.ConeGeometry((0.14 + Math.abs(i) * 0.015) * UNIT, 0.58 * UNIT, 12), hairMat);
-    spike.position.set(i * 0.17 * UNIT, 5.2 * UNIT - Math.abs(i) * 0.02 * UNIT, -0.02 * UNIT);
-    spike.rotation.x = -0.2 + Math.abs(i) * 0.05;
-    spike.castShadow = true;
-    hairSpiky.add(spike);
-  }
-  const spikyBase = new THREE.Mesh(new THREE.SphereGeometry(0.62 * UNIT, 16, 10), hairMatSoft);
-  spikyBase.scale.set(1, 0.38, 0.9);
-  spikyBase.position.set(0, 5.03 * UNIT, -0.03 * UNIT);
-  spikyBase.castShadow = true;
-  hairSpiky.add(spikyBase);
-
-  const hairLong = new THREE.Group();
-  const longCrown = new THREE.Mesh(new THREE.SphereGeometry(0.66 * UNIT, 18, 12), hairMat);
-  longCrown.scale.set(1.0, 0.58, 0.94);
-  longCrown.position.set(0, 5.08 * UNIT, 0);
-  longCrown.castShadow = true;
-  const longBack = new THREE.Mesh(new THREE.BoxGeometry(1.0 * UNIT, 1.24 * UNIT, 0.52 * UNIT), hairMatSoft);
-  longBack.position.set(0, 4.56 * UNIT, -0.42 * UNIT);
-  longBack.castShadow = true;
-  const longFrontL = new THREE.Mesh(new THREE.BoxGeometry(0.2 * UNIT, 0.56 * UNIT, 0.16 * UNIT), hairMatSoft);
-  longFrontL.position.set(-0.49 * UNIT, 4.6 * UNIT, 0.38 * UNIT);
-  longFrontL.castShadow = true;
-  const longFrontR = longFrontL.clone();
-  longFrontR.position.x = 0.49 * UNIT;
-  hairLong.add(longCrown, longBack, longFrontL, longFrontR);
-
-  const hairPonytail = new THREE.Group();
-  const ponyCap = new THREE.Mesh(new THREE.SphereGeometry(0.66 * UNIT, 18, 12), hairMat);
-  ponyCap.scale.set(1.0, 0.58, 0.95);
-  ponyCap.position.set(0, 5.08 * UNIT, 0);
-  ponyCap.castShadow = true;
-  const ponyBand = new THREE.Mesh(new THREE.TorusGeometry(0.14 * UNIT, 0.03 * UNIT, 8, 16), new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.5 }));
-  ponyBand.position.set(0, 4.9 * UNIT, -0.5 * UNIT);
-  ponyBand.rotation.x = Math.PI / 2;
-  const ponyTailTop = new THREE.Mesh(new THREE.CylinderGeometry(0.16 * UNIT, 0.13 * UNIT, 0.42 * UNIT, 10), hairMatSoft);
-  ponyTailTop.position.set(0, 4.64 * UNIT, -0.58 * UNIT);
-  ponyTailTop.rotation.x = 0.28;
-  ponyTailTop.castShadow = true;
-  const ponyTailMid = new THREE.Mesh(new THREE.CylinderGeometry(0.13 * UNIT, 0.1 * UNIT, 0.42 * UNIT, 10), hairMatSoft);
-  ponyTailMid.position.set(0, 4.3 * UNIT, -0.62 * UNIT);
-  ponyTailMid.rotation.x = 0.2;
-  ponyTailMid.castShadow = true;
-  const ponyTailEnd = new THREE.Mesh(new THREE.CylinderGeometry(0.1 * UNIT, 0.06 * UNIT, 0.36 * UNIT, 10), hairMatSoft);
-  ponyTailEnd.position.set(0, 4.02 * UNIT, -0.58 * UNIT);
-  ponyTailEnd.rotation.x = 0.05;
-  ponyTailEnd.castShadow = true;
-  hairPonytail.add(ponyCap, ponyBand, ponyTailTop, ponyTailMid, ponyTailEnd);
-
-  const hairBob = new THREE.Group();
-  const bobCrown = new THREE.Mesh(new THREE.SphereGeometry(0.68 * UNIT, 18, 12), hairMat);
-  bobCrown.scale.set(1.02, 0.58, 0.95);
-  bobCrown.position.set(0, 5.05 * UNIT, 0);
-  bobCrown.castShadow = true;
-  const bobBack = new THREE.Mesh(new THREE.BoxGeometry(1.08 * UNIT, 0.82 * UNIT, 0.4 * UNIT), hairMatSoft);
-  bobBack.position.set(0, 4.54 * UNIT, -0.36 * UNIT);
-  bobBack.castShadow = true;
-  const bobSideL = new THREE.Mesh(new THREE.CylinderGeometry(0.11 * UNIT, 0.14 * UNIT, 0.72 * UNIT, 10), hairMatSoft);
-  bobSideL.position.set(-0.55 * UNIT, 4.63 * UNIT, 0.1 * UNIT);
-  bobSideL.rotation.z = 0.1;
-  bobSideL.castShadow = true;
-  const bobSideR = bobSideL.clone();
-  bobSideR.position.x = 0.55 * UNIT;
-  bobSideR.rotation.z = -0.1;
-  hairBob.add(bobCrown, bobBack, bobSideL, bobSideR);
-
-  const hairWavy = new THREE.Group();
-  const waveCrown = new THREE.Mesh(new THREE.SphereGeometry(0.67 * UNIT, 18, 12), hairMat);
-  waveCrown.scale.set(1, 0.58, 0.95);
-  waveCrown.position.set(0, 5.08 * UNIT, -0.01 * UNIT);
-  waveCrown.castShadow = true;
-  hairWavy.add(waveCrown);
-  for (let i = -2; i <= 2; i += 1) {
-    const curl = new THREE.Mesh(new THREE.SphereGeometry((0.13 + (2 - Math.abs(i)) * 0.012) * UNIT, 10, 8), hairMatSoft);
-    curl.position.set(i * 0.18 * UNIT, 4.58 * UNIT - Math.abs(i) * 0.02 * UNIT, 0.44 * UNIT);
-    curl.castShadow = true;
-    hairWavy.add(curl);
-  }
-  for (const side of [-1, 1]) {
-    const sideWave = new THREE.Mesh(new THREE.CylinderGeometry(0.11 * UNIT, 0.08 * UNIT, 0.58 * UNIT, 10), hairMatSoft);
-    sideWave.position.set(side * 0.56 * UNIT, 4.52 * UNIT, 0.02 * UNIT);
-    sideWave.rotation.z = -side * 0.12;
-    sideWave.castShadow = true;
-    hairWavy.add(sideWave);
-  }
-
-  const hat = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.52 * UNIT, 0.52 * UNIT, 0.3 * UNIT, 16),
-    new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.6 })
-  );
-  hat.position.set(0, 5.38 * UNIT, 0);
-  hat.castShadow = true;
-
-  const glasses = new THREE.Group();
-  const glassMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.2 });
-  const glassLeft = new THREE.Mesh(new THREE.TorusGeometry(0.13 * UNIT, 0.02 * UNIT, 8, 12), glassMat);
-  glassLeft.position.set(-0.22 * UNIT, 4.56 * UNIT, 0.57 * UNIT);
-  const glassRight = glassLeft.clone();
-  glassRight.position.x = 0.22 * UNIT;
-  const glassBridge = new THREE.Mesh(new THREE.BoxGeometry(0.12 * UNIT, 0.02 * UNIT, 0.02 * UNIT), glassMat);
-  glassBridge.position.set(0, 4.56 * UNIT, 0.57 * UNIT);
-  glasses.add(glassLeft, glassRight, glassBridge);
-
-  const backpack = new THREE.Mesh(
-    new THREE.BoxGeometry(1.0 * UNIT, 1.2 * UNIT, 0.35 * UNIT),
-    new THREE.MeshStandardMaterial({ color: 0x374151, roughness: 0.82 })
-  );
-  backpack.position.set(0, 2.5 * UNIT, -0.64 * UNIT);
-  backpack.castShadow = true;
-
-  const shadow = new THREE.Mesh(
-    new THREE.CircleGeometry(0.72, 20),
-    new THREE.MeshBasicMaterial({ color: 0x111827, transparent: true, opacity: 0.25 })
-  );
-  shadow.rotation.x = -Math.PI / 2;
-  shadow.position.y = 0.02;
-
-  rig.add(
-    hips,
-    torso,
-    torsoStripe,
-    jacket,
-    belt,
-    neck,
-    neckConnector,
-    head,
-    leftArmPivot,
-    rightArmPivot,
-    leftLegPivot,
-    rightLegPivot,
-    leftEye,
-    rightEye,
-    mouthSmile,
-    mouthSerious,
-    mouthGrin,
-    mouthSoft,
-    leftEyeWink,
-    leftLashes,
-    rightLashes,
-    hat,
-    glasses,
-    backpack,
-    hairShort,
-    hairSidePart,
-    sideBang,
-    hairSpiky,
-    hairLong,
-    hairPonytail,
-    hairBob,
-    hairWavy
-  );
-
-  const group = new THREE.Group();
-  group.add(rig, shadow);
-  group.userData.body = rig;
-  group.userData.baseBodyY = rig.position.y;
-  group.userData.parts = {
-    hips,
-    torso,
-    jacket,
-    neck,
-    neckConnector,
-    head,
-    leftArmPivot,
-    rightArmPivot,
-    leftLegPivot,
-    rightLegPivot,
-    leftArm,
-    rightArm,
-    leftHand,
-    rightHand,
-    leftLeg,
-    rightLeg,
-    leftKnee,
-    rightKnee,
-    leftBoot,
-    rightBoot,
-    leftSleeve,
-    rightSleeve,
-    torsoStripe,
-    belt,
-    leftEye,
-    rightEye,
-    mouthSmile,
-    mouthSerious,
-    mouthGrin,
-    mouthSoft,
-    leftEyeWink,
-    leftLashes,
-    rightLashes,
-    heldTorch,
-    heldTorchFlame: heldTorch.userData.flame || null,
-    heldPickaxe,
-    heldPickaxeHead: heldPickaxe.userData.head || null,
-    heldFishingRod,
-    heldFishingRodAccent: heldFishingRod.userData.accent || null,
-    hat,
-    glasses,
-    backpack,
-    hairShort,
-    hairSidePart,
-    sideBang,
-    hairSpiky,
-    hairLong,
-    hairPonytail,
-    hairBob,
-    hairWavy,
-    faceStyle: appearance.faceStyle,
-    accessories: appearance.accessories
-  };
-  scene.add(group);
-
-  return group;
-}
-
-function paintPlayer(player, appearance) {
-  const parts = player?.mesh?.userData?.parts;
-  if (!parts) return;
-  const tintMeshTree = (node, color) => {
-    if (!node) return;
-    if (node.material?.color) {
-      node.material.color.set(color);
-    }
-    if (Array.isArray(node.children)) {
-      node.children.forEach((child) => tintMeshTree(child, color));
-    }
-  };
-
-  parts.torso.material.color.set(appearance.shirt);
-  parts.torsoStripe.material.color.set(appearance.shirt);
-  parts.jacket.material.color.set(appearance.shirt);
-  parts.belt.material.color.set(0x1f2937);
-  parts.hips.material.color.set(appearance.pants);
-  parts.neck.material.color.set(appearance.skin);
-  parts.neckConnector.material.color.set(appearance.skin);
-  parts.head.material.color.set(appearance.skin);
-  parts.leftArm.material.color.set(appearance.skin);
-  parts.rightArm.material.color.set(appearance.skin);
-  parts.leftHand.material.color.set(appearance.skin);
-  parts.rightHand.material.color.set(appearance.skin);
-  parts.leftSleeve.material.color.set(appearance.shirt);
-  parts.rightSleeve.material.color.set(appearance.shirt);
-  parts.leftLeg.material.color.set(appearance.pants);
-  parts.rightLeg.material.color.set(appearance.pants);
-  parts.leftBoot.material.color.set(appearance.shoes);
-  parts.rightBoot.material.color.set(appearance.shoes);
-  tintMeshTree(parts.hairShort, appearance.hairColor);
-  tintMeshTree(parts.hairSidePart, appearance.hairColor);
-  tintMeshTree(parts.sideBang, appearance.hairColor);
-  tintMeshTree(parts.hairSpiky, appearance.hairColor);
-  tintMeshTree(parts.hairLong, appearance.hairColor);
-  tintMeshTree(parts.hairPonytail, appearance.hairColor);
-  tintMeshTree(parts.hairBob, appearance.hairColor);
-  tintMeshTree(parts.hairWavy, appearance.hairColor);
-
-  parts.hairShort.visible = appearance.hairStyle === 'short';
-  parts.hairSidePart.visible = appearance.hairStyle === 'sidepart';
-  parts.sideBang.visible = appearance.hairStyle === 'sidepart';
-  parts.hairSpiky.visible = appearance.hairStyle === 'spiky';
-  parts.hairLong.visible = appearance.hairStyle === 'long';
-  parts.hairPonytail.visible = appearance.hairStyle === 'ponytail';
-  parts.hairBob.visible = appearance.hairStyle === 'bob';
-  parts.hairWavy.visible = appearance.hairStyle === 'wavy';
-  const accessories = Array.isArray(appearance.accessories) ? appearance.accessories : [];
-  parts.hat.visible = accessories.includes('hat');
-  parts.glasses.visible = accessories.includes('glasses');
-  parts.backpack.visible = accessories.includes('backpack');
-
-  parts.leftEye.visible = true;
-  parts.rightEye.visible = true;
-  parts.leftEyeWink.visible = false;
-  parts.leftLashes.visible = false;
-  parts.rightLashes.visible = false;
-  parts.mouthSmile.visible = false;
-  parts.mouthSerious.visible = false;
-  parts.mouthGrin.visible = false;
-  parts.mouthSoft.visible = false;
-
-  if (appearance.faceStyle === 'serious') {
-    parts.mouthSerious.visible = true;
-  } else if (appearance.faceStyle === 'grin') {
-    parts.mouthGrin.visible = true;
-  } else if (appearance.faceStyle === 'wink') {
-    parts.leftEye.visible = false;
-    parts.leftEyeWink.visible = true;
-    parts.mouthSmile.visible = true;
-  } else if (appearance.faceStyle === 'lashessmile') {
-    parts.leftLashes.visible = true;
-    parts.rightLashes.visible = true;
-    parts.mouthSmile.visible = true;
-  } else if (appearance.faceStyle === 'soft') {
-    parts.leftLashes.visible = true;
-    parts.rightLashes.visible = true;
-    parts.mouthSoft.visible = true;
-  } else {
-    parts.mouthSmile.visible = true;
-  }
-}
-
 function applyPlayerCustomization(id, name, color, appearancePayload) {
   const player = players.get(id);
   if (!player) return;
@@ -8557,181 +3518,9 @@ function showChatBubble(id, text) {
   player.bubbleUntil = Date.now() + CHAT_BUBBLE_MS;
 }
 
-function normalizeAccountTag(value) {
-  const raw = typeof value === 'string' ? value.trim() : '';
-  if (!raw) return null;
-  return raw.slice(0, 24);
-}
-
-function resolveAccountUsername(data) {
-  if (!data) return '';
-  const direct = typeof data.username === 'string' ? data.username.trim() : '';
-  if (direct) return direct.toLowerCase();
-  const profileId = typeof data.profileId === 'string' ? data.profileId.trim() : '';
-  if (profileId.toLowerCase().startsWith('acct-')) {
-    return profileId.slice(5).toLowerCase();
-  }
-  return '';
-}
-
-function applyTaggedNameToElement(element, name, accountTag = null) {
-  if (!element) return;
-  const base = String(name || '').trim() || 'Player';
-  const tag = normalizeAccountTag(accountTag);
-  element.textContent = '';
-  if (tag) {
-    const badge = document.createElement('span');
-    badge.className = 'account-role-tag';
-    badge.textContent = `[${tag}]`;
-    element.appendChild(badge);
-    element.appendChild(document.createTextNode(' '));
-  }
-  element.appendChild(document.createTextNode(base));
-}
-
-function displayNameWithTag(name, accountTag = null) {
-  const base = String(name || '').trim() || 'Player';
-  const tag = normalizeAccountTag(accountTag);
-  return tag ? `[${tag}] ${base}` : base;
-}
-
-function capitalizeWord(value) {
-  const text = String(value || '');
-  if (!text) return '';
-  return text.charAt(0).toUpperCase() + text.slice(1);
-}
-
 function normalizePickaxeTier(value, fallback = 'wood') {
   const tier = typeof value === 'string' ? value.toLowerCase() : '';
   return PICKAXE_TIERS.includes(tier) ? tier : fallback;
-}
-
-function createHeldPickaxeMesh(unit) {
-  const mesh = new THREE.Group();
-  const handle = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.055 * unit, 0.055 * unit, 1.42 * unit, 8),
-    new THREE.MeshStandardMaterial({ color: 0x7c4a26, roughness: 0.8 })
-  );
-  handle.rotation.z = Math.PI / 2;
-  handle.castShadow = true;
-
-  const head = new THREE.Mesh(
-    new THREE.BoxGeometry(0.64 * unit, 0.22 * unit, 0.22 * unit),
-    new THREE.MeshStandardMaterial({ color: PICKAXE_HEAD_COLORS.wood, roughness: 0.45, metalness: 0.18 })
-  );
-  head.position.set(0.58 * unit, 0, 0);
-  head.castShadow = true;
-
-  mesh.add(handle, head);
-  mesh.userData.head = head;
-  return mesh;
-}
-
-function createHeldFishingRodMesh(unit) {
-  const rod = new THREE.Group();
-  const grip = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.08 * unit, 0.09 * unit, 0.52 * unit, 10),
-    new THREE.MeshStandardMaterial({ color: 0x7c4a26, roughness: 0.84 })
-  );
-  grip.rotation.z = Math.PI / 2;
-  grip.position.x = -0.46 * unit;
-  grip.castShadow = true;
-
-  const shaft = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.028 * unit, 0.033 * unit, 2.25 * unit, 10),
-    new THREE.MeshStandardMaterial({ color: 0xdbeafe, roughness: 0.28, metalness: 0.52 })
-  );
-  shaft.rotation.z = Math.PI / 2;
-  shaft.position.x = 0.36 * unit;
-  shaft.castShadow = true;
-
-  const accent = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.11 * unit, 0.11 * unit, 0.14 * unit, 14),
-    new THREE.MeshStandardMaterial({ color: FISHING_ROD_ACCENT_COLORS.basic, roughness: 0.36, metalness: 0.58 })
-  );
-  accent.position.set(-0.2 * unit, -0.12 * unit, 0);
-  accent.castShadow = true;
-
-  const line = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.007 * unit, 0.007 * unit, 0.56 * unit, 6),
-    new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.22, metalness: 0.1 })
-  );
-  line.position.set(1.44 * unit, -0.28 * unit, 0);
-  line.castShadow = true;
-
-  const hook = new THREE.Mesh(
-    new THREE.SphereGeometry(0.03 * unit, 8, 8),
-    new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.32, metalness: 0.55 })
-  );
-  hook.position.set(1.44 * unit, -0.58 * unit, 0);
-  hook.castShadow = true;
-
-  rod.add(grip, shaft, accent, line, hook);
-  rod.userData.accent = accent;
-  return rod;
-}
-
-function createHeldTorchMesh(unit) {
-  const torch = new THREE.Group();
-  const handle = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.06 * unit, 0.07 * unit, 1.0 * unit, 8),
-    new THREE.MeshStandardMaterial({ color: 0x7c4a26, roughness: 0.85 })
-  );
-  handle.castShadow = true;
-
-  const band = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.08 * unit, 0.08 * unit, 0.14 * unit, 10),
-    new THREE.MeshStandardMaterial({ color: 0x9ca3af, roughness: 0.3, metalness: 0.6 })
-  );
-  band.position.y = 0.42 * unit;
-  band.castShadow = true;
-
-  const flame = new THREE.Mesh(
-    new THREE.ConeGeometry(0.14 * unit, 0.36 * unit, 10),
-    new THREE.MeshStandardMaterial({ color: 0xf97316, emissive: 0xf59e0b, emissiveIntensity: 1.25, roughness: 0.28 })
-  );
-  flame.position.y = 0.72 * unit;
-  flame.castShadow = true;
-
-  torch.add(handle, band, flame);
-  torch.userData.flame = flame;
-  return torch;
-}
-
-function applyHeldGearVisual(player) {
-  const parts = player?.mesh?.userData?.parts;
-  if (!parts) return;
-
-  const tier = normalizePickaxeTier(player.heldPickaxe, 'wood');
-  const rodTier = normalizeRodTier(player.heldFishingRodTier, 'basic');
-  const hasRod = player.hasFishingRod === true;
-  const fishingActive = player.isLocal
-    ? Boolean(fishingMiniGame.active || fishingMiniGame.starting)
-    : player.isFishing === true;
-  const rodVisible = hasRod && fishingActive;
-  const pickaxeVisible = !rodVisible;
-
-  if (parts.heldPickaxeHead?.material?.color) {
-    parts.heldPickaxeHead.material.color.set(PICKAXE_HEAD_COLORS[tier] || PICKAXE_HEAD_COLORS.wood);
-  }
-  if (parts.heldPickaxe) {
-    parts.heldPickaxe.visible = pickaxeVisible;
-  }
-  if (parts.heldFishingRodAccent?.material?.color) {
-    parts.heldFishingRodAccent.material.color.set(FISHING_ROD_ACCENT_COLORS[rodTier] || FISHING_ROD_ACCENT_COLORS.basic);
-  }
-  if (parts.heldFishingRod) {
-    parts.heldFishingRod.visible = rodVisible;
-  }
-
-  const localTorchCount = player.isLocal ? Math.max(0, Math.floor(Number(questState.inventory.torch) || 0)) : 1;
-  const torchVisible = Boolean(player.torchEquipped) && localTorchCount > 0;
-  if (parts.heldTorch) {
-    parts.heldTorch.visible = torchVisible;
-  }
-  if (parts.heldTorchFlame) {
-    parts.heldTorchFlame.visible = torchVisible;
-  }
 }
 
 function syncLocalHeldGear(emitToServer = false) {
@@ -8764,27 +3553,6 @@ function syncLocalHeldGear(emitToServer = false) {
       isFishing: local.isFishing === true
     });
   }
-}
-
-function makeTextSign(text, width = 2.2, height = 0.7, bg = '#8b5a2b', fg = '#fef3c7') {
-  const canvas = document.createElement('canvas');
-  canvas.width = 512;
-  canvas.height = 192;
-  const ctx = canvas.getContext('2d');
-  ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.strokeStyle = '#3f2a1a';
-  ctx.lineWidth = 10;
-  ctx.strokeRect(8, 8, canvas.width - 16, canvas.height - 16);
-  ctx.fillStyle = fg;
-  ctx.font = 'bold 64px Arial';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(text, canvas.width * 0.5, canvas.height * 0.52);
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.needsUpdate = true;
-  const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9, metalness: 0.02 });
-  return new THREE.Mesh(new THREE.PlaneGeometry(width, height), mat);
 }
 
 function closeNpcDialogue() {
@@ -8904,40 +3672,6 @@ function hideFishCatchCard() {
   fishCatchCardEl?.classList.add('hidden');
 }
 
-function normalizeFishRarity(value, fallback = 'common') {
-  return FISH_RARITY_ORDER.includes(value) ? value : fallback;
-}
-
-function sanitizeHexColor(value, fallback) {
-  const raw = typeof value === 'string' ? value.trim() : '';
-  if (/^#[0-9a-fA-F]{6}$/.test(raw)) return raw.toLowerCase();
-  return fallback;
-}
-
-function normalizeFishIndexMap(value) {
-  const next = {};
-  if (!value || typeof value !== 'object') return next;
-  for (const [id, count] of Object.entries(value)) {
-    if (!FISH_BY_ID.has(id)) continue;
-    const n = Number(count);
-    if (!Number.isFinite(n) || n <= 0) continue;
-    next[id] = Math.max(0, Math.floor(n));
-  }
-  return next;
-}
-
-function normalizeFishBagMap(value) {
-  const next = {};
-  if (!value || typeof value !== 'object') return next;
-  for (const [id, count] of Object.entries(value)) {
-    if (!FISH_BY_ID.has(id)) continue;
-    const n = Number(count);
-    if (!Number.isFinite(n) || n <= 0) continue;
-    next[id] = Math.max(0, Math.floor(n));
-  }
-  return next;
-}
-
 function caughtFishCount(fishId) {
   return Math.max(0, Math.floor(Number(questState.fishIndex?.[fishId]) || 0));
 }
@@ -8992,34 +3726,6 @@ function setFishingFocusMode(active) {
   document.body.classList.toggle('fishing-focus', Boolean(active));
 }
 
-function renderFishIndex() {
-  if (!fishIndexListEl) return;
-  const discovered = discoveredFishCount();
-  if (fishIndexSummaryEl) {
-    fishIndexSummaryEl.textContent = `Fish discovered: ${discovered} / ${FISH_CATALOG_SORTED.length}`;
-  }
-  if (marketFishIndexSummaryEl) {
-    marketFishIndexSummaryEl.textContent = `Fish discovered: ${discovered} / ${FISH_CATALOG_SORTED.length}`;
-  }
-  fishIndexListEl.innerHTML = '';
-  FISH_CATALOG_SORTED.forEach((fish) => {
-    const count = caughtFishCount(fish.id);
-    const isDiscovered = count > 0;
-    const entry = document.createElement('article');
-    entry.className = `fish-entry${isDiscovered ? '' : ' locked'}`;
-    const rarityLabel = capitalizeWord(fish.rarity);
-    entry.innerHTML = `
-      <div class="icon-wrap">${buildFishIconMarkup(fish, { compact: true, locked: !isDiscovered })}</div>
-      <div class="meta">
-        <div class="name">${isDiscovered ? fish.name : 'Unknown Fish'}</div>
-        <div class="sub">${rarityLabel}${isDiscovered ? ` - ${fish.chanceLabel}` : ''}</div>
-      </div>
-      <div class="count">${isDiscovered ? `x${count}` : '---'}</div>
-    `;
-    fishIndexListEl.appendChild(entry);
-  });
-}
-
 function fishSellPriceById(fishId) {
   const fish = FISH_BY_ID.get(fishId);
   if (!fish) return 0;
@@ -9066,18 +3772,6 @@ function setHomeStatus(text, color = '#cbd5e1') {
   homeStatusEl.style.color = color;
 }
 
-function formatRefreshCountdown(targetAt) {
-  const remainingMs = Math.max(0, Math.floor(Number(targetAt) || 0) - Date.now());
-  if (remainingMs <= 0) return 'refreshing now';
-  const totalSeconds = Math.ceil(remainingMs / 1000);
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  if (hours > 0) return `${hours}h ${minutes}m`;
-  if (minutes > 0) return `${minutes}m ${seconds}s`;
-  return `${seconds}s`;
-}
-
 function updateFurnitureTraderSummary() {
   if (!furnitureTraderSummaryEl) return;
   const trader = normalizeFurnitureTraderState(questState.furnitureTrader);
@@ -9104,73 +3798,6 @@ function startFurnitureTraderCountdown() {
     }
     updateFurnitureTraderSummary();
   }, 1000);
-}
-
-function renderFurnitureTraderModal() {
-  const trader = normalizeFurnitureTraderState(questState.furnitureTrader);
-  questState.furnitureTrader = trader;
-  updateFurnitureTraderSummary();
-  if (!furnitureTraderListEl) return;
-  furnitureTraderListEl.innerHTML = '';
-  for (const item of trader.items) {
-    const card = document.createElement('article');
-    card.className = 'market-section furniture-trader-card';
-
-    const title = document.createElement('h3');
-    title.textContent = item.label;
-
-    const meta = document.createElement('div');
-    meta.className = 'furniture-trader-card-meta';
-    if (item.owned) {
-      meta.textContent = 'Status: owned and ready for your room.';
-    } else if (!item.availableThisCycle) {
-      meta.textContent = item.occasional
-        ? 'Occasional stock item. Check the next refresh.'
-        : 'Unavailable this cycle.';
-    } else if (item.remaining <= 0) {
-      meta.textContent = 'Status: sold out for this cycle.';
-    } else {
-      const stockText = item.stock === 1 ? '1 copy this cycle' : `${item.remaining.toLocaleString()} of ${item.stock.toLocaleString()} left`;
-      meta.textContent = `Price: ${item.price.toLocaleString()} coins | ${stockText}${item.occasional ? ' | Occasional stock' : ''}`;
-    }
-
-    const action = document.createElement('button');
-    const cycleLimitReached = trader.purchasesRemaining <= 0;
-    if (item.owned) {
-      action.textContent = 'Owned';
-      action.disabled = true;
-    } else if (!item.availableThisCycle) {
-      action.textContent = 'Not In Stock';
-      action.disabled = true;
-    } else if (item.remaining <= 0) {
-      action.textContent = 'Sold Out';
-      action.disabled = true;
-    } else if (cycleLimitReached) {
-      action.textContent = 'Cycle Limit Reached';
-      action.disabled = true;
-    } else {
-      action.textContent = `Buy (${item.price.toLocaleString()} coins)`;
-      action.disabled = questState.coins < item.price;
-      action.addEventListener('click', () => {
-        socket.emit('shop:buyFurniture', { itemId: item.itemId }, (resp) => {
-          if (!resp?.ok) {
-            setFurnitureTraderStatus(resp?.error || 'Could not buy furniture.', '#fecaca');
-            return;
-          }
-          if (resp.progress) {
-            applyProgressState(resp.progress);
-          } else if (resp.furnitureTrader) {
-            questState.furnitureTrader = normalizeFurnitureTraderState(resp.furnitureTrader);
-          }
-          renderFurnitureTraderModal();
-          setFurnitureTraderStatus(`Bought ${item.label}. It is now placed in your room.`, '#86efac');
-        });
-      });
-    }
-
-    card.append(title, meta, action);
-    furnitureTraderListEl.appendChild(card);
-  }
 }
 
 function loadFurnitureTraderModal(statusText = '') {
@@ -9228,100 +3855,6 @@ function ensureHomePaintSelectOptions() {
   }
 }
 
-function renderHomeModal() {
-  ensureHomePaintSelectOptions();
-  const room = normalizeHomeRoomState(questState.homeRoom);
-  questState.homeRoom = room;
-  if (homeWallSelectEl) {
-    homeWallSelectEl.value = Object.prototype.hasOwnProperty.call(HOME_ROOM_WALL_OPTIONS, room.wallPaint)
-      ? room.wallPaint
-      : 'sand';
-  }
-  if (homeFloorSelectEl) {
-    homeFloorSelectEl.value = Object.prototype.hasOwnProperty.call(HOME_ROOM_FLOOR_OPTIONS, room.floorPaint)
-      ? room.floorPaint
-      : 'oak';
-  }
-  if (homeWallApplyEl) {
-    homeWallApplyEl.textContent = `Apply Wall Paint (${HOME_ROOM_PAINT_PRICE.toLocaleString()} coins)`;
-  }
-  if (homeFloorApplyEl) {
-    homeFloorApplyEl.textContent = `Apply Floor Paint (${HOME_ROOM_PAINT_PRICE.toLocaleString()} coins)`;
-  }
-  if (homeFurnitureListEl) {
-    homeFurnitureListEl.innerHTML = '';
-    for (const itemId of HOME_ROOM_FURNITURE_ORDER) {
-      const item = HOME_ROOM_FURNITURE_SHOP[itemId];
-      if (!item) continue;
-      const owned = room.ownedFurniture?.[itemId] === true;
-      const placed = room.placedFurniture?.[itemId] === true;
-      const card = document.createElement('article');
-      card.className = 'home-furniture-card';
-
-      const header = document.createElement('div');
-      header.className = 'home-furniture-header';
-
-      const title = document.createElement('h3');
-      title.textContent = item.label;
-
-      const tag = document.createElement('span');
-      tag.className = 'home-furniture-tag';
-      if (owned) {
-        tag.textContent = placed ? 'Placed' : 'Stored';
-        tag.dataset.state = placed ? 'placed' : 'stored';
-      } else {
-        tag.textContent = item.occasionallyAvailable ? 'Occasional' : 'Standard';
-        tag.dataset.state = item.occasionallyAvailable ? 'occasional' : 'standard';
-      }
-
-      header.append(title, tag);
-
-      const meta = document.createElement('div');
-      meta.className = 'home-furniture-meta';
-      if (owned) {
-        meta.textContent = placed
-          ? 'Status: placed in your room.'
-          : 'Status: owned and stored.';
-      } else {
-        const priceText = item.price ? `${item.price.toLocaleString()} coins` : 'Market price';
-        meta.textContent = `Buy at the Furniture Trader island (${priceText}).`;
-      }
-      const action = document.createElement('button');
-      if (owned) {
-        action.textContent = placed ? 'Store Item' : 'Place Item';
-        action.addEventListener('click', () => {
-          socket.emit('home:toggleFurniture', { itemId, placed: !placed }, (resp) => {
-            if (!resp?.ok) {
-              setHomeStatus(resp?.error || 'Could not update furniture.', '#fecaca');
-              return;
-            }
-            if (resp.progress) {
-              applyProgressState(resp.progress);
-            }
-            setHomeStatus(`${item.label} ${placed ? 'stored' : 'placed'}.`, '#86efac');
-            renderHomeModal();
-          });
-        });
-      } else {
-        action.textContent = 'Buy At Trader';
-        action.disabled = true;
-      }
-      const actions = document.createElement('div');
-      actions.className = 'home-furniture-actions';
-      actions.append(action);
-      card.append(header, meta, actions);
-      homeFurnitureListEl.appendChild(card);
-    }
-  }
-  if (homeDoorToggleEl) {
-    homeDoorToggleEl.textContent = room.doorOpen === false ? 'Door: Closed' : 'Door: Open';
-  }
-  applyHomeRoomVisuals();
-  if (homeStatusEl && !homeStatusEl.textContent.trim()) {
-    setHomeStatus('Use coins to buy furniture and paint your room.', '#cbd5e1');
-  }
-}
-
 function inventoryEntriesForTab(tab = 'ores') {
   if (tab === 'fish') {
     return FISH_CATALOG_SORTED
@@ -9343,99 +3876,6 @@ function inventoryEntriesForTab(tab = 'ores') {
     qty: Math.max(0, Math.floor(Number(questState.inventory?.[ore]) || 0)),
     price: ORE_SELL_PRICE[ore] || 0
   }));
-}
-
-function renderInventoryModal() {
-  if (!inventoryListEl) return;
-  const tab = inventoryViewTab === 'fish' ? 'fish' : 'ores';
-  inventoryViewTab = tab;
-  inventoryTabOresEl?.classList.toggle('active', tab === 'ores');
-  inventoryTabFishEl?.classList.toggle('active', tab === 'fish');
-  const entries = inventoryEntriesForTab(tab);
-  inventoryListEl.innerHTML = '';
-  if (!entries.length) {
-    const empty = document.createElement('article');
-    empty.className = 'inventory-entry';
-    empty.innerHTML = `
-      <div class="name">No items</div>
-      <div class="qty">${tab === 'fish' ? 'Catch fish to fill this tab.' : 'Mine ore to fill this tab.'}</div>
-      <div class="price">Value: --</div>
-    `;
-    inventoryListEl.appendChild(empty);
-    return;
-  }
-  entries.forEach((entry) => {
-    const card = document.createElement('article');
-    card.className = 'inventory-entry';
-    card.innerHTML = `
-      <div class="name">${entry.name}</div>
-      <div class="qty">Owned: ${entry.qty.toLocaleString()}</div>
-      <div class="price">Sell value: ${entry.price.toLocaleString()} coins each</div>
-    `;
-    inventoryListEl.appendChild(card);
-  });
-}
-
-function renderRodShopModal() {
-  const hasFishingRod = questState.hasFishingRod === true;
-  const currentTier = normalizeRodTier(questState.fishingRodTier, 'basic');
-  const shopData = rodShopSnapshot?.rodShop || null;
-  const buyPrice = Math.max(0, Math.floor(Number(rodShopSnapshot?.buyPrice) || FISHING_ROD_PRICE));
-  const basicRodLevelReq = Math.max(1, Math.floor(Number(FISHING_ROD_LEVEL_REQUIREMENT.basic) || 1));
-  const canBuyBasicRod = questState.level >= basicRodLevelReq;
-  const currentLabel = hasFishingRod ? rodTierLabel(currentTier) : 'None';
-  if (rodCurrentTierEl) {
-    rodCurrentTierEl.textContent = `Current rod: ${currentLabel}`;
-  }
-  const next = shopData?.next || null;
-  if (!hasFishingRod) {
-    if (rodNextTierEl) rodNextTierEl.textContent = 'Next upgrade: Buy your first rod';
-    if (rodUpgradeCostEl) {
-      const levelText = `Level required: ${basicRodLevelReq} (you: ${questState.level})`;
-      rodUpgradeCostEl.textContent = `First rod price: ${buyPrice.toLocaleString()} coins | ${levelText}`;
-    }
-    if (rodUpgradeFishCostEl) rodUpgradeFishCostEl.innerHTML = '<li>No fish required for first rod.</li>';
-  } else if (shopData && next) {
-    if (rodNextTierEl) rodNextTierEl.textContent = `Next upgrade: ${next.label || rodTierLabel(next.tier)}`;
-    if (rodUpgradeCostEl) {
-      const coinsRequired = Math.max(0, Math.floor(Number(next.coins) || 0)).toLocaleString();
-      const levelRequired = Math.max(1, Math.floor(Number(next.levelRequired) || 1));
-      rodUpgradeCostEl.textContent = `Coins required: ${coinsRequired} | Level required: ${levelRequired} (you: ${questState.level})`;
-    }
-    if (rodUpgradeFishCostEl) {
-      rodUpgradeFishCostEl.innerHTML = '';
-      for (const cost of next.fishCost || []) {
-        const item = document.createElement('li');
-        const owned = Math.max(0, Math.floor(Number(ownedFishCount(cost?.fishId) || cost?.owned) || 0));
-        const needed = Math.max(1, Math.floor(Number(cost?.amount) || 1));
-        const ok = owned >= needed;
-        item.style.color = ok ? '#86efac' : '#fca5a5';
-        item.textContent = `${cost?.name || 'Fish'}: ${owned.toLocaleString()} / ${needed.toLocaleString()}`;
-        rodUpgradeFishCostEl.appendChild(item);
-      }
-    }
-  } else if (!shopData) {
-    if (rodNextTierEl) rodNextTierEl.textContent = 'Next upgrade: Loading...';
-    if (rodUpgradeCostEl) rodUpgradeCostEl.textContent = '';
-    if (rodUpgradeFishCostEl) rodUpgradeFishCostEl.innerHTML = '<li>Loading rod data...</li>';
-  } else {
-    if (rodNextTierEl) rodNextTierEl.textContent = 'Next upgrade: Max tier reached';
-    if (rodUpgradeCostEl) rodUpgradeCostEl.textContent = '';
-    if (rodUpgradeFishCostEl) rodUpgradeFishCostEl.innerHTML = '<li>Your rod is fully upgraded.</li>';
-  }
-
-  if (rodBuyBtnEl) {
-    rodBuyBtnEl.disabled = hasFishingRod || !canBuyBasicRod;
-    rodBuyBtnEl.textContent = hasFishingRod
-      ? 'Rod Owned'
-      : (canBuyBasicRod
-        ? `Buy Fishing Rod (${buyPrice.toLocaleString()} coins)`
-        : `Locked: Level ${basicRodLevelReq}`);
-  }
-  if (rodUpgradeBtnEl) {
-    const meetsLevel = Boolean(next?.meetsLevel);
-    rodUpgradeBtnEl.disabled = !hasFishingRod || !next || !meetsLevel;
-  }
 }
 
 function loadRodShopModal(statusText = '') {
@@ -9610,13 +4050,6 @@ function renderMarketQuestSection() {
   if (marketQuestClaimBtnEl) marketQuestClaimBtnEl.disabled = quest.status !== 'ready';
 }
 
-function renderMarketModal() {
-  renderFishIndex();
-  renderMarketSellOptions();
-  renderMarketSellPreview();
-  renderMarketQuestSection();
-}
-
 function selectedOreSellEntry() {
   const selectedId = typeof oreSellItemEl?.value === 'string' ? oreSellItemEl.value : '';
   const entry = marketSellEntries('ore').find((item) => item.id === selectedId) || null;
@@ -9672,11 +4105,6 @@ function renderOreSellPreview() {
   if (oreSellBtnEl) oreSellBtnEl.disabled = false;
 }
 
-function renderOreModal() {
-  renderOreSellOptions();
-  renderOreSellPreview();
-}
-
 function showFishCatchCard(fish, amount = 1) {
   if (!fish || !fishCatchCardEl) return;
   const rarity = normalizeFishRarity(fish.rarity, 'common');
@@ -9703,13 +4131,6 @@ function showFishCatchCard(fish, amount = 1) {
     fishCatchCardTimer = null;
     fishCatchCardEl.classList.add('hidden');
   }, FISH_CATCH_CARD_SHOW_MS);
-}
-
-function hexToCss(value, fallback = '#9ca3af') {
-  const num = Number(value);
-  if (!Number.isFinite(num)) return fallback;
-  const safe = Math.max(0, Math.min(0xffffff, Math.floor(num)));
-  return `#${safe.toString(16).padStart(6, '0')}`;
 }
 
 function mineTimingProfile(resource) {
@@ -12711,120 +7132,6 @@ function currentFormAppearance() {
   );
 }
 
-function refreshItemCards() {
-  itemCards.forEach((card) => {
-    const type = card.dataset.type;
-    const value = card.dataset.value;
-    const selected =
-      (type === 'hair' && hairStyleInputEl.value === value) ||
-      (type === 'face' && faceStyleInputEl.value === value) ||
-      (type === 'accessory' && selectedAccessories.has(value));
-    card.classList.toggle('active', selected);
-  });
-}
-
-function makePreviewMesh(appearance) {
-  const mesh = makePlayerMesh(appearance);
-  scene.remove(mesh);
-  mesh.position.set(0, 0, 0);
-  paintPlayer({ mesh }, appearance);
-  return mesh;
-}
-
-function ensurePreviewScene() {
-  if (previewScene) return;
-  previewScene = new THREE.Scene();
-  previewScene.background = new THREE.Color(0x111827);
-  previewCamera = new THREE.PerspectiveCamera(40, 1, 0.1, 50);
-  previewCamera.position.set(0, 2.5, previewDistance);
-  previewLight = new THREE.DirectionalLight(0xffffff, 1.25);
-  previewLight.position.set(5, 8, 7);
-  previewScene.add(new THREE.HemisphereLight(0xdbeafe, 0x1f2937, 0.86), previewLight);
-  const pad = new THREE.Mesh(
-    new THREE.CircleGeometry(1.9, 24),
-    new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.92 })
-  );
-  pad.rotation.x = -Math.PI / 2;
-  previewScene.add(pad);
-  previewRenderer = new THREE.WebGLRenderer({ canvas: customizePreviewEl, antialias: true, alpha: false });
-  previewRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, previewPixelRatioCap));
-
-  const startDrag = (event) => {
-    event.preventDefault();
-    previewDragging = true;
-    previewAutoSpin = false;
-    previewPointerId = event.pointerId;
-    previewLastX = event.clientX;
-    previewLastY = event.clientY;
-    if (customizePreviewEl.setPointerCapture) {
-      try {
-        customizePreviewEl.setPointerCapture(event.pointerId);
-      } catch {}
-    }
-  };
-
-  const moveDrag = (event) => {
-    if (!previewDragging || (previewPointerId !== null && event.pointerId !== previewPointerId)) return;
-    event.preventDefault();
-    const dx = event.clientX - previewLastX;
-    const dy = event.clientY - previewLastY;
-    previewLastX = event.clientX;
-    previewLastY = event.clientY;
-    previewYaw += dx * 0.012;
-    previewPitch = THREE.MathUtils.clamp(previewPitch + dy * 0.004, -0.65, 0.45);
-  };
-
-  const endDrag = (event) => {
-    if (previewPointerId !== null && event.pointerId !== previewPointerId) return;
-    previewDragging = false;
-    previewPointerId = null;
-  };
-
-  customizePreviewEl.addEventListener('pointerdown', startDrag);
-  customizePreviewEl.addEventListener('pointermove', moveDrag);
-  customizePreviewEl.addEventListener('pointerup', endDrag);
-  customizePreviewEl.addEventListener('pointercancel', endDrag);
-  customizePreviewEl.addEventListener('pointerleave', endDrag);
-  customizePreviewEl.addEventListener(
-    'wheel',
-    (event) => {
-      event.preventDefault();
-      previewAutoSpin = false;
-      previewDistance = THREE.MathUtils.clamp(previewDistance + event.deltaY * 0.01, 4.2, 9.2);
-    },
-    { passive: false }
-  );
-}
-
-function updatePreviewAvatar() {
-  ensurePreviewScene();
-  if (previewAvatar) {
-    previewScene.remove(previewAvatar);
-  }
-  previewAvatar = makePreviewMesh(currentFormAppearance());
-  previewScene.add(previewAvatar);
-}
-
-function renderPreview() {
-  if (!previewRenderer || !previewScene || !previewAvatar || customizeModalEl.classList.contains('hidden')) return;
-  const width = Math.max(220, customizePreviewEl.clientWidth || customizePreviewEl.width);
-  const height = Math.max(220, customizePreviewEl.clientHeight || customizePreviewEl.height);
-  if (width !== previewRenderWidth || height !== previewRenderHeight) {
-    previewRenderWidth = width;
-    previewRenderHeight = height;
-    previewRenderer.setSize(width, height, false);
-    previewCamera.aspect = width / height;
-    previewCamera.updateProjectionMatrix();
-  }
-  previewCamera.position.set(0, 2.5, previewDistance);
-  previewCamera.lookAt(0, 1.55 + Math.sin(previewPitch) * 0.55, 0);
-  if (previewAutoSpin && !previewDragging) {
-    previewYaw += 0.012;
-  }
-  previewAvatar.rotation.y = previewYaw;
-  previewRenderer.render(previewScene, previewCamera);
-}
-
 itemCards.forEach((card) => {
   card.addEventListener('click', () => {
     const type = card.dataset.type;
@@ -12839,50 +7146,6 @@ itemCards.forEach((card) => {
     updatePreviewAvatar();
   });
 });
-
-function outfitStorageKey(slot) {
-  return `island_outfit_slot_${slot}`;
-}
-
-function saveOutfit(slot) {
-  const appearance = currentFormAppearance();
-  const name = nameInputEl.value.trim().slice(0, 18);
-  localStorage.setItem(
-    outfitStorageKey(slot),
-    JSON.stringify({
-      name,
-      appearance
-    })
-  );
-  customizeStatusEl.textContent = `Saved outfit slot ${slot}.`;
-}
-
-function loadOutfit(slot) {
-  const raw = localStorage.getItem(outfitStorageKey(slot));
-  if (!raw) {
-    customizeStatusEl.textContent = `No outfit in slot ${slot}.`;
-    return;
-  }
-  try {
-    const parsed = JSON.parse(raw);
-    const appearance = normalizeAppearance(parsed.appearance, currentFormAppearance());
-    if (parsed.name) nameInputEl.value = String(parsed.name).slice(0, 18);
-    skinInputEl.value = appearance.skin;
-    colorInputEl.value = appearance.shirt;
-    pantsColorInputEl.value = appearance.pants;
-    shoesColorInputEl.value = appearance.shoes;
-    hairStyleInputEl.value = appearance.hairStyle;
-    hairColorInputEl.value = appearance.hairColor;
-    faceStyleInputEl.value = appearance.faceStyle;
-    selectedAccessories.clear();
-    (appearance.accessories || []).forEach((item) => selectedAccessories.add(item));
-    refreshItemCards();
-    updatePreviewAvatar();
-    customizeStatusEl.textContent = `Loaded outfit slot ${slot}.`;
-  } catch {
-    customizeStatusEl.textContent = `Outfit slot ${slot} is invalid.`;
-  }
-}
 
 outfitSaveButtons.forEach((button) => {
   button.addEventListener('click', () => {

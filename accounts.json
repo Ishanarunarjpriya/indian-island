@@ -40,5 +40,11 @@
     "hash": "4d275c817ff223252d4d3344fb808f3be3d43d0dd22ca4e405dd8b91d4ad876d26ec29003727b10b226c51da7a648d944b7720c94f90de9fed4725239727bfdd",
     "profileId": "acct-guest_l483w1m3",
     "bannedUntil": 0
+  },
+  "ishyfishyinthedishy": {
+    "salt": "c903b2440740454b439e7a0c647faabf",
+    "hash": "a3b047d1d2d74c675b48095eb73617857171857b269a37f57fcb84e3131ffb45b086e97cf96799751e88a3748003ba1ce7e4f474562a4463d609343651de67e7",
+    "profileId": "acct-ishyfishyinthedishy",
+    "bannedUntil": 0
   }
 }
