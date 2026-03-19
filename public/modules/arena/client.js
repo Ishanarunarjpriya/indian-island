@@ -49,6 +49,30 @@ export function initArenaClient(context) {
   };
   const arenaRenderer = createArenaRenderer({ scene: context?.scene });
 
+  function teleportLocal(position) {
+    if (!position) return;
+    const x = Number(position.x);
+    const y = Number(position.y);
+    const z = Number(position.z);
+    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) return;
+
+    const localPlayer = typeof context.getLocalPlayer === 'function' ? context.getLocalPlayer() : null;
+    if (localPlayer?.mesh?.position) {
+      localPlayer.mesh.position.set(x, y, z);
+    }
+    if (localPlayer) {
+      localPlayer.x = x;
+      localPlayer.y = y;
+      localPlayer.z = z;
+    }
+    const localState = typeof context.getLocalPlayerState === 'function' ? context.getLocalPlayerState() : null;
+    if (localState) {
+      localState.x = x;
+      localState.y = y;
+      localState.z = z;
+    }
+  }
+
   const ui = createArenaUI({
     getSocketId: () => socket.id,
     onEnterQueueHub: () => socket.emit('arena:enterQueueHub'),
@@ -60,7 +84,7 @@ export function initArenaClient(context) {
   });
 
   function refreshUI() {
-    const shouldShowArenaUi = Boolean(state.match) || state.nearGateway || state.nearQueueHub;
+    const shouldShowArenaUi = Boolean(state.match) || state.nearQueueHub;
     ui.setVisible(shouldShowArenaUi);
     ui.renderProfile(state.profile);
     ui.renderQueueHubState(state.queue);
@@ -98,12 +122,25 @@ export function initArenaClient(context) {
     refreshUI();
   }
 
+  function onReturnToLobby(payload) {
+    teleportLocal(payload);
+    if (payload?.mode === 'queue-hub') {
+      state.lastMessage = 'Entered PvP queue hub.';
+    } else if (payload?.mode === 'main-world') {
+      state.lastMessage = 'Returned to main world.';
+    } else if (payload?.mode === 'match') {
+      state.lastMessage = 'PvP match started.';
+    }
+    refreshUI();
+  }
+
   socket.on('arena:profile', onProfile);
   socket.on('arena:queueHubState', onQueue);
   socket.on('arena:queueState', onQueue);
   socket.on('arena:state', onMatch);
   socket.on('arena:message', onMessage);
   socket.on('arena:matchEnded', onMatchEnded);
+  socket.on('arena:returnToLobby', onReturnToLobby);
 
   socket.emit('arena:requestSync');
 
@@ -165,6 +202,7 @@ export function initArenaClient(context) {
       socket.off('arena:state', onMatch);
       socket.off('arena:message', onMessage);
       socket.off('arena:matchEnded', onMatchEnded);
+      socket.off('arena:returnToLobby', onReturnToLobby);
       arenaRenderer.dispose();
       ui.destroy();
     },
