@@ -45,6 +45,7 @@ export function initArenaClient(context) {
     match: null,
     nearGateway: false,
     nearQueueHub: false,
+    nearbyPadId: null,
     lastMessage: '',
   };
   const arenaRenderer = createArenaRenderer({ scene: context?.scene });
@@ -83,8 +84,28 @@ export function initArenaClient(context) {
     onDecision: (decision) => socket.emit('arena:decision', decision),
   });
 
+  function getNearbyPadId(pos) {
+    const pads = Array.isArray(ARENA_CLIENT_CONFIG.queuePads) ? ARENA_CLIENT_CONFIG.queuePads : [];
+    const padRadius = Number(ARENA_CLIENT_CONFIG.queuePadJoinRadius || 2.9);
+    let best = null;
+    let bestDist = Number.POSITIVE_INFINITY;
+    for (let i = 0; i < pads.length; i += 1) {
+      const pad = pads[i];
+      const center = {
+        x: Number(ARENA_CLIENT_CONFIG.queueHubCenter.x) + Number(pad?.offset?.x || 0),
+        z: Number(ARENA_CLIENT_CONFIG.queueHubCenter.z) + Number(pad?.offset?.z || 0),
+      };
+      const dist = distanceXZ(pos, center);
+      if (dist <= padRadius && dist < bestDist) {
+        bestDist = dist;
+        best = pad.id;
+      }
+    }
+    return best;
+  }
+
   function refreshUI() {
-    const shouldShowArenaUi = Boolean(state.match) || state.nearQueueHub;
+    const shouldShowArenaUi = Boolean(state.match);
     ui.setVisible(shouldShowArenaUi);
     ui.renderProfile(state.profile);
     ui.renderQueueHubState(state.queue);
@@ -125,6 +146,8 @@ export function initArenaClient(context) {
   function onReturnToLobby(payload) {
     teleportLocal(payload);
     if (payload?.mode === 'queue-hub') {
+      state.nearQueueHub = true;
+      state.nearGateway = false;
       state.lastMessage = 'Entered PvP queue hub.';
     } else if (payload?.mode === 'main-world') {
       state.lastMessage = 'Returned to main world.';
@@ -148,8 +171,26 @@ export function initArenaClient(context) {
     if (!event || typeof event.key !== 'string') return;
 
     if (event.key.toLowerCase() === 'e') {
+      if (state.match) return;
       if (state.nearGateway) {
+        teleportLocal({
+          x: ARENA_CLIENT_CONFIG.queueHubCenter.x,
+          y: ARENA_CLIENT_CONFIG.queueHubCenter.y,
+          z: ARENA_CLIENT_CONFIG.queueHubCenter.z,
+        });
+        state.nearGateway = false;
+        state.nearQueueHub = true;
+        state.lastMessage = 'Entering PvP queue hub...';
         socket.emit('arena:enterQueueHub');
+        socket.emit('arena:requestSync');
+        refreshUI();
+        event.preventDefault();
+        return;
+      }
+      if (state.nearQueueHub && state.nearbyPadId) {
+        socket.emit('arena:joinQueuePad', { padId: state.nearbyPadId });
+        state.lastMessage = `Joining ${state.nearbyPadId.toUpperCase()} queue...`;
+        refreshUI();
         event.preventDefault();
       }
       return;
@@ -164,6 +205,21 @@ export function initArenaClient(context) {
 
     if (event.key.toLowerCase() === 'r') {
       socket.emit('arena:decision', 'continue');
+      event.preventDefault();
+      return;
+    }
+    if (event.key.toLowerCase() === 'c') {
+      socket.emit('arena:decision', 'cashout');
+      event.preventDefault();
+      return;
+    }
+    if (event.key.toLowerCase() === 'q') {
+      if (state.nearQueueHub && !state.match) {
+        socket.emit('arena:leaveQueuePad');
+        state.lastMessage = 'Left queue lane.';
+        refreshUI();
+        event.preventDefault();
+      }
     }
   }
 
@@ -183,10 +239,12 @@ export function initArenaClient(context) {
 
     const nearGateway = distanceXZ(pos, ARENA_CLIENT_CONFIG.gatewayCenter) <= Number(ARENA_CLIENT_CONFIG.gatewayInteractRadius || 4.2);
     const nearQueueHub = distanceXZ(pos, ARENA_CLIENT_CONFIG.queueHubCenter) <= Number(ARENA_CLIENT_CONFIG.queueHubInteractRadius || 28);
+    const nearbyPadId = nearQueueHub ? getNearbyPadId(pos) : null;
 
-    if (nearGateway !== state.nearGateway || nearQueueHub !== state.nearQueueHub) {
+    if (nearGateway !== state.nearGateway || nearQueueHub !== state.nearQueueHub || nearbyPadId !== state.nearbyPadId) {
       state.nearGateway = nearGateway;
       state.nearQueueHub = nearQueueHub;
+      state.nearbyPadId = nearbyPadId;
       refreshUI();
     }
   }, 160);
