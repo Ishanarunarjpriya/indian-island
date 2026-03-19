@@ -83,7 +83,7 @@ export function createArenaUI() {
     <div id="arena-modal-header">
       <div>
         <div style="font-size:30px;font-weight:900;">Arena Lobby</div>
-        <div id="arena-modal-subtitle" style="opacity:.72;margin-top:4px;">Queue up, buy gear, and manage your hotbar.</div>
+        <div id="arena-modal-subtitle" style="opacity:.72;margin-top:4px;">Stage your loadout here, then teleport into the combat ring.</div>
       </div>
       <button id="arena-close" class="arena-button ghost" style="width:auto;padding:12px 14px;">Close</button>
     </div>
@@ -110,7 +110,7 @@ export function createArenaUI() {
         </div>
         <div id="arena-overview">
           <div style="font-size:20px;font-weight:900;margin-bottom:10px;">Run Rules</div>
-          <div style="line-height:1.7;opacity:.82;">Fight endless waves, bank PvP Tokens, and risk unbanked loot if the team wipes. Bosses spawn every 5 waves.</div>
+          <div style="line-height:1.7;opacity:.82;">Use the island hub as your lobby, gear up at the stall, then start a run to teleport into the separate combat ring. Bank PvP Tokens between waves and boss fights.</div>
         </div>
       </div>
     </div>
