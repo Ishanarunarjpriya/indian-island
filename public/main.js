@@ -6530,7 +6530,18 @@ socket.on('disconnect', () => {
 socket.on('auth:required', () => {
   statusEl.textContent = 'Auth Required';
   clearSessionWorld();
-  setAuthModalOpen(true, 'Please login or create an account.');
+  const savedUser = localStorage.getItem('island_auth_username') || '';
+  const savedPass = localStorage.getItem('island_auth_password') || '';
+  if (savedUser && savedPass) {
+    statusEl.textContent = 'Logging in...';
+    socket.emit('auth:login', { username: savedUser, password: savedPass }, (response) => {
+      if (!response?.ok) {
+        setAuthModalOpen(true, response?.error || 'Auto-login failed. Please login again.');
+      }
+    });
+  } else {
+    setAuthModalOpen(true, 'Please login or create an account.');
+  }
 });
 
 socket.on('init', (payload) => {
@@ -7818,9 +7829,7 @@ let lastPointerX = 0;
 let lastPointerY = 0;
 
 function clampGameplayCameraPitch(value) {
-  const min = firstPersonEnabled ? CAMERA_PITCH_FIRST_PERSON_MIN : CAMERA_PITCH_MIN;
-  const max = firstPersonEnabled ? CAMERA_PITCH_FIRST_PERSON_MAX : CAMERA_PITCH_MAX;
-  return Math.max(min, Math.min(max, value));
+  return value;
 }
 
 renderer.domElement.addEventListener('pointerdown', (event) => {
