@@ -637,9 +637,22 @@ const mineWarningNoAskEl = document.getElementById('mine-warning-no-ask');
 
 const cachedAuthUsername = localStorage.getItem('island_auth_username') || '';
 const cachedAuthPassword = localStorage.getItem('island_auth_password') || '';
+const ACCOUNT_GATE_PASSWORD = 'WeAreIndian';
+let accountGateUnlocked = false;
 let skipMineEntryWarning = localStorage.getItem(MINE_ENTRY_WARNING_PREF_KEY) === '1';
 if (authUsernameEl) authUsernameEl.value = cachedAuthUsername;
 if (authPasswordEl) authPasswordEl.value = cachedAuthPassword;
+
+function ensureAccountGateUnlocked() {
+  if (accountGateUnlocked) return true;
+  const entered = window.prompt('Enter game access password');
+  if (entered === ACCOUNT_GATE_PASSWORD) {
+    accountGateUnlocked = true;
+    return true;
+  }
+  if (authStatusEl) authStatusEl.textContent = 'Incorrect access password.';
+  return false;
+}
 
 function persistAuth(username, password) {
   localStorage.setItem('island_auth_username', username);
@@ -6557,6 +6570,10 @@ socket.on('disconnect', () => {
 socket.on('auth:required', () => {
   statusEl.textContent = 'Auth Required';
   clearSessionWorld();
+  if (!ensureAccountGateUnlocked()) {
+    setAuthModalOpen(true, 'Enter the access password to continue.');
+    return;
+  }
   const savedUser = localStorage.getItem('island_auth_username') || '';
   const savedPass = localStorage.getItem('island_auth_password') || '';
   if (savedUser && savedPass) {
@@ -7294,6 +7311,7 @@ function setCustomizeModal(open) {
 }
 
 async function submitAuth(mode) {
+  if (!ensureAccountGateUnlocked()) return;
   const username = (authUsernameEl?.value || '').trim().toLowerCase();
   const password = authPasswordEl?.value || '';
   if (!username || !password) {
