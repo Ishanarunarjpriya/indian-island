@@ -129,7 +129,7 @@ export function initArenaClient(context) {
     const promptText = state.match
       ? ''
       : state.nearHub
-        ? 'Press E to open the Arena Lobby'
+        ? 'Press E to enter the PvP teleporter'
         : '';
     ui.setPrompt(promptText, !!promptText && !state.modalOpen);
   }
@@ -157,7 +157,7 @@ export function initArenaClient(context) {
   });
   socket.on('arena:queueState', (queue) => {
     state.queue = queue;
-    ui.renderQueue(queue);
+    renderAll();
   });
   socket.on('arena:state', (matchState) => {
     state.match = matchState;
@@ -181,12 +181,11 @@ export function initArenaClient(context) {
   setTimeout(requestSync, 1000);
 
   ui.refs.close.addEventListener('click', closeModal);
-  ui.refs.playSolo.addEventListener('click', () => {
-    closeModal();
-    socket.emit('arena:startSolo');
-  });
-  ui.refs.playCoop.addEventListener('click', () => {
-    socket.emit('arena:joinCoop');
+  ui.refs.closeSecondary.addEventListener('click', closeModal);
+  ui.refs.joinQueue.addEventListener('click', () => {
+    const queueEmpty = !state.queue || !Array.isArray(state.queue.entries) || !state.queue.entries.length;
+    const targetSize = Math.max(2, Math.min(4, Number(ui.refs.targetSize?.value) || 4));
+    socket.emit('arena:joinCoop', queueEmpty ? { targetSize } : {});
     openModal('overview');
   });
   ui.refs.openShop.addEventListener('click', () => openModal('shop'));
@@ -234,7 +233,15 @@ export function initArenaClient(context) {
     emitUseItem();
   }, true);
 
-  setInterval(updatePrompt, 250);
+  setInterval(() => {
+    updatePrompt();
+    if (state.queue) {
+      ui.renderQueue(state.queue);
+    }
+    if (state.match) {
+      ui.renderMatch(state.match);
+    }
+  }, 250);
   renderAll();
 
   return {
