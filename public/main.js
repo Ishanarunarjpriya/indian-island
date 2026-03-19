@@ -6534,7 +6534,18 @@ socket.on('auth:required', () => {
   const savedPass = localStorage.getItem('island_auth_password') || '';
   if (savedUser && savedPass) {
     statusEl.textContent = 'Logging in...';
+    if (authStatusEl) authStatusEl.textContent = 'Logging in...';
+    let responded = false;
+    const fallbackTimer = setTimeout(() => {
+      if (!responded) {
+        responded = true;
+        setAuthModalOpen(true, 'Login timed out. Please try again.');
+      }
+    }, 6000);
     socket.emit('auth:login', { username: savedUser, password: savedPass }, (response) => {
+      if (responded) return;
+      responded = true;
+      clearTimeout(fallbackTimer);
       if (!response?.ok) {
         setAuthModalOpen(true, response?.error || 'Auto-login failed. Please login again.');
       }
