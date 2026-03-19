@@ -1,6 +1,6 @@
 export const ARENA_CLIENT_CONFIG = {
   world: {
-    hubCenter: { x: -48, y: 1.25, z: 86 },
+    hubCenter: { x: -43.37, y: 1.35, z: 110.14 },
     combatCenter: { x: -172, y: 1.25, z: 164 },
     islandRadius: 18,
     interactRadius: 26,
