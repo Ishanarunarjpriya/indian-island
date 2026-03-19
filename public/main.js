@@ -231,6 +231,8 @@ const {
   FURNITURE_ISLAND_RADIUS,
   LEADERBOARD_ISLAND_POS,
   LEADERBOARD_ISLAND_RADIUS,
+  ARENA_GATEWAY_ISLAND_POS,
+  ARENA_GATEWAY_ISLAND_RADIUS,
   FISHING_SHOP_BASE,
   MARKET_SHOP_BASE,
   FURNITURE_SHOP_BASE,
@@ -2697,6 +2699,7 @@ function clampToPlayableGround(x, z, allowMine = false) {
   const FISHING_RADIUS = FISHING_ISLAND_RADIUS;
   const MARKET_RADIUS = MARKET_ISLAND_RADIUS;
   const LEADERBOARD_RADIUS = LEADERBOARD_ISLAND_RADIUS;
+  const ARENA_RADIUS = ARENA_GATEWAY_ISLAND_RADIUS;
   const INTERIOR_RADIUS = INTERIOR_PLAY_RADIUS;
   const HOUSE_ROOM_RADIUS = HOUSE_ROOM_PLAY_RADIUS;
   const HOUSE_HALL_RADIUS = getHallPlayRadius();
@@ -2720,6 +2723,9 @@ function clampToPlayableGround(x, z, allowMine = false) {
   const dxB = x - LEADERBOARD_ISLAND_POS.x;
   const dzB = z - LEADERBOARD_ISLAND_POS.z;
   const inLeaderboardIsland = Math.hypot(dxB, dzB) <= LEADERBOARD_RADIUS;
+  const dxA = x - ARENA_GATEWAY_ISLAND_POS.x;
+  const dzA = z - ARENA_GATEWAY_ISLAND_POS.z;
+  const inArenaIsland = Math.hypot(dxA, dzA) <= ARENA_RADIUS;
   const dxI = x - LIGHTHOUSE_INTERIOR_BASE.x;
   const dzI = z - LIGHTHOUSE_INTERIOR_BASE.z;
   const inInterior = Math.hypot(dxI, dzI) <= INTERIOR_RADIUS;
@@ -2748,6 +2754,7 @@ function clampToPlayableGround(x, z, allowMine = false) {
     || inFishingIsland
     || inMarketIsland
     || inLeaderboardIsland
+    || inArenaIsland
     || inInterior
     || inHouseRoomZone
     || inHouseHallZone
@@ -2792,6 +2799,12 @@ function clampToPlayableGround(x, z, allowMine = false) {
     z: LEADERBOARD_ISLAND_POS.z + (dzB / lenB) * LEADERBOARD_RADIUS
   };
   const distLeaderboard = Math.hypot(x - toLeaderboard.x, z - toLeaderboard.z);
+  const lenA = Math.hypot(dxA, dzA) || 1;
+  const toArena = {
+    x: ARENA_GATEWAY_ISLAND_POS.x + (dxA / lenA) * ARENA_RADIUS,
+    z: ARENA_GATEWAY_ISLAND_POS.z + (dzA / lenA) * ARENA_RADIUS
+  };
+  const distArena = Math.hypot(x - toArena.x, z - toArena.z);
   const lenI = Math.hypot(dxI, dzI) || 1;
   const toInterior = {
     x: LIGHTHOUSE_INTERIOR_BASE.x + (dxI / lenI) * INTERIOR_RADIUS,
@@ -2830,19 +2843,25 @@ function clampToPlayableGround(x, z, allowMine = false) {
   const distMine = allowMine ? Math.hypot(x - toMine.x, z - toMine.z) : Number.POSITIVE_INFINITY;
   const toSwim = clampToRing(x, z, SWIM_MIN_RADIUS, SWIM_MAX_RADIUS);
   const distSwim = mineSwimBlocked ? Number.POSITIVE_INFINITY : Math.hypot(x - toSwim.x, z - toSwim.z);
-  if (distMain <= distLight && distMain <= distMineEntry && distMain <= distFishing && distMain <= distMarket && distMain <= distLeaderboard && distMain <= distInterior && distMain <= distHouseRoom && distMain <= distFishingShop && distMain <= distMarketShop && distMain <= distFurnitureShop && distMain <= distMine && distMain <= distSwim) return toMain;
-  if (distLight <= distMineEntry && distLight <= distFishing && distLight <= distMarket && distLight <= distLeaderboard && distLight <= distInterior && distLight <= distHouseRoom && distLight <= distFishingShop && distLight <= distMarketShop && distLight <= distFurnitureShop && distLight <= distMine && distLight <= distSwim) return toLight;
-  if (distMineEntry <= distFishing && distMineEntry <= distMarket && distMineEntry <= distLeaderboard && distMineEntry <= distInterior && distMineEntry <= distHouseRoom && distMineEntry <= distFishingShop && distMineEntry <= distMarketShop && distMineEntry <= distFurnitureShop && distMineEntry <= distMine && distMineEntry <= distSwim) return toMineEntry;
-  if (distFishing <= distMarket && distFishing <= distLeaderboard && distFishing <= distInterior && distFishing <= distHouseRoom && distFishing <= distFishingShop && distFishing <= distMarketShop && distFishing <= distFurnitureShop && distFishing <= distMine && distFishing <= distSwim) return toFishing;
-  if (distMarket <= distLeaderboard && distMarket <= distInterior && distMarket <= distHouseRoom && distMarket <= distFishingShop && distMarket <= distMarketShop && distMarket <= distFurnitureShop && distMarket <= distMine && distMarket <= distSwim) return toMarket;
-  if (distLeaderboard <= distInterior && distLeaderboard <= distHouseRoom && distLeaderboard <= distFishingShop && distLeaderboard <= distMarketShop && distLeaderboard <= distFurnitureShop && distLeaderboard <= distMine && distLeaderboard <= distSwim) return toLeaderboard;
-  if (distInterior <= distHouseRoom && distInterior <= distFishingShop && distInterior <= distMarketShop && distInterior <= distFurnitureShop && distInterior <= distMine && distInterior <= distSwim) return toInterior;
-  if (distHouseRoom <= distFishingShop && distHouseRoom <= distMarketShop && distHouseRoom <= distFurnitureShop && distHouseRoom <= distMine && distHouseRoom <= distSwim) return toHouseRoom;
-  if (distFishingShop <= distMarketShop && distFishingShop <= distFurnitureShop && distFishingShop <= distMine && distFishingShop <= distSwim) return toFishingShop;
-  if (distMarketShop <= distFurnitureShop && distMarketShop <= distMine && distMarketShop <= distSwim) return toMarketShop;
-  if (distFurnitureShop <= distMine && distFurnitureShop <= distSwim) return toFurnitureShop;
-  if (distMine <= distSwim) return toMine;
-  return toSwim;
+  const nearest = [
+    { pos: toMain, dist: distMain },
+    { pos: toLight, dist: distLight },
+    { pos: toMineEntry, dist: distMineEntry },
+    { pos: toFishing, dist: distFishing },
+    { pos: toMarket, dist: distMarket },
+    { pos: toLeaderboard, dist: distLeaderboard },
+    { pos: toArena, dist: distArena },
+    { pos: toInterior, dist: distInterior },
+    { pos: toHouseRoom, dist: distHouseRoom },
+    { pos: toFishingShop, dist: distFishingShop },
+    { pos: toMarketShop, dist: distMarketShop },
+    { pos: toFurnitureShop, dist: distFurnitureShop },
+    { pos: toMine, dist: distMine },
+    { pos: toSwim, dist: distSwim }
+  ]
+    .filter((entry) => Number.isFinite(entry.dist))
+    .sort((a, b) => a.dist - b.dist)[0];
+  return nearest ? nearest.pos : toMain;
 }
 
 function isWaterAt(x, z) {
@@ -2893,6 +2912,10 @@ function isWaterAt(x, z) {
   const dzB = z - LEADERBOARD_ISLAND_POS.z;
   const onLeaderboardIslandLand = Math.hypot(dxB, dzB) <= LEADERBOARD_ISLAND_RADIUS + 3.2;
   if (onLeaderboardIslandLand) return false;
+  const dxA = x - ARENA_GATEWAY_ISLAND_POS.x;
+  const dzA = z - ARENA_GATEWAY_ISLAND_POS.z;
+  const onArenaGatewayIslandLand = Math.hypot(dxA, dzA) <= ARENA_GATEWAY_ISLAND_RADIUS + 3.2;
+  if (onArenaGatewayIslandLand) return false;
   const dxH = x - HOUSE_ROOM_BASE.x;
   const dzH = z - HOUSE_ROOM_BASE.z;
   const onHouseRoomLand = Math.hypot(dxH, dzH) <= HOUSE_ROOM_PLAY_RADIUS + 1.4;
@@ -3333,6 +3356,7 @@ function isWithinPlayableWorld(x, z, allowMine = false) {
   const FISHING_RADIUS = FISHING_ISLAND_RADIUS;
   const MARKET_RADIUS = MARKET_ISLAND_RADIUS;
   const LEADERBOARD_RADIUS = LEADERBOARD_ISLAND_RADIUS;
+  const ARENA_RADIUS = ARENA_GATEWAY_ISLAND_RADIUS;
   const INTERIOR_RADIUS = INTERIOR_PLAY_RADIUS;
   const HOUSE_ROOM_RADIUS = HOUSE_ROOM_PLAY_RADIUS;
   const mineSwimBlocked = allowMine && blocksMineEscapeSwim(x, z);
@@ -3342,12 +3366,13 @@ function isWithinPlayableWorld(x, z, allowMine = false) {
   const onFishingIsland = Math.hypot(x - FISHING_ISLAND_POS.x, z - FISHING_ISLAND_POS.z) <= FISHING_RADIUS;
   const onMarketIsland = Math.hypot(x - MARKET_ISLAND_POS.x, z - MARKET_ISLAND_POS.z) <= MARKET_RADIUS;
   const onLeaderboardIsland = Math.hypot(x - LEADERBOARD_ISLAND_POS.x, z - LEADERBOARD_ISLAND_POS.z) <= LEADERBOARD_RADIUS;
+  const onArenaGatewayIsland = Math.hypot(x - ARENA_GATEWAY_ISLAND_POS.x, z - ARENA_GATEWAY_ISLAND_POS.z) <= ARENA_RADIUS;
   const inInterior = Math.hypot(x - LIGHTHOUSE_INTERIOR_BASE.x, z - LIGHTHOUSE_INTERIOR_BASE.z) <= INTERIOR_RADIUS;
   const inHouseRoomZone = Math.hypot(x - HOUSE_ROOM_BASE.x, z - HOUSE_ROOM_BASE.z) <= HOUSE_ROOM_RADIUS;
   const inHouseHallZone = Math.hypot(x - HOUSE_HALL_BASE.x, z - HOUSE_HALL_BASE.z) <= getHallPlayRadius();
   const inMine = allowMine && mineDistance(x, z) <= MINE_PLAY_RADIUS;
   const inSwim = isSwimZone(x, z) && !mineSwimBlocked;
-  return onMain || onLighthouse || onMineEntryIsland || onFishingIsland || onMarketIsland || onLeaderboardIsland || inInterior || inHouseRoomZone || inHouseHallZone || inMine || inSwim;
+  return onMain || onLighthouse || onMineEntryIsland || onFishingIsland || onMarketIsland || onLeaderboardIsland || onArenaGatewayIsland || inInterior || inHouseRoomZone || inHouseHallZone || inMine || inSwim;
 }
 
 function setBeaconVisual(active) {

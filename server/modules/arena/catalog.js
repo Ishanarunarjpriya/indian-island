@@ -1,264 +1,225 @@
-import { RARITY_CONFIG, STATUS_EFFECTS } from './config.js';
+const RARITY_ORDER = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
 
-export const ARENA_ITEM_CATALOG = {
-  rust_sword: {
-    id: 'rust_sword',
-    name: 'Rust Sword',
+export const ARENA_ITEM_CATALOG = Object.freeze({
+  melee_rust_blade: Object.freeze({
+    id: 'melee_rust_blade',
+    name: 'Rust Blade',
     category: 'melee',
-    slotType: 'weapon',
-    rarity: 'common',
-    price: 0,
-    damage: 22,
-    range: 2.7,
-    cooldownMs: 540,
-    critChance: 0.08,
-    critMultiplier: 1.7,
-    description: 'Starter blade. Fast enough to survive the first few waves.',
-    color: '#c4b39d',
+    tokenCost: 0,
+    maxUpgradeLevel: 5,
+    upgradeBaseCost: 24,
+    upgradeCostStep: 20,
     icon: '⚔️',
-    shop: true,
-  },
-  raider_axe: {
-    id: 'raider_axe',
-    name: 'Raider Axe',
-    category: 'melee',
-    slotType: 'weapon',
-    rarity: 'rare',
-    price: 120,
-    damage: 33,
-    range: 2.9,
-    cooldownMs: 760,
-    critChance: 0.12,
-    critMultiplier: 1.8,
-    description: 'Heavy melee burst for tankier targets.',
-    color: '#db8450',
-    icon: '🪓',
-    shop: true,
-  },
-  shock_baton: {
-    id: 'shock_baton',
-    name: 'Shock Baton',
-    category: 'melee',
-    slotType: 'weapon',
-    rarity: 'epic',
-    price: 280,
-    damage: 28,
-    range: 3,
-    cooldownMs: 620,
-    status: { type: 'freeze', chance: 0.35, durationMs: STATUS_EFFECTS.freeze.durationMs },
-    description: 'Chains together quick strikes that slow enemies.',
-    color: '#79d7ff',
-    icon: '🔱',
-    shop: true,
-  },
-  guardian_hammer: {
-    id: 'guardian_hammer',
-    name: 'Guardian Hammer',
-    category: 'melee',
-    slotType: 'weapon',
-    rarity: 'legendary',
-    price: 0,
-    damage: 48,
-    range: 3.2,
-    cooldownMs: 980,
-    splashRadius: 2.4,
-    description: 'Rare loot drop. Massive slam damage with splash.',
-    color: '#ffd56d',
-    icon: '🔨',
-    shop: false,
-  },
-  arena_blaster: {
-    id: 'arena_blaster',
-    name: 'Arena Blaster',
-    category: 'gun',
-    slotType: 'weapon',
-    rarity: 'rare',
-    price: 180,
-    damage: 24,
-    cooldownMs: 340,
-    projectileSpeed: 20,
-    projectileLifeMs: 1600,
-    spread: 0.015,
-    description: 'Reliable ranged sidearm for kiting.',
-    color: '#6ac8ff',
-    icon: '🔫',
-    shop: true,
-  },
-  scatter_shot: {
-    id: 'scatter_shot',
-    name: 'Scatter Shot',
-    category: 'gun',
-    slotType: 'weapon',
-    rarity: 'epic',
-    price: 360,
-    damage: 15,
-    cooldownMs: 820,
-    projectileSpeed: 18,
-    projectileLifeMs: 1300,
-    pelletCount: 5,
-    spread: 0.12,
-    description: 'Close-range burst that clears clustered mobs.',
-    color: '#ffb84f',
-    icon: '💥',
-    shop: true,
-  },
-  ember_rifle: {
-    id: 'ember_rifle',
-    name: 'Ember Rifle',
-    category: 'gun',
-    slotType: 'weapon',
-    rarity: 'legendary',
-    price: 640,
-    damage: 34,
-    cooldownMs: 420,
-    projectileSpeed: 24,
-    projectileLifeMs: 1700,
-    status: { type: 'burn', chance: 0.28, durationMs: STATUS_EFFECTS.burn.durationMs },
-    description: 'High-end rifle that burns tougher waves down.',
-    color: '#ff7e59',
-    icon: '🔥',
-    shop: true,
-  },
-  storm_cannon: {
-    id: 'storm_cannon',
-    name: 'Storm Cannon',
-    category: 'gun',
-    slotType: 'weapon',
-    rarity: 'mythic',
-    price: 0,
-    damage: 52,
-    cooldownMs: 1050,
-    projectileSpeed: 18,
-    projectileLifeMs: 1900,
-    pierce: 2,
-    description: 'Mythic drop that punches through entire lines.',
-    color: '#d49bff',
+    baseStats: Object.freeze({
+      damage: 16,
+      range: 2.1,
+      cooldownMs: 620,
+      critChance: 0.06,
+      critMultiplier: 1.6,
+    }),
+  }),
+  sword_iron_fang: Object.freeze({
+    id: 'sword_iron_fang',
+    name: 'Iron Fang',
+    category: 'sword',
+    tokenCost: 120,
+    maxUpgradeLevel: 7,
+    upgradeBaseCost: 48,
+    upgradeCostStep: 28,
+    icon: '🗡️',
+    baseStats: Object.freeze({
+      damage: 28,
+      range: 2.5,
+      cooldownMs: 560,
+      critChance: 0.08,
+      critMultiplier: 1.7,
+    }),
+  }),
+  sword_storm_edge: Object.freeze({
+    id: 'sword_storm_edge',
+    name: 'Storm Edge',
+    category: 'sword',
+    tokenCost: 360,
+    maxUpgradeLevel: 9,
+    upgradeBaseCost: 86,
+    upgradeCostStep: 44,
     icon: '⚡',
-    shop: false,
-  },
-  frost_nova: {
-    id: 'frost_nova',
+    baseStats: Object.freeze({
+      damage: 42,
+      range: 2.8,
+      cooldownMs: 500,
+      critChance: 0.11,
+      critMultiplier: 1.85,
+    }),
+  }),
+  melee_titan_hammer: Object.freeze({
+    id: 'melee_titan_hammer',
+    name: 'Titan Hammer',
+    category: 'melee',
+    tokenCost: 280,
+    maxUpgradeLevel: 8,
+    upgradeBaseCost: 74,
+    upgradeCostStep: 36,
+    icon: '🔨',
+    baseStats: Object.freeze({
+      damage: 52,
+      range: 2.3,
+      cooldownMs: 820,
+      critChance: 0.05,
+      critMultiplier: 2.05,
+      splashRadius: 1.9,
+      splashScale: 0.35,
+    }),
+  }),
+  ability_fireburst: Object.freeze({
+    id: 'ability_fireburst',
+    name: 'Fireburst',
+    category: 'ability',
+    tokenCost: 240,
+    maxUpgradeLevel: 7,
+    upgradeBaseCost: 66,
+    upgradeCostStep: 35,
+    icon: '🔥',
+    baseStats: Object.freeze({
+      damage: 60,
+      range: 5.4,
+      cooldownMs: 4000,
+      radius: 2.6,
+      burnDamage: 10,
+      burnTicks: 3,
+      burnTickMs: 800,
+    }),
+  }),
+  ability_frost_nova: Object.freeze({
+    id: 'ability_frost_nova',
     name: 'Frost Nova',
     category: 'ability',
-    slotType: 'ability',
-    rarity: 'rare',
-    price: 220,
-    damage: 16,
-    cooldownMs: 8000,
-    radius: 4.2,
-    status: { type: 'freeze', chance: 1, durationMs: 2600 },
-    description: 'Freezes nearby enemies to create breathing room.',
-    color: '#94f2ff',
+    tokenCost: 300,
+    maxUpgradeLevel: 8,
+    upgradeBaseCost: 82,
+    upgradeCostStep: 44,
     icon: '❄️',
-    shop: true,
-  },
-  fire_orb: {
-    id: 'fire_orb',
-    name: 'Fire Orb',
+    baseStats: Object.freeze({
+      damage: 42,
+      range: 4.2,
+      cooldownMs: 4800,
+      radius: 3.2,
+      slowRatio: 0.42,
+      slowMs: 2800,
+    }),
+  }),
+  ability_arc_dash: Object.freeze({
+    id: 'ability_arc_dash',
+    name: 'Arc Dash',
     category: 'ability',
-    slotType: 'ability',
-    rarity: 'epic',
-    price: 420,
-    damage: 42,
-    cooldownMs: 6200,
-    projectileSpeed: 14,
-    projectileLifeMs: 1500,
-    radius: 3,
-    status: { type: 'burn', chance: 1, durationMs: 4000 },
-    description: 'Explosive projectile with guaranteed burn.',
-    color: '#ff7f50',
-    icon: '☄️',
-    shop: true,
-  },
-  venom_pulse: {
-    id: 'venom_pulse',
-    name: 'Venom Pulse',
-    category: 'ability',
-    slotType: 'ability',
-    rarity: 'legendary',
-    price: 700,
-    damage: 24,
-    cooldownMs: 5400,
-    radius: 5,
-    status: { type: 'poison', chance: 1, durationMs: STATUS_EFFECTS.poison.durationMs },
-    description: 'Wide pulse that poisons everything around you.',
-    color: '#7fe77b',
-    icon: '🧪',
-    shop: true,
-  },
-  arc_surge: {
-    id: 'arc_surge',
-    name: 'Arc Surge',
-    category: 'ability',
-    slotType: 'ability',
-    rarity: 'mythic',
-    price: 0,
-    damage: 58,
-    cooldownMs: 11000,
-    radius: 6,
-    chainTargets: 5,
-    description: 'Mythic chain lightning loot drop.',
-    color: '#ffe06b',
-    icon: '🌩️',
-    shop: false,
-  },
-  heal_potion: {
-    id: 'heal_potion',
-    name: 'Heal Potion',
-    category: 'consumable',
-    slotType: 'utility',
-    rarity: 'common',
-    price: 0,
-    healAmount: 45,
-    cooldownMs: 0,
-    description: 'Single-use emergency healing.',
-    color: '#88ffb0',
-    icon: '🧴',
-    shop: false,
-  },
-  berserk_tonic: {
-    id: 'berserk_tonic',
-    name: 'Berserk Tonic',
-    category: 'consumable',
-    slotType: 'utility',
-    rarity: 'rare',
-    price: 0,
-    buff: { damageMultiplier: 1.4, durationMs: 9000 },
-    description: 'Temporary damage boost during hard waves.',
-    color: '#ff99c1',
-    icon: '🍷',
-    shop: false,
-  },
-};
+    tokenCost: 220,
+    maxUpgradeLevel: 7,
+    upgradeBaseCost: 58,
+    upgradeCostStep: 30,
+    icon: '💨',
+    baseStats: Object.freeze({
+      damage: 34,
+      range: 7.5,
+      cooldownMs: 3600,
+      dashDistance: 4.7,
+    }),
+  }),
+});
 
-export const STARTER_LOADOUT = ['rust_sword', null, null, null, null, null, null, null, null];
+export const STARTER_OWNED_ITEMS = Object.freeze(['melee_rust_blade']);
+export const STARTER_LOADOUT = Object.freeze(['melee_rust_blade', null, null, null, null, null, null, null, null]);
 
-export const STARTER_OWNED_ITEMS = ['rust_sword'];
+export const PVP_SHOP_INVENTORY = Object.freeze([
+  'sword_iron_fang',
+  'melee_titan_hammer',
+  'ability_arc_dash',
+  'ability_fireburst',
+  'ability_frost_nova',
+  'sword_storm_edge',
+]);
 
-export const SHOP_CATEGORIES = ['melee', 'gun', 'ability'];
+export const LOOT_TABLE = Object.freeze([
+  { itemId: 'sword_iron_fang', rarity: 'rare', weight: 36 },
+  { itemId: 'melee_titan_hammer', rarity: 'epic', weight: 20 },
+  { itemId: 'ability_arc_dash', rarity: 'rare', weight: 30 },
+  { itemId: 'ability_fireburst', rarity: 'epic', weight: 16 },
+  { itemId: 'ability_frost_nova', rarity: 'epic', weight: 12 },
+  { itemId: 'sword_storm_edge', rarity: 'legendary', weight: 6 },
+]);
 
-export const LOOT_TABLE = [
-  { itemId: 'heal_potion', rarity: 'common', weight: 35 },
-  { itemId: 'berserk_tonic', rarity: 'rare', weight: 18 },
-  { itemId: 'guardian_hammer', rarity: 'legendary', weight: 5 },
-  { itemId: 'storm_cannon', rarity: 'mythic', weight: 2 },
-  { itemId: 'arc_surge', rarity: 'mythic', weight: 2 },
-  { itemId: 'shock_baton', rarity: 'epic', weight: 8 },
-  { itemId: 'fire_orb', rarity: 'epic', weight: 10 },
-];
+function clampNumber(value, min, max) {
+  if (!Number.isFinite(value)) return min;
+  if (value < min) return min;
+  if (value > max) return max;
+  return value;
+}
 
 export function getCatalogItem(itemId) {
   return ARENA_ITEM_CATALOG[itemId] || null;
 }
 
-export function getShopInventory() {
-  return Object.values(ARENA_ITEM_CATALOG).filter((item) => item.shop);
+export function getItemUpgradeCost(itemId, currentLevel) {
+  const item = getCatalogItem(itemId);
+  if (!item) return null;
+  const level = clampNumber(currentLevel, 0, item.maxUpgradeLevel);
+  if (level >= item.maxUpgradeLevel) return null;
+  const rawCost = item.upgradeBaseCost + (item.upgradeCostStep * level);
+  return Math.max(1, Math.round(rawCost));
 }
 
-export function buildClientCatalog() {
-  return Object.values(ARENA_ITEM_CATALOG).map((item) => ({
-    ...item,
-    rarityLabel: RARITY_CONFIG[item.rarity]?.label || item.rarity,
-    rarityColor: RARITY_CONFIG[item.rarity]?.color || '#ffffff',
-  }));
+export function getUpgradedItemStats(itemId, upgradeLevel) {
+  const item = getCatalogItem(itemId);
+  if (!item) return null;
+  const level = clampNumber(upgradeLevel, 0, item.maxUpgradeLevel);
+  const scalar = 1 + (level * 0.13);
+  const stats = { ...item.baseStats };
+  if (Number.isFinite(stats.damage)) stats.damage = Math.round(stats.damage * scalar);
+  if (Number.isFinite(stats.range)) stats.range = Number((stats.range + level * 0.04).toFixed(3));
+  if (Number.isFinite(stats.cooldownMs)) stats.cooldownMs = Math.max(180, Math.round(stats.cooldownMs * (1 - level * 0.025)));
+  if (Number.isFinite(stats.critChance)) stats.critChance = Number(Math.min(0.6, stats.critChance + level * 0.01).toFixed(4));
+  if (Number.isFinite(stats.critMultiplier)) stats.critMultiplier = Number((stats.critMultiplier + level * 0.03).toFixed(3));
+  if (Number.isFinite(stats.radius)) stats.radius = Number((stats.radius + level * 0.05).toFixed(3));
+  if (Number.isFinite(stats.burnDamage)) stats.burnDamage = Math.round(stats.burnDamage * (1 + level * 0.1));
+  if (Number.isFinite(stats.burnTicks)) stats.burnTicks = Math.round(stats.burnTicks + level * 0.08);
+  if (Number.isFinite(stats.slowMs)) stats.slowMs = Math.round(stats.slowMs + level * 100);
+  if (Number.isFinite(stats.splashRadius)) stats.splashRadius = Number((stats.splashRadius + level * 0.03).toFixed(3));
+  if (Number.isFinite(stats.splashScale)) stats.splashScale = Number(Math.min(0.7, stats.splashScale + level * 0.02).toFixed(3));
+  if (Number.isFinite(stats.dashDistance)) stats.dashDistance = Number((stats.dashDistance + level * 0.2).toFixed(3));
+  return stats;
+}
+
+function rarityRank(rarity) {
+  const idx = RARITY_ORDER.indexOf(rarity);
+  return idx === -1 ? 0 : idx;
+}
+
+export function rollLoot(random = Math.random) {
+  const total = LOOT_TABLE.reduce((sum, entry) => sum + entry.weight, 0);
+  if (total <= 0) return null;
+  let marker = random() * total;
+  for (let i = 0; i < LOOT_TABLE.length; i += 1) {
+    marker -= LOOT_TABLE[i].weight;
+    if (marker <= 0) return LOOT_TABLE[i];
+  }
+  return LOOT_TABLE[LOOT_TABLE.length - 1] || null;
+}
+
+export function getShopInventory(progress = null) {
+  const owned = new Set(Array.isArray(progress?.ownedItems) ? progress.ownedItems : []);
+  const upgrades = progress && typeof progress.itemUpgrades === 'object' && progress.itemUpgrades
+    ? progress.itemUpgrades
+    : {};
+  return PVP_SHOP_INVENTORY.map((itemId) => {
+    const item = getCatalogItem(itemId);
+    const level = clampNumber(Number(upgrades[itemId]) || 0, 0, item.maxUpgradeLevel);
+    const nextUpgradeCost = getItemUpgradeCost(itemId, level);
+    return {
+      ...item,
+      owned: owned.has(itemId),
+      upgradeLevel: level,
+      nextUpgradeCost,
+      rarityRank: rarityRank(item.rarity || 'common'),
+      upgradedStats: getUpgradedItemStats(itemId, level),
+    };
+  });
 }

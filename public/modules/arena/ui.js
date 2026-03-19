@@ -1,334 +1,364 @@
-import { ARENA_CLIENT_CONFIG } from './config.js';
+const ROOT_ID = 'arena-ui-root';
 
-function formatDuration(ms) {
-  const total = Math.max(0, Math.ceil((ms || 0) / 1000));
-  const minutes = Math.floor(total / 60);
-  const seconds = total % 60;
-  return minutes + ':' + String(seconds).padStart(2, '0');
+function el(tag, className = '', text = '') {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text) node.textContent = text;
+  return node;
 }
 
-function createElement(tag, className, text) {
-  const element = document.createElement(tag);
-  if (className) {
-    element.className = className;
-  }
-  if (text != null) {
-    element.textContent = text;
-  }
-  return element;
+function formatSeconds(ms) {
+  return Math.max(0, Math.ceil((Number(ms) || 0) / 1000));
 }
 
-function ensureStyles() {
-  if (document.getElementById('arena-ui-styles')) {
-    return;
-  }
-  const style = document.createElement('style');
-  style.id = 'arena-ui-styles';
-  style.textContent = `
-    #arena-root { position: fixed; inset: 0; pointer-events: none; z-index: 48; font-family: system-ui, sans-serif; color: #f3f7ff; }
-    .arena-panel { background: ${ARENA_CLIENT_CONFIG.ui.panel}; border: 1px solid ${ARENA_CLIENT_CONFIG.ui.border}; border-radius: 20px; box-shadow: 0 24px 80px rgba(0,0,0,0.35); backdrop-filter: blur(12px); }
-    #arena-prompt { position: fixed; bottom: 146px; left: 50%; transform: translateX(-50%); padding: 14px 20px; font-weight: 700; display: none; }
-    #arena-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(960px, calc(100vw - 32px)); max-height: min(82vh, 760px); overflow: hidden; display: none; }
-    #arena-modal-header { display: flex; align-items: center; justify-content: space-between; padding: 22px 24px 0; }
-    #arena-modal-body { display: grid; grid-template-columns: 1.2fr 1fr; gap: 18px; padding: 18px 24px 24px; }
-    #arena-actions, #arena-shop, #arena-loadout, #arena-match-hud, #arena-hotbar { pointer-events: auto; }
-    .arena-card { background: rgba(18, 27, 43, 0.8); border: 1px solid rgba(123,181,255,0.16); border-radius: 18px; padding: 18px; }
-    .arena-actions-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-    .arena-button { width: 100%; border: 0; border-radius: 14px; padding: 14px 16px; font-weight: 800; cursor: pointer; color: #04111d; background: linear-gradient(135deg, #ffd166, #ff9b64); }
-    .arena-button.secondary { background: linear-gradient(135deg, #73d3ff, #6ef3d6); }
-    .arena-button.ghost { background: rgba(255,255,255,0.08); color: #eff6ff; }
-    .arena-item-grid { display: grid; gap: 12px; max-height: 46vh; overflow: auto; padding-right: 4px; }
-    .arena-item-card { border-radius: 16px; border: 1px solid rgba(255,255,255,0.1); padding: 14px; background: rgba(9, 14, 24, 0.7); display: grid; gap: 8px; }
-    .arena-item-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-    .arena-item-name { font-weight: 800; }
-    .arena-item-meta { font-size: 12px; opacity: 0.8; }
-    .arena-item-actions { display: flex; gap: 8px; }
-    .arena-pill { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 5px 10px; font-size: 12px; font-weight: 800; background: rgba(255,255,255,0.08); }
-    .arena-field { display: grid; gap: 6px; margin-top: 14px; }
-    .arena-field label { font-size: 12px; font-weight: 800; letter-spacing: 0.06em; opacity: 0.8; text-transform: uppercase; }
-    .arena-select { width: 100%; border: 1px solid rgba(255,255,255,0.12); border-radius: 12px; padding: 12px 14px; background: rgba(11, 18, 31, 0.85); color: #eff6ff; font-weight: 700; }
-    #arena-hud { position: fixed; top: 92px; left: 50%; transform: translateX(-50%); width: min(760px, calc(100vw - 40px)); display: grid; gap: 12px; }
-    #arena-match-hud { display: none; padding: 16px 18px; }
-    .arena-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
-    .arena-stat { padding: 12px; border-radius: 16px; background: rgba(255,255,255,0.05); }
-    .arena-stat-label { font-size: 12px; opacity: 0.75; }
-    .arena-stat-value { font-size: 24px; font-weight: 800; }
-    #arena-intermission { display: none; margin-top: 12px; gap: 10px; }
-    #arena-hotbar { position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; }
-    .arena-slot { width: 84px; min-height: 84px; border-radius: 18px; padding: 10px; display: grid; align-content: space-between; background: rgba(10, 15, 28, 0.82); border: 1px solid rgba(255,255,255,0.08); box-shadow: 0 16px 36px rgba(0,0,0,0.28); }
-    .arena-slot.active { border-color: rgba(255,173,92,0.9); box-shadow: 0 0 0 2px rgba(255,173,92,0.25), 0 16px 36px rgba(0,0,0,0.28); }
-    .arena-slot-key { font-size: 12px; opacity: 0.6; }
-    .arena-slot-name { font-size: 13px; font-weight: 700; }
-    .arena-slot-icon { font-size: 22px; }
-    .arena-hidden { display: none !important; }
-    @media (max-width: 880px) {
-      #arena-modal-body { grid-template-columns: 1fr; }
-      .arena-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      #arena-hotbar { gap: 8px; }
-      .arena-slot { width: 70px; min-height: 76px; }
-    }
-  `;
-  document.head.appendChild(style);
+function formatLoot(loot) {
+  const entries = Object.entries(loot || {}).filter(([, amount]) => Number(amount) > 0);
+  if (!entries.length) return 'None';
+  return entries.map(([itemId, amount]) => `${itemId} x${amount}`).join(', ');
 }
 
-export function createArenaUI() {
-  ensureStyles();
-  const root = createElement('div');
-  root.id = 'arena-root';
+function clearChildren(node) {
+  while (node.firstChild) node.removeChild(node.firstChild);
+}
 
-  const prompt = createElement('div', 'arena-panel');
-  prompt.id = 'arena-prompt';
+function ensureRoot() {
+  let root = document.getElementById(ROOT_ID);
+  if (root) return root;
+  root = el('div');
+  root.id = ROOT_ID;
+  root.style.position = 'fixed';
+  root.style.left = '16px';
+  root.style.bottom = '16px';
+  root.style.width = '360px';
+  root.style.maxWidth = 'calc(100vw - 32px)';
+  root.style.background = 'rgba(10, 20, 38, 0.86)';
+  root.style.border = '1px solid rgba(120, 190, 255, 0.35)';
+  root.style.borderRadius = '14px';
+  root.style.padding = '12px';
+  root.style.fontFamily = 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
+  root.style.color = '#eaf6ff';
+  root.style.backdropFilter = 'blur(8px)';
+  root.style.zIndex = '1200';
+  root.style.pointerEvents = 'auto';
+  document.body.appendChild(root);
+  return root;
+}
+
+export function createArenaUI(callbacks) {
+  const root = ensureRoot();
+  clearChildren(root);
+
+  const title = el('div', '', 'PvP Gateway');
+  title.style.fontSize = '20px';
+  title.style.fontWeight = '700';
+  title.style.marginBottom = '8px';
+  root.appendChild(title);
+
+  const hint = el('div', '', 'Walk to the PvP island teleporter and press E.');
+  hint.style.opacity = '0.85';
+  hint.style.marginBottom = '10px';
+  root.appendChild(hint);
+
+  const prompt = el('div', '', '');
+  prompt.style.marginBottom = '8px';
+  prompt.style.fontWeight = '600';
   root.appendChild(prompt);
 
-  const modal = createElement('div', 'arena-panel');
-  modal.id = 'arena-modal';
-  modal.innerHTML = `
-    <div id="arena-modal-header">
-      <div>
-        <div style="font-size:30px;font-weight:900;">PvP Teleporter</div>
-        <div id="arena-modal-subtitle" style="opacity:.72;margin-top:4px;">First player picks the party size. When the timer ends, everyone in the portal queue gets sent into the PvP round arena.</div>
-      </div>
-      <button id="arena-close" class="arena-button ghost" style="width:auto;padding:12px 14px;">Close</button>
-    </div>
-    <div id="arena-modal-body">
-      <div class="arena-card" id="arena-actions">
-        <div style="font-size:22px;font-weight:900;margin-bottom:8px;">Teleporter Queue</div>
-        <div class="arena-field">
-          <label for="arena-target-size">Party Size</label>
-          <select id="arena-target-size" class="arena-select">
-            <option value="2">2 players</option>
-            <option value="3">3 players</option>
-            <option value="4" selected>4 players</option>
-          </select>
-        </div>
-        <div class="arena-actions-grid">
-          <button id="arena-join-queue" class="arena-button secondary">Enter Teleporter</button>
-          <button id="arena-open-shop" class="arena-button ghost">PVP Shop</button>
-          <button id="arena-open-loadout" class="arena-button ghost">Loadout</button>
-          <button id="arena-close-secondary" class="arena-button ghost">Close</button>
-        </div>
-        <div id="arena-queue-info" style="margin-top:16px;line-height:1.5;opacity:.82;">Teleporter idle.</div>
-      </div>
-      <div class="arena-card" id="arena-right-column">
-        <div id="arena-balance" style="font-size:18px;font-weight:900;margin-bottom:12px;">PvP Tokens: 0</div>
-        <div id="arena-shop" class="arena-hidden">
-          <div style="font-size:20px;font-weight:900;margin-bottom:10px;">PVP Shop</div>
-          <div id="arena-shop-grid" class="arena-item-grid"></div>
-        </div>
-        <div id="arena-loadout" class="arena-hidden">
-          <div style="font-size:20px;font-weight:900;margin-bottom:10px;">Loadout</div>
-          <div id="arena-loadout-grid" class="arena-item-grid"></div>
-        </div>
-        <div id="arena-overview">
-          <div style="font-size:20px;font-weight:900;margin-bottom:10px;">How It Works</div>
-          <div style="line-height:1.7;opacity:.82;">Step into the teleporter queue, let the first entrant set how many players can join, then fight through PvP rounds. Spend PvP Tokens at the stall on melee weapons, guns, and special powers.</div>
-        </div>
-      </div>
-    </div>
-  `;
-  root.appendChild(modal);
+  const actions = el('div');
+  actions.style.display = 'grid';
+  actions.style.gridTemplateColumns = '1fr 1fr';
+  actions.style.gap = '8px';
+  root.appendChild(actions);
 
-  const hud = createElement('div');
-  hud.id = 'arena-hud';
-  const matchHud = createElement('div', 'arena-panel');
-  matchHud.id = 'arena-match-hud';
-  matchHud.innerHTML = `
-    <div class="arena-stats">
-      <div class="arena-stat"><div class="arena-stat-label">Round</div><div id="arena-wave" class="arena-stat-value">1</div></div>
-      <div class="arena-stat"><div class="arena-stat-label">Players Left</div><div id="arena-enemies" class="arena-stat-value">0</div></div>
-      <div class="arena-stat"><div class="arena-stat-label">Health</div><div id="arena-health" class="arena-stat-value">120</div></div>
-      <div class="arena-stat"><div class="arena-stat-label">PvP Tokens</div><div id="arena-pending" class="arena-stat-value">0</div></div>
-    </div>
-    <div id="arena-match-message" style="margin-top:12px;font-weight:700;opacity:.85;">Use number keys to swap gear.</div>
-    <div id="arena-intermission" style="display:none;grid-template-columns:repeat(2,minmax(0,1fr));">
-      <button id="arena-cashout" class="arena-button">Cash Out</button>
-      <button id="arena-continue" class="arena-button secondary">Continue</button>
-    </div>
-  `;
-  hud.appendChild(matchHud);
-  root.appendChild(hud);
+  const enterHubBtn = el('button', '', 'Enter Queue Hub');
+  enterHubBtn.type = 'button';
+  enterHubBtn.style.padding = '8px 10px';
+  enterHubBtn.style.borderRadius = '9px';
+  enterHubBtn.style.border = '1px solid rgba(130, 190, 255, 0.45)';
+  enterHubBtn.style.background = 'linear-gradient(180deg, #2f6fa1, #204e73)';
+  enterHubBtn.style.color = '#eff8ff';
+  enterHubBtn.style.fontWeight = '700';
+  enterHubBtn.addEventListener('click', () => callbacks.onEnterQueueHub());
+  actions.appendChild(enterHubBtn);
 
-  const hotbar = createElement('div');
-  hotbar.id = 'arena-hotbar';
-  root.appendChild(hotbar);
+  const leavePadBtn = el('button', '', 'Leave Queue');
+  leavePadBtn.type = 'button';
+  leavePadBtn.style.padding = '8px 10px';
+  leavePadBtn.style.borderRadius = '9px';
+  leavePadBtn.style.border = '1px solid rgba(180, 200, 230, 0.35)';
+  leavePadBtn.style.background = 'linear-gradient(180deg, #2a3b56, #1c2635)';
+  leavePadBtn.style.color = '#e0edff';
+  leavePadBtn.style.fontWeight = '700';
+  leavePadBtn.addEventListener('click', () => callbacks.onLeaveQueuePad());
+  actions.appendChild(leavePadBtn);
 
-  document.body.appendChild(root);
+  const queuePanel = el('div');
+  queuePanel.style.marginTop = '10px';
+  queuePanel.style.paddingTop = '8px';
+  queuePanel.style.borderTop = '1px solid rgba(110, 160, 220, 0.25)';
+  root.appendChild(queuePanel);
 
-  const refs = {
-    root,
-    prompt,
-    modal,
-    subtitle: modal.querySelector('#arena-modal-subtitle'),
-    queueInfo: modal.querySelector('#arena-queue-info'),
-    balance: modal.querySelector('#arena-balance'),
-    close: modal.querySelector('#arena-close'),
-    closeSecondary: modal.querySelector('#arena-close-secondary'),
-    joinQueue: modal.querySelector('#arena-join-queue'),
-    targetSize: modal.querySelector('#arena-target-size'),
-    openShop: modal.querySelector('#arena-open-shop'),
-    openLoadout: modal.querySelector('#arena-open-loadout'),
-    shop: modal.querySelector('#arena-shop'),
-    loadout: modal.querySelector('#arena-loadout'),
-    overview: modal.querySelector('#arena-overview'),
-    shopGrid: modal.querySelector('#arena-shop-grid'),
-    loadoutGrid: modal.querySelector('#arena-loadout-grid'),
-    matchHud,
-    wave: matchHud.querySelector('#arena-wave'),
-    enemies: matchHud.querySelector('#arena-enemies'),
-    health: matchHud.querySelector('#arena-health'),
-    pending: matchHud.querySelector('#arena-pending'),
-    message: matchHud.querySelector('#arena-match-message'),
-    intermission: matchHud.querySelector('#arena-intermission'),
-    cashout: matchHud.querySelector('#arena-cashout'),
-    continueRun: matchHud.querySelector('#arena-continue'),
-    hotbar,
-  };
+  const queueTitle = el('div', '', 'Queue Pads');
+  queueTitle.style.fontWeight = '700';
+  queueTitle.style.marginBottom = '6px';
+  queuePanel.appendChild(queueTitle);
 
-  function setPrompt(text, visible) {
-    refs.prompt.textContent = text || '';
-    refs.prompt.style.display = visible ? 'block' : 'none';
-  }
+  const queueList = el('div');
+  queueList.style.display = 'grid';
+  queueList.style.gridTemplateColumns = '1fr';
+  queueList.style.gap = '6px';
+  queuePanel.appendChild(queueList);
 
-  function setModalVisible(visible) {
-    refs.modal.style.display = visible ? 'block' : 'none';
-  }
+  const decisionPanel = el('div');
+  decisionPanel.style.display = 'none';
+  decisionPanel.style.marginTop = '10px';
+  decisionPanel.style.paddingTop = '8px';
+  decisionPanel.style.borderTop = '1px solid rgba(110, 160, 220, 0.25)';
+  root.appendChild(decisionPanel);
 
-  function showPanel(panel) {
-    refs.shop.classList.toggle('arena-hidden', panel !== 'shop');
-    refs.loadout.classList.toggle('arena-hidden', panel !== 'loadout');
-    refs.overview.classList.toggle('arena-hidden', panel !== 'overview');
-  }
+  const decisionText = el('div', '', 'Round complete. Cash out or continue?');
+  decisionText.style.fontWeight = '700';
+  decisionText.style.marginBottom = '6px';
+  decisionPanel.appendChild(decisionText);
 
-  function renderShop(profile, onBuy) {
-    refs.shopGrid.replaceChildren();
-    const items = Array.isArray(profile?.catalog) ? profile.catalog.filter((item) => item.shop) : [];
-    items.forEach((item) => {
-      const card = createElement('div', 'arena-item-card');
-      card.innerHTML = `
-        <div class="arena-item-top">
-          <div>
-            <div class="arena-item-name">${item.icon || '•'} ${item.name}</div>
-            <div class="arena-item-meta">${item.category.toUpperCase()} • ${item.rarity.toUpperCase()}</div>
-          </div>
-          <div class="arena-pill">${item.price} Tokens</div>
-        </div>
-        <div class="arena-item-meta">${item.description}</div>
-      `;
-      const actions = createElement('div', 'arena-item-actions');
-      const buy = createElement('button', 'arena-button ghost', profile?.ownedItems?.includes(item.id) ? 'Owned' : 'Buy');
-      buy.disabled = profile?.ownedItems?.includes(item.id);
-      buy.addEventListener('click', () => onBuy(item.id));
-      actions.appendChild(buy);
-      card.appendChild(actions);
-      refs.shopGrid.appendChild(card);
-    });
-  }
+  const decisionActions = el('div');
+  decisionActions.style.display = 'grid';
+  decisionActions.style.gridTemplateColumns = '1fr 1fr';
+  decisionActions.style.gap = '6px';
+  decisionPanel.appendChild(decisionActions);
 
-  function renderLoadout(profile, onEquip) {
-    refs.loadoutGrid.replaceChildren();
-    const hotbar = Array.isArray(profile?.hotbar) ? profile.hotbar : Array.from({ length: ARENA_CLIENT_CONFIG.hotbarSlots }, () => null);
-    hotbar.forEach((itemId, index) => {
-      const row = createElement('div', 'arena-item-card');
-      const title = createElement('div', 'arena-item-top');
-      title.innerHTML = `<div class="arena-item-name">Slot ${index + 1}</div><div class="arena-pill">${itemId || 'Empty'}</div>`;
-      row.appendChild(title);
-      const select = document.createElement('select');
-      select.style.padding = '10px';
-      select.style.borderRadius = '12px';
-      select.style.background = 'rgba(255,255,255,0.08)';
-      select.style.color = '#f5f8ff';
-      const none = document.createElement('option');
-      none.value = '';
-      none.textContent = 'Empty';
-      select.appendChild(none);
-      (profile?.ownedItems || []).forEach((ownedId) => {
-        const option = document.createElement('option');
-        option.value = ownedId;
-        option.textContent = ownedId;
-        option.selected = ownedId === itemId;
-        select.appendChild(option);
-      });
-      select.addEventListener('change', () => onEquip(index, select.value || null));
-      row.appendChild(select);
-      refs.loadoutGrid.appendChild(row);
-    });
-  }
+  const cashoutBtn = el('button', '', 'Cash Out');
+  cashoutBtn.type = 'button';
+  cashoutBtn.style.padding = '8px 10px';
+  cashoutBtn.style.borderRadius = '9px';
+  cashoutBtn.style.border = '1px solid rgba(130, 220, 160, 0.55)';
+  cashoutBtn.style.background = 'linear-gradient(180deg, #2f7c4c, #215436)';
+  cashoutBtn.style.color = '#ecffef';
+  cashoutBtn.style.fontWeight = '700';
+  cashoutBtn.addEventListener('click', () => callbacks.onDecision('cashout'));
+  decisionActions.appendChild(cashoutBtn);
 
-  function renderHotbar(profile, matchState) {
-    refs.hotbar.replaceChildren();
-    const hotbar = Array.isArray(matchState?.self?.hotbar) ? matchState.self.hotbar : Array.isArray(profile?.hotbar) ? profile.hotbar : [];
-    const selectedSlot = matchState?.self?.selectedSlot ?? profile?.selectedSlot ?? 0;
-    hotbar.forEach((itemId, index) => {
-      const item = (profile?.catalog || []).find((entry) => entry.id === itemId);
-      const slot = createElement('div', 'arena-slot' + (index === selectedSlot ? ' active' : ''));
-      slot.innerHTML = `
-        <div class="arena-slot-key">${index + 1}</div>
-        <div class="arena-slot-icon">${item?.icon || '·'}</div>
-        <div class="arena-slot-name">${item?.name || 'Empty'}</div>
-      `;
-      refs.hotbar.appendChild(slot);
-    });
-    refs.hotbar.style.display = hotbar.length ? 'flex' : 'none';
-  }
+  const continueBtn = el('button', '', 'Continue');
+  continueBtn.type = 'button';
+  continueBtn.style.padding = '8px 10px';
+  continueBtn.style.borderRadius = '9px';
+  continueBtn.style.border = '1px solid rgba(130, 190, 255, 0.45)';
+  continueBtn.style.background = 'linear-gradient(180deg, #2f6fa1, #204e73)';
+  continueBtn.style.color = '#eff8ff';
+  continueBtn.style.fontWeight = '700';
+  continueBtn.addEventListener('click', () => callbacks.onDecision('continue'));
+  decisionActions.appendChild(continueBtn);
 
-  function renderQueue(queue) {
-    if (!queue || !Array.isArray(queue.entries) || !queue.entries.length) {
-      refs.targetSize.disabled = false;
-      refs.queueInfo.textContent = 'Teleporter idle. Step in and set the party size.';
+  const matchStats = el('div');
+  matchStats.style.marginTop = '10px';
+  matchStats.style.paddingTop = '8px';
+  matchStats.style.borderTop = '1px solid rgba(110, 160, 220, 0.25)';
+  root.appendChild(matchStats);
+
+  const matchText = el('div', '', 'No active match.');
+  matchStats.appendChild(matchText);
+
+  const profilePanel = el('div');
+  profilePanel.style.marginTop = '10px';
+  profilePanel.style.paddingTop = '8px';
+  profilePanel.style.borderTop = '1px solid rgba(110, 160, 220, 0.25)';
+  root.appendChild(profilePanel);
+
+  const profileTitle = el('div', '', 'PvP Shop (tokens only)');
+  profileTitle.style.fontWeight = '700';
+  profileTitle.style.marginBottom = '6px';
+  profilePanel.appendChild(profileTitle);
+
+  const profileInfo = el('div', '', 'Tokens: 0');
+  profileInfo.style.opacity = '0.9';
+  profileInfo.style.marginBottom = '8px';
+  profilePanel.appendChild(profileInfo);
+
+  const shopList = el('div');
+  shopList.style.display = 'grid';
+  shopList.style.gridTemplateColumns = '1fr';
+  shopList.style.gap = '6px';
+  profilePanel.appendChild(shopList);
+
+  const message = el('div', '', '');
+  message.style.marginTop = '10px';
+  message.style.opacity = '0.86';
+  root.appendChild(message);
+
+  function renderQueueLanes(queueHubState) {
+    clearChildren(queueList);
+    const lanes = Array.isArray(queueHubState?.lanes) ? queueHubState.lanes : [];
+    if (!lanes.length) {
+      const empty = el('div', '', 'No queue pads loaded.');
+      empty.style.opacity = '0.75';
+      queueList.appendChild(empty);
       return;
     }
-    refs.targetSize.disabled = true;
-    const remaining = queue.timerEndsAt ? Math.max(0, queue.timerEndsAt - Date.now()) : 0;
-    const names = queue.entries.map((entry) => entry.displayName).join(', ');
-    refs.queueInfo.textContent = `${queue.entries.length}/${queue.targetSize || queue.maxPlayers} in teleporter • Launch in ${formatDuration(remaining)} • ${names}`;
-    if (refs.targetSize && Number(queue.targetSize) > 0) {
-      refs.targetSize.value = String(queue.targetSize);
+    for (let i = 0; i < lanes.length; i += 1) {
+      const lane = lanes[i];
+      const row = el('div');
+      row.style.display = 'grid';
+      row.style.gridTemplateColumns = '1fr auto';
+      row.style.alignItems = 'center';
+      row.style.gap = '6px';
+      row.style.padding = '7px 8px';
+      row.style.borderRadius = '8px';
+      row.style.border = '1px solid rgba(130, 180, 235, 0.25)';
+      row.style.background = 'rgba(8, 23, 46, 0.46)';
+
+      const left = el('div');
+      const count = `${lane.occupancy || 0}/${lane.capacity || 0}`;
+      const seconds = formatSeconds(lane.countdownMs);
+      left.textContent = `${lane.label || lane.id} (${count}) - ${seconds}s`;
+      row.appendChild(left);
+
+      const joinBtn = el('button', '', 'Join');
+      joinBtn.type = 'button';
+      joinBtn.style.padding = '5px 8px';
+      joinBtn.style.borderRadius = '7px';
+      joinBtn.style.border = '1px solid rgba(138, 194, 255, 0.4)';
+      joinBtn.style.background = 'linear-gradient(180deg, #2b638e, #1d445f)';
+      joinBtn.style.color = '#e9f5ff';
+      joinBtn.style.fontWeight = '700';
+      joinBtn.disabled = Number(lane.occupancy) >= Number(lane.capacity);
+      joinBtn.addEventListener('click', () => callbacks.onJoinQueuePad(lane.id));
+      row.appendChild(joinBtn);
+
+      queueList.appendChild(row);
     }
   }
 
   function renderProfile(profile) {
-    refs.balance.textContent = 'PvP Tokens: ' + (profile?.tokens || 0);
-  }
-
-  function renderMatch(matchState) {
-    const active = !!matchState;
-    refs.matchHud.style.display = active ? 'block' : 'none';
-    if (!active) {
-      refs.intermission.style.display = 'none';
+    const tokens = Number(profile?.tokens) || 0;
+    profileInfo.textContent = `Tokens: ${tokens}`;
+    clearChildren(shopList);
+    const shopItems = Array.isArray(profile?.shopInventory) ? profile.shopInventory : [];
+    if (!shopItems.length) {
+      const none = el('div', '', 'Shop unavailable.');
+      none.style.opacity = '0.7';
+      shopList.appendChild(none);
       return;
     }
-    const alivePlayers = Array.isArray(matchState.members)
-      ? matchState.members.filter((entry) => entry.alive).length
-      : (matchState.enemiesRemaining || 0);
-    refs.wave.textContent = String(matchState.wave || 0);
-    refs.enemies.textContent = String(alivePlayers);
-    refs.health.textContent = `${matchState.self?.hp || 0} / ${matchState.self?.maxHp || 0}`;
-    refs.pending.textContent = String(matchState.self?.pendingTokens || 0);
-    const intermissionActive = matchState.status === 'intermission';
-    refs.intermission.style.display = intermissionActive && matchState.mode !== 'pvp' ? 'grid' : 'none';
-    refs.message.textContent = matchState.mode === 'pvp'
-      ? intermissionActive
-        ? 'Round break. Next PvP round is starting.'
-        : matchState.self?.spectating
-          ? 'You were knocked out. Spectate until the round ends.'
-          : 'Use 1-9 to swap gear and left click to attack.'
-      : intermissionActive
-        ? 'Intermission: vote to cash out or keep the run alive.'
-        : matchState.self?.spectating
-          ? 'You are spectating. Stay with the team until the round ends.'
-          : 'Use 1-9 to swap gear and left click to attack.';
+
+    for (let i = 0; i < shopItems.length; i += 1) {
+      const item = shopItems[i];
+      const row = el('div');
+      row.style.padding = '7px 8px';
+      row.style.borderRadius = '8px';
+      row.style.border = '1px solid rgba(120, 170, 230, 0.22)';
+      row.style.background = 'rgba(8, 19, 40, 0.5)';
+
+      const name = el('div', '', `${item.icon || ''} ${item.name || item.id}`.trim());
+      name.style.fontWeight = '700';
+      row.appendChild(name);
+
+      const meta = el(
+        'div',
+        '',
+        `${item.category} | buy ${Number(item.tokenCost) || 0} | upgrade Lv ${Number(item.upgradeLevel) || 0}/${Number(item.maxUpgradeLevel) || 0}`,
+      );
+      meta.style.opacity = '0.85';
+      meta.style.fontSize = '12px';
+      row.appendChild(meta);
+
+      const actions = el('div');
+      actions.style.marginTop = '6px';
+      actions.style.display = 'grid';
+      actions.style.gridTemplateColumns = '1fr 1fr';
+      actions.style.gap = '6px';
+      row.appendChild(actions);
+
+      const buyBtn = el('button', '', item.owned ? 'Owned' : `Buy (${Number(item.tokenCost) || 0})`);
+      buyBtn.type = 'button';
+      buyBtn.style.padding = '5px 8px';
+      buyBtn.style.borderRadius = '7px';
+      buyBtn.style.border = '1px solid rgba(120, 180, 240, 0.35)';
+      buyBtn.style.background = item.owned
+        ? 'linear-gradient(180deg, #4a586a, #2f3b48)'
+        : 'linear-gradient(180deg, #2c6792, #1b415c)';
+      buyBtn.style.color = '#e9f6ff';
+      buyBtn.style.fontWeight = '700';
+      buyBtn.disabled = !!item.owned;
+      buyBtn.addEventListener('click', () => callbacks.onBuyItem(item.id));
+      actions.appendChild(buyBtn);
+
+      const nextUpgradeCost = Number(item.nextUpgradeCost);
+      const canUpgrade = Number.isFinite(nextUpgradeCost) && nextUpgradeCost > 0 && !!item.owned;
+      const upLabel = canUpgrade ? `Upgrade (${nextUpgradeCost})` : 'Upgrade Max';
+      const upBtn = el('button', '', upLabel);
+      upBtn.type = 'button';
+      upBtn.style.padding = '5px 8px';
+      upBtn.style.borderRadius = '7px';
+      upBtn.style.border = '1px solid rgba(150, 200, 255, 0.35)';
+      upBtn.style.background = canUpgrade
+        ? 'linear-gradient(180deg, #396e90, #204059)'
+        : 'linear-gradient(180deg, #4a586a, #2f3b48)';
+      upBtn.style.color = '#e9f6ff';
+      upBtn.style.fontWeight = '700';
+      upBtn.disabled = !canUpgrade;
+      upBtn.addEventListener('click', () => callbacks.onUpgradeItem(item.id));
+      actions.appendChild(upBtn);
+
+      shopList.appendChild(row);
+    }
+  }
+
+  let nearGateway = false;
+  let nearQueueHub = false;
+
+  function refreshPrompt() {
+    if (nearGateway) {
+      prompt.textContent = 'Press E to enter the PvP queue hub.';
+      return;
+    }
+    if (nearQueueHub) {
+      prompt.textContent = 'Queue hub active: join Solo/Duo/Trio/Squad pads.';
+      return;
+    }
+    prompt.textContent = 'Walk to the PvP mini island teleporter.';
   }
 
   return {
-    refs,
-    setPrompt,
-    setModalVisible,
-    showPanel,
-    renderQueue,
-    renderProfile,
-    renderShop,
-    renderLoadout,
-    renderHotbar,
-    renderMatch,
+    renderQueueHubState(queueHubState) {
+      renderQueueLanes(queueHubState);
+    },
+    renderProfile(profile) {
+      renderProfile(profile);
+    },
+    renderMatch(match) {
+      if (!match) {
+        decisionPanel.style.display = 'none';
+        matchText.textContent = 'No active match.';
+        return;
+      }
+
+      const me = (Array.isArray(match.players) ? match.players : []).find((entry) => entry.socketId === callbacks.getSocketId());
+      const unclaimedTokens = Number(me?.unclaimedTokens) || 0;
+      const lootText = formatLoot(me?.unclaimedLoot || {});
+      matchText.textContent = `Round ${match.round || 0} | phase: ${match.phase || 'combat'} | enemies ${match.enemiesRemaining || 0} | unclaimed ${unclaimedTokens} | loot ${lootText}`;
+
+      if (match.phase === 'intermission') {
+        const seconds = formatSeconds(match.intermissionSeconds ? match.intermissionSeconds * 1000 : match.intermissionEndsAt - Date.now());
+        const votes = match.voteCounts || { cashout: 0, continue: 0, required: 1 };
+        decisionText.textContent = `Intermission ${seconds}s - cashout ${votes.cashout}/${votes.required}, continue ${votes.continue}/${votes.required}`;
+        decisionPanel.style.display = 'block';
+      } else {
+        decisionPanel.style.display = 'none';
+      }
+    },
+    setNearGateway(value) {
+      nearGateway = !!value;
+      refreshPrompt();
+    },
+    setNearQueueHub(value) {
+      nearQueueHub = !!value;
+      refreshPrompt();
+    },
+    setMessage(text) {
+      message.textContent = text || '';
+    },
+    destroy() {
+      root.remove();
+    },
   };
 }

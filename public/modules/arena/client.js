@@ -1,252 +1,170 @@
 import { ARENA_CLIENT_CONFIG } from './config.js';
-import { createArenaRenderer } from './render.js';
 import { createArenaUI } from './ui.js';
+import { createArenaRenderer } from './render.js';
 
-function distance2D(ax, az, bx, bz) {
-  const dx = ax - bx;
-  const dz = az - bz;
-  return Math.sqrt(dx * dx + dz * dz);
+function safeNumber(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
 }
 
-function normalize2D(x, z) {
-  const length = Math.hypot(x, z) || 1;
-  return { x: x / length, z: z / length };
+function distanceXZ(a, b) {
+  const dx = safeNumber(a?.x) - safeNumber(b?.x);
+  const dz = safeNumber(a?.z) - safeNumber(b?.z);
+  return Math.hypot(dx, dz);
+}
+
+function getPlayerPosition(context) {
+  const state = typeof context.getLocalPlayerState === 'function' ? context.getLocalPlayerState() : null;
+  if (state && Number.isFinite(Number(state.x)) && Number.isFinite(Number(state.z))) {
+    return {
+      x: Number(state.x),
+      y: Number(state.y || 0),
+      z: Number(state.z),
+    };
+  }
+  const player = typeof context.getLocalPlayer === 'function' ? context.getLocalPlayer() : null;
+  if (!player) return null;
+  const source = player.position || player;
+  if (!source || !Number.isFinite(Number(source.x)) || !Number.isFinite(Number(source.z))) return null;
+  return {
+    x: Number(source.x),
+    y: Number(source.y || 0),
+    z: Number(source.z),
+  };
 }
 
 export function initArenaClient(context) {
-  const socket = context.socket;
+  const socket = context?.socket;
   if (!socket) {
-    return null;
+    return { destroy() {} };
   }
-
-  // Use getter functions so we always get the live player/state references
-  const getLocalPlayer = typeof context.getLocalPlayer === 'function'
-    ? context.getLocalPlayer
-    : () => context.localPlayer;
-  const getLocalPlayerState = typeof context.getLocalPlayerState === 'function'
-    ? context.getLocalPlayerState
-    : () => context.localPlayerState;
 
   const state = {
     profile: null,
     queue: null,
     match: null,
-    modalOpen: false,
-    panel: 'overview',
-    nearHub: false,
+    nearGateway: false,
+    nearQueueHub: false,
+    lastMessage: '',
   };
+  const arenaRenderer = createArenaRenderer({ scene: context?.scene });
 
-  const renderer = createArenaRenderer({ scene: context.scene, world: ARENA_CLIENT_CONFIG.world });
-  const ui = createArenaUI();
+  const ui = createArenaUI({
+    getSocketId: () => socket.id,
+    onEnterQueueHub: () => socket.emit('arena:enterQueueHub'),
+    onJoinQueuePad: (padId) => socket.emit('arena:joinQueuePad', { padId }),
+    onLeaveQueuePad: () => socket.emit('arena:leaveQueuePad'),
+    onBuyItem: (itemId) => socket.emit('arena:buyItem', { itemId }),
+    onUpgradeItem: (itemId) => socket.emit('arena:upgradeItem', { itemId }),
+    onDecision: (decision) => socket.emit('arena:decision', decision),
+  });
 
-  function localPosition() {
-    const player = getLocalPlayer();
-    const playerState = getLocalPlayerState();
-    return {
-      x: Number(playerState?.x ?? player?.x ?? player?.mesh?.position?.x ?? 0),
-      y: Number(playerState?.y ?? player?.y ?? player?.mesh?.position?.y ?? 0),
-      z: Number(playerState?.z ?? player?.z ?? player?.mesh?.position?.z ?? 0),
-    };
-  }
-
-  function teleportLocal(position) {
-    if (!position) {
-      return;
-    }
-    const player = getLocalPlayer();
-    if (player?.mesh) {
-      player.mesh.position.set(position.x, position.y, position.z);
-    }
-    if (player) {
-      player.x = position.x;
-      player.y = position.y;
-      player.z = position.z;
-    }
-    const playerState = getLocalPlayerState();
-    if (playerState) {
-      playerState.x = position.x;
-      playerState.y = position.y;
-      playerState.z = position.z;
-      playerState.rotation = position.rotation || 0;
-    }
-  }
-
-  function syncRoomState() {
-    const playerState = getLocalPlayerState();
-    if (!playerState) {
-      return;
-    }
-    if (state.match && state.match.roomId) {
-      playerState.arenaState = { roomId: state.match.roomId };
-      return;
-    }
-    playerState.arenaState = null;
-  }
-
-  function renderAll() {
+  function refreshUI() {
     ui.renderProfile(state.profile);
-    ui.renderQueue(state.queue);
+    ui.renderQueueHubState(state.queue);
     ui.renderMatch(state.match);
-    ui.renderHotbar(state.profile, state.match);
-    ui.renderShop(state.profile, (itemId) => socket.emit('arena:buyItem', itemId));
-    ui.renderLoadout(state.profile, (slotIndex, itemId) => {
-      if (!state.profile) {
-        return;
-      }
-      const nextHotbar = Array.isArray(state.profile.hotbar) ? state.profile.hotbar.slice() : Array.from({ length: ARENA_CLIENT_CONFIG.hotbarSlots }, () => null);
-      nextHotbar[slotIndex] = itemId;
-      state.profile.hotbar = nextHotbar;
-      ui.renderLoadout(state.profile, (index, nextItemId) => {
-        const cloned = state.profile.hotbar.slice();
-        cloned[index] = nextItemId;
-        state.profile.hotbar = cloned;
-        socket.emit('arena:setHotbar', cloned);
-        renderAll();
-      });
-      socket.emit('arena:setHotbar', nextHotbar);
-      renderAll();
-    });
+    ui.setNearGateway(state.nearGateway);
+    ui.setNearQueueHub(state.nearQueueHub);
+    ui.setMessage(state.lastMessage);
+    arenaRenderer.updateState(state.match);
   }
 
-  function openModal(panel) {
-    state.modalOpen = true;
-    state.panel = panel || state.panel;
-    ui.setModalVisible(true);
-    ui.showPanel(state.panel);
-    renderAll();
+  function onProfile(profile) {
+    state.profile = profile || null;
+    refreshUI();
   }
 
-  function closeModal() {
-    state.modalOpen = false;
-    ui.setModalVisible(false);
+  function onQueue(queueState) {
+    state.queue = queueState || null;
+    refreshUI();
   }
 
-  function updatePrompt() {
-    const pos = localPosition();
-    const hub = ARENA_CLIENT_CONFIG.world.hubCenter;
-    const dist = distance2D(pos.x, pos.z, hub.x, hub.z);
-    state.nearHub = dist <= ARENA_CLIENT_CONFIG.world.interactRadius;
-    const promptText = state.match
-      ? ''
-      : state.nearHub
-        ? 'Press E to enter the PvP teleporter'
-        : '';
-    ui.setPrompt(promptText, !!promptText && !state.modalOpen);
+  function onMatch(matchState) {
+    state.match = matchState || null;
+    refreshUI();
   }
 
-  function emitUseItem() {
-    if (!state.match || !state.match.self?.alive) {
-      return;
-    }
-    const camera = context.camera;
-    const vector = window.THREE ? new window.THREE.Vector3(0, 0, -1) : { x: 0, y: 0, z: -1 };
-    if (window.THREE && camera) {
-      vector.applyQuaternion(camera.quaternion);
-    }
-    const direction = normalize2D(vector.x || 0, vector.z || -1);
-    socket.emit('arena:useItem', { direction });
+  function onMessage(payload) {
+    state.lastMessage = typeof payload?.message === 'string' ? payload.message : '';
+    refreshUI();
   }
 
-  function requestSync() {
-    socket.emit('arena:requestSync');
-  }
-
-  socket.on('arena:profile', (profile) => {
-    state.profile = profile;
-    renderAll();
-  });
-  socket.on('arena:queueState', (queue) => {
-    state.queue = queue;
-    renderAll();
-  });
-  socket.on('arena:state', (matchState) => {
-    state.match = matchState;
-    syncRoomState();
-    renderer.updateState(matchState);
-    renderAll();
-  });
-  socket.on('arena:matchEnded', () => {
+  function onMatchEnded(summary) {
     state.match = null;
-    syncRoomState();
-    renderAll();
-  });
-  socket.on('arena:returnToLobby', (position) => {
-    state.match = null;
-    syncRoomState();
-    teleportLocal(position);
-    renderer.updateState({ enemies: [], projectiles: [] });
-    renderAll();
-  });
-  socket.on('connect', requestSync);
-  setTimeout(requestSync, 1000);
+    const outcome = summary?.outcome === 'cashout' ? 'Cashout complete.' : 'Run failed. Unclaimed rewards lost.';
+    state.lastMessage = outcome;
+    refreshUI();
+  }
 
-  ui.refs.close.addEventListener('click', closeModal);
-  ui.refs.closeSecondary.addEventListener('click', closeModal);
-  ui.refs.joinQueue.addEventListener('click', () => {
-    const queueEmpty = !state.queue || !Array.isArray(state.queue.entries) || !state.queue.entries.length;
-    const targetSize = Math.max(2, Math.min(4, Number(ui.refs.targetSize?.value) || 4));
-    socket.emit('arena:joinCoop', queueEmpty ? { targetSize } : {});
-    openModal('overview');
-  });
-  ui.refs.openShop.addEventListener('click', () => openModal('shop'));
-  ui.refs.openLoadout.addEventListener('click', () => openModal('loadout'));
-  ui.refs.cashout.addEventListener('click', () => socket.emit('arena:decision', 'cashout'));
-  ui.refs.continueRun.addEventListener('click', () => socket.emit('arena:decision', 'continue'));
+  socket.on('arena:profile', onProfile);
+  socket.on('arena:queueHubState', onQueue);
+  socket.on('arena:queueState', onQueue);
+  socket.on('arena:state', onMatch);
+  socket.on('arena:message', onMessage);
+  socket.on('arena:matchEnded', onMatchEnded);
 
-  document.addEventListener('keydown', (event) => {
-    if (event.repeat) {
-      return;
-    }
-    if (/^[1-9]$/.test(event.key) && state.match) {
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      socket.emit('arena:selectSlot', Number(event.key) - 1);
-      return;
-    }
+  socket.emit('arena:requestSync');
+
+  function handleKeydown(event) {
+    if (!event || typeof event.key !== 'string') return;
+
     if (event.key.toLowerCase() === 'e') {
-      if (state.match?.status === 'intermission') {
-        return;
-      }
-      if (!state.match && state.nearHub) {
+      if (state.nearGateway) {
+        socket.emit('arena:enterQueueHub');
         event.preventDefault();
-        event.stopImmediatePropagation();
-        if (state.modalOpen) {
-          closeModal();
-        } else {
-          openModal('overview');
-        }
       }
-    }
-    if (event.key === 'Escape' && state.modalOpen) {
-      closeModal();
-    }
-  }, true);
-
-  document.addEventListener('pointerdown', (event) => {
-    if (event.button !== 0) {
       return;
     }
-    if (!state.match || state.modalOpen) {
+
+    if (/^[1-9]$/.test(event.key)) {
+      const slot = Number(event.key) - 1;
+      socket.emit('arena:selectSlot', slot);
+      event.preventDefault();
       return;
     }
-    event.stopImmediatePropagation();
-    emitUseItem();
-  }, true);
 
-  setInterval(() => {
-    updatePrompt();
-    if (state.queue) {
-      ui.renderQueue(state.queue);
+    if (event.key.toLowerCase() === 'r') {
+      socket.emit('arena:decision', 'continue');
     }
-    if (state.match) {
-      ui.renderMatch(state.match);
+  }
+
+  function handlePointerDown(event) {
+    if (!state.match || state.match.phase !== 'combat') return;
+    const target = event?.target;
+    if (target && typeof target.closest === 'function' && target.closest('#arena-ui-root')) return;
+    socket.emit('arena:useItem', {});
+  }
+
+  window.addEventListener('keydown', handleKeydown);
+  window.addEventListener('pointerdown', handlePointerDown);
+
+  const loopHandle = setInterval(() => {
+    const pos = getPlayerPosition(context);
+    if (!pos) return;
+
+    const nearGateway = distanceXZ(pos, ARENA_CLIENT_CONFIG.gatewayCenter) <= Number(ARENA_CLIENT_CONFIG.gatewayInteractRadius || 4.2);
+    const nearQueueHub = distanceXZ(pos, ARENA_CLIENT_CONFIG.queueHubCenter) <= Number(ARENA_CLIENT_CONFIG.queueHubInteractRadius || 28);
+
+    if (nearGateway !== state.nearGateway || nearQueueHub !== state.nearQueueHub) {
+      state.nearGateway = nearGateway;
+      state.nearQueueHub = nearQueueHub;
+      refreshUI();
     }
-  }, 250);
-  renderAll();
+  }, 160);
 
   return {
-    openModal,
-    closeModal,
-    requestSync,
+    destroy() {
+      clearInterval(loopHandle);
+      window.removeEventListener('keydown', handleKeydown);
+      window.removeEventListener('pointerdown', handlePointerDown);
+      socket.off('arena:profile', onProfile);
+      socket.off('arena:queueHubState', onQueue);
+      socket.off('arena:queueState', onQueue);
+      socket.off('arena:state', onMatch);
+      socket.off('arena:message', onMessage);
+      socket.off('arena:matchEnded', onMatchEnded);
+      arenaRenderer.dispose();
+      ui.destroy();
+    },
   };
 }

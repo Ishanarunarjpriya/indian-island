@@ -1,3 +1,4 @@
+import * as THREE from 'https://unpkg.com/three@0.165.0/build/three.module.js';
 import { ARENA_CLIENT_CONFIG } from './config.js';
 
 function makeTextSprite(THREE, text, options = {}) {
@@ -41,9 +42,18 @@ function disposeGroup(group) {
   });
 }
 
-export function createArenaRenderer({ scene, world = ARENA_CLIENT_CONFIG.world }) {
-  const THREE = window.THREE;
-  if (!THREE || !scene) {
+function buildWorldConfig() {
+  return {
+    hubCenter: ARENA_CLIENT_CONFIG.queueHubCenter,
+    combatCenter: ARENA_CLIENT_CONFIG.combatCenter || ARENA_CLIENT_CONFIG.queueHubCenter,
+    islandRadius: 18,
+    stallOffset: { x: -10.8, y: 0, z: -6.4 },
+    queuePads: Array.isArray(ARENA_CLIENT_CONFIG.queuePads) ? ARENA_CLIENT_CONFIG.queuePads : [],
+  };
+}
+
+export function createArenaRenderer({ scene, world = buildWorldConfig() }) {
+  if (!scene) {
     return {
       updateState() {},
       dispose() {},
@@ -139,26 +149,58 @@ export function createArenaRenderer({ scene, world = ARENA_CLIENT_CONFIG.world }
   teleporterSign.position.set(lobbyCenter.x, lobbyCenter.y + 4.6, lobbyCenter.z + 8.3);
   lobbyRoot.add(teleporterSign);
 
-  [
-    { x: -5.2, z: 1.1, label: '1-2' },
-    { x: 0, z: -1.1, label: '1-4' },
-    { x: 5.2, z: 1.1, label: 'FAST' },
-  ].forEach((slot) => {
+  const queuePads = world.queuePads.length
+    ? world.queuePads
+    : [
+      { offset: { x: -8.6, z: 6.2 }, label: 'Solo', capacity: 1 },
+      { offset: { x: -2.85, z: 6.2 }, label: 'Duo', capacity: 2 },
+      { offset: { x: 2.85, z: 6.2 }, label: 'Trio', capacity: 3 },
+      { offset: { x: 8.6, z: 6.2 }, label: 'Squad', capacity: 4 },
+    ];
+  queuePads.forEach((slot) => {
+    const offsetX = Number(slot?.offset?.x) || 0;
+    const offsetZ = Number(slot?.offset?.z) || 0;
+    const padLabel = `${slot.label || 'Queue'} (${Number(slot.capacity) || 1})`;
     const queuePad = new THREE.Mesh(
       new THREE.BoxGeometry(3.2, 0.08, 2.2),
       new THREE.MeshBasicMaterial({ color: 0xf0bb58, transparent: true, opacity: 0.35 }),
     );
-    queuePad.position.set(lobbyCenter.x + slot.x, lobbyCenter.y + 0.26, lobbyCenter.z + 5.2 + slot.z);
+    queuePad.position.set(lobbyCenter.x + offsetX, lobbyCenter.y + 0.26, lobbyCenter.z + offsetZ);
     lobbyRoot.add(queuePad);
-    const queueLabel = makeTextSprite(THREE, slot.label, {
+    const queueLabel = makeTextSprite(THREE, padLabel, {
       scaleX: 2.8,
       scaleY: 0.9,
       background: 'rgba(15, 20, 32, 0.9)',
       color: '#ffe5b2',
     });
-    queueLabel.position.set(lobbyCenter.x + slot.x, lobbyCenter.y + 1.2, lobbyCenter.z + 5.2 + slot.z);
+    queueLabel.position.set(lobbyCenter.x + offsetX, lobbyCenter.y + 1.2, lobbyCenter.z + offsetZ);
     lobbyRoot.add(queueLabel);
   });
+
+  const gateFrame = new THREE.Mesh(
+    new THREE.BoxGeometry(16, 4.8, 0.24),
+    new THREE.MeshLambertMaterial({ color: 0x39424d }),
+  );
+  gateFrame.position.set(lobbyCenter.x, lobbyCenter.y + 2.2, lobbyCenter.z + 10.6);
+  lobbyRoot.add(gateFrame);
+  const cautionBand = new THREE.Mesh(
+    new THREE.BoxGeometry(15, 0.3, 0.3),
+    new THREE.MeshLambertMaterial({ color: 0xf3c24f }),
+  );
+  cautionBand.position.set(lobbyCenter.x, lobbyCenter.y + 2.5, lobbyCenter.z + 10.68);
+  cautionBand.rotation.z = 0.22;
+  lobbyRoot.add(cautionBand);
+  const cautionBand2 = cautionBand.clone();
+  cautionBand2.rotation.z = -0.22;
+  lobbyRoot.add(cautionBand2);
+  for (let i = 0; i < 5; i += 1) {
+    const cone = new THREE.Mesh(
+      new THREE.ConeGeometry(0.38, 0.8, 12),
+      new THREE.MeshLambertMaterial({ color: 0xff8f4e }),
+    );
+    cone.position.set(lobbyCenter.x - 5.4 + i * 2.7, lobbyCenter.y + 0.38, lobbyCenter.z + 9.25);
+    lobbyRoot.add(cone);
+  }
 
   const stall = new THREE.Group();
   const stallBase = world.stallOffset;

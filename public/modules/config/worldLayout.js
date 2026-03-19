@@ -60,6 +60,8 @@ export function createWorldLayout(THREE, worldLimit) {
   const FURNITURE_ISLAND_RADIUS = 8.1;
   const LEADERBOARD_ISLAND_POS = new THREE.Vector3(worldLimit * 2.8, 0, -worldLimit * 0.95);
   const LEADERBOARD_ISLAND_RADIUS = 11.2;
+  const ARENA_GATEWAY_ISLAND_POS = new THREE.Vector3(-43.37, 0, 110.14);
+  const ARENA_GATEWAY_ISLAND_RADIUS = 12.6;
   const FISHING_SHOP_BASE = new THREE.Vector3(-220, 0, 210);
   const MARKET_SHOP_BASE = new THREE.Vector3(-220, 0, 260);
   const FURNITURE_SHOP_BASE = new THREE.Vector3(-220, 0, 310);
@@ -201,6 +203,8 @@ export function createWorldLayout(THREE, worldLimit) {
     FURNITURE_ISLAND_RADIUS,
     LEADERBOARD_ISLAND_POS,
     LEADERBOARD_ISLAND_RADIUS,
+    ARENA_GATEWAY_ISLAND_POS,
+    ARENA_GATEWAY_ISLAND_RADIUS,
     FISHING_SHOP_BASE,
     MARKET_SHOP_BASE,
     FURNITURE_SHOP_BASE,

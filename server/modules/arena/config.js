@@ -1,22 +1,31 @@
 export const ARENA_ROOM_PREFIX = 'arena:';
 
 export const ARENA_WORLD = {
-  hubCenter: { x: -172, y: 1.25, z: 164 },
+  queueHubCenter: { x: -172, y: 1.25, z: 164 },
+  combatCenter: { x: -236, y: 1.25, z: 164 },
   islandRadius: 18,
   innerCombatRadius: 13.5,
   spawnRingRadius: 7.5,
   enemySpawnRadius: 10.5,
   spectatorHeight: 10,
+  queueHubTeleportOffset: { x: 0, y: 0, z: -11.5 },
 };
 
 export const MATCHMAKING = {
-  queueTimerMs: 18000,
-  minPlayers: 2,
+  queueTimerMs: 22000,
+  minPlayers: 1,
   maxPlayers: 4,
   intermissionMs: 12000,
   endDelayMs: 5000,
   tickMs: 100,
 };
+
+export const QUEUE_PADS = [
+  { id: 'solo', label: 'Solo', capacity: 1, offset: { x: -8.6, z: 6.2 }, radius: 2.7 },
+  { id: 'duo', label: 'Duo', capacity: 2, offset: { x: -2.85, z: 6.2 }, radius: 2.7 },
+  { id: 'trio', label: 'Trio', capacity: 3, offset: { x: 2.85, z: 6.2 }, radius: 2.7 },
+  { id: 'squad', label: 'Squad', capacity: 4, offset: { x: 8.6, z: 6.2 }, radius: 2.7 },
+];
 
 export const PLAYER_COMBAT = {
   maxHealth: 120,
@@ -31,9 +40,9 @@ export const REWARD_CONFIG = {
   dropTokenChance: 0.65,
   baseTokenDrop: [2, 5],
   bossTokenMultiplier: 3.5,
-  waveTokenBase: 12,
-  waveTokenGrowth: 4,
-  bossWaveBonus: 30,
+  waveTokenBase: 14,
+  waveTokenGrowth: 5,
+  bossWaveBonus: 36,
 };
 
 export const RARITY_CONFIG = {

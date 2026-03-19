@@ -4,1311 +4,1344 @@ import {
   ENEMY_TYPES,
   MATCHMAKING,
   PLAYER_COMBAT,
-  RARITY_CONFIG,
+  QUEUE_PADS,
   REWARD_CONFIG,
-  STATUS_EFFECTS,
   WAVE_TABLE,
 } from './config.js';
-import { LOOT_TABLE, getCatalogItem, getShopInventory } from './catalog.js';
-import { ensureArenaProgress, snapshotArenaProgress } from './progress.js';
+import {
+  getCatalogItem,
+  getShopInventory,
+  getUpgradedItemStats,
+  rollLoot,
+} from './catalog.js';
+import {
+  ensureArenaProgress,
+  getArenaProgress,
+  ownArenaItem,
+  snapshotArenaProgress,
+  upgradeArenaItem,
+} from './progress.js';
 
-const TWO_PI = Math.PI * 2;
+const QUEUE_HUB_ROOM_ID = `${ARENA_ROOM_PREFIX}queue-hub`;
+const LOBBY_RETURN_POS = Object.freeze({ x: -43.37, y: 1.35, z: 110.14 });
+const MATCH_PREFIX = `${ARENA_ROOM_PREFIX}match:`;
+const DEFAULT_MATCH_SECONDS = 20;
+const ENEMY_ATTACK_INTERVAL_MS = 450;
+const MATCH_STATE_THROTTLE_MS = 240;
+const STATUS_TICK_MS = PLAYER_COMBAT.statusTickMs || 1000;
+const MAX_QUEUE_TIMER_MS = Math.max(5000, Number(MATCHMAKING.queueTimerMs) || 22000);
+const INTERMISSION_MS = Math.max(5000, Number(MATCHMAKING.intermissionMs) || 12000);
+const ROUND_BREAK_BUFFER_MS = 550;
 
 function nowMs() {
   return Date.now();
 }
 
-function clamp(value, min, max) {
-  return Math.max(min, Math.min(max, value));
+function safeNumber(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
 }
 
-function randomRange(min, max) {
-  return min + Math.random() * (max - min);
+function clamp(n, min, max) {
+  if (n < min) return min;
+  if (n > max) return max;
+  return n;
+}
+
+function distanceXZ(a, b) {
+  const dx = safeNumber(a?.x) - safeNumber(b?.x);
+  const dz = safeNumber(a?.z) - safeNumber(b?.z);
+  return Math.hypot(dx, dz);
+}
+
+function randomBetween(min, max) {
+  return min + (Math.random() * (max - min));
 }
 
 function randomInt(min, max) {
-  return Math.floor(randomRange(min, max + 1));
+  return Math.floor(randomBetween(min, max + 1));
 }
 
-function distance2D(ax, az, bx, bz) {
-  const dx = ax - bx;
-  const dz = az - bz;
-  return Math.sqrt(dx * dx + dz * dz);
+function chance(probability) {
+  return Math.random() < probability;
 }
 
-function normalize2D(x, z) {
-  const length = Math.hypot(x, z) || 1;
-  return { x: x / length, z: z / length };
+function pickRandom(list) {
+  if (!Array.isArray(list) || list.length < 1) return null;
+  return list[Math.floor(Math.random() * list.length)] || null;
 }
 
-function createId(prefix) {
-  return prefix + '_' + Math.random().toString(36).slice(2, 10);
-}
-
-function pickWeighted(entries) {
-  const total = entries.reduce((sum, entry) => sum + entry.weight, 0);
-  let roll = Math.random() * total;
-  for (const entry of entries) {
-    roll -= entry.weight;
-    if (roll <= 0) {
-      return entry;
-    }
-  }
-  return entries[entries.length - 1] || null;
-}
-
-function rarityWeight(rarity) {
-  return RARITY_CONFIG[rarity] ? RARITY_CONFIG[rarity].lootWeight : 1;
-}
-
-function getEnemyScale(wave) {
+function anglePoint(center, radius, angle) {
   return {
-    hp: 1 + (wave - 1) * 0.18,
-    damage: 1 + (wave - 1) * 0.11,
-    moveSpeed: 1 + Math.min(0.35, (wave - 1) * 0.02),
+    x: center.x + (Math.cos(angle) * radius),
+    y: center.y,
+    z: center.z + (Math.sin(angle) * radius),
   };
 }
 
-function buildWaveComposition(wave) {
-  if (wave % 5 === 0) {
-    return [{ type: 'boss', count: 1 }];
+function buildQueueLaneFromConfig(pad) {
+  return {
+    id: pad.id,
+    label: pad.label,
+    capacity: pad.capacity,
+    offset: { ...pad.offset },
+    radius: pad.radius,
+    members: new Set(),
+    timerEndsAt: 0,
+    createdAt: 0,
+  };
+}
+
+function createParticipantFromPlayer(player) {
+  return {
+    socketId: player.socketId,
+    username: typeof player.username === 'string' ? player.username : `player_${player.socketId.slice(0, 5)}`,
+    displayName: typeof player.displayName === 'string' && player.displayName
+      ? player.displayName
+      : (typeof player.username === 'string' ? player.username : 'Player'),
+    maxHealth: PLAYER_COMBAT.maxHealth,
+    health: PLAYER_COMBAT.maxHealth,
+    alive: true,
+    unclaimedTokens: 0,
+    unclaimedLoot: {},
+    cooldowns: {},
+    statusEffects: [],
+    decisions: {
+      cashout: 0,
+      continue: 0,
+    },
+  };
+}
+
+function serializeLoot(lootMap) {
+  const keys = Object.keys(lootMap || {});
+  keys.sort();
+  const normalized = {};
+  for (let i = 0; i < keys.length; i += 1) {
+    const itemId = keys[i];
+    const amount = Math.max(0, Math.floor(Number(lootMap[itemId]) || 0));
+    if (amount > 0) normalized[itemId] = amount;
   }
-  return Object.entries(WAVE_TABLE)
-    .map(function mapWaveEntry(entry) {
-      const type = entry[0];
-      const baseCount = entry[1][0];
-      const growth = entry[1][1];
+  return normalized;
+}
+
+function formatSeconds(ms) {
+  return Math.max(0, Math.ceil(ms / 1000));
+}
+
+function computeEnemyDifficulty(round, partySize) {
+  const waveScale = 1 + ((Math.max(1, round) - 1) * 0.2);
+  const partyScale = 1 + ((Math.max(1, partySize) - 1) * 0.22);
+  const damageScale = 1 + ((Math.max(1, round) - 1) * 0.15) + ((Math.max(1, partySize) - 1) * 0.17);
+  return {
+    hpScale: waveScale * partyScale,
+    damageScale,
+    countScale: 1 + ((Math.max(1, round) - 1) * 0.2) + ((Math.max(1, partySize) - 1) * 0.33),
+  };
+}
+
+function computeWaveCounts(round, partySize) {
+  const counts = {
+    basic: 0,
+    tank: 0,
+    ranged: 0,
+    elite: 0,
+    boss: 0,
+  };
+  const countScale = computeEnemyDifficulty(round, partySize).countScale;
+  const enemyIds = ['basic', 'tank', 'ranged', 'elite'];
+  for (let i = 0; i < enemyIds.length; i += 1) {
+    const enemyId = enemyIds[i];
+    const [baseCount, growth] = Array.isArray(WAVE_TABLE[enemyId]) ? WAVE_TABLE[enemyId] : [0, 0];
+    const unscaled = baseCount + (growth * (round - 1));
+    counts[enemyId] = Math.max(0, Math.floor(unscaled * countScale));
+  }
+  if (round <= 2) counts.tank = Math.min(counts.tank, 1);
+  if (round <= 3) counts.elite = Math.min(counts.elite, 1);
+  if (round % 5 === 0) {
+    counts.boss = Math.max(1, Math.floor(1 + ((round - 5) / 10)));
+    counts.elite += Math.max(1, Math.floor(round / 4));
+  }
+  if (counts.basic < 1) counts.basic = 1;
+  return counts;
+}
+
+function buildQueueHubState(lanes, socketLookup) {
+  const snapshotLanes = lanes.map((lane) => {
+    const members = Array.from(lane.members).map((socketId) => {
+      const player = socketLookup(socketId);
       return {
-        type,
-        count: Math.max(0, Math.floor(baseCount + wave * growth)),
+        socketId,
+        username: typeof player?.username === 'string' ? player.username : null,
+        displayName: typeof player?.displayName === 'string' ? player.displayName : null,
       };
-    })
-    .filter(function filterWaveEntry(entry) {
-      return entry.count > 0;
     });
+    return {
+      id: lane.id,
+      label: lane.label,
+      capacity: lane.capacity,
+      occupancy: lane.members.size,
+      countdownMs: lane.timerEndsAt > 0 ? Math.max(0, lane.timerEndsAt - nowMs()) : 0,
+      members,
+    };
+  });
+  return { lanes: snapshotLanes, updatedAt: nowMs() };
 }
 
-function buildSpawnPoint(index, total) {
-  const angle = (index / Math.max(1, total)) * TWO_PI;
-  return {
-    x: ARENA_WORLD.hubCenter.x + Math.cos(angle) * ARENA_WORLD.spawnRingRadius,
-    y: ARENA_WORLD.hubCenter.y,
-    z: ARENA_WORLD.hubCenter.z + Math.sin(angle) * ARENA_WORLD.spawnRingRadius,
-  };
+function computeRoundWaveReward(round, isBossRound) {
+  const base = Number(REWARD_CONFIG.waveTokenBase) || 10;
+  const growth = Number(REWARD_CONFIG.waveTokenGrowth) || 4;
+  let reward = base + (growth * Math.max(0, round - 1));
+  if (isBossRound) reward += Number(REWARD_CONFIG.bossWaveBonus) || 0;
+  return Math.max(0, Math.floor(reward));
 }
 
-function buildEnemySpawnPoint() {
-  const angle = Math.random() * TWO_PI;
-  const radius = randomRange(ARENA_WORLD.enemySpawnRadius - 2.5, ARENA_WORLD.enemySpawnRadius);
-  return {
-    x: ARENA_WORLD.hubCenter.x + Math.cos(angle) * radius,
-    y: ARENA_WORLD.hubCenter.y,
-    z: ARENA_WORLD.hubCenter.z + Math.sin(angle) * radius,
-  };
+function computeEnemyDropTokens(typeId, isBoss) {
+  if (!chance(REWARD_CONFIG.dropTokenChance || 0.5)) return 0;
+  const [minDrop, maxDrop] = Array.isArray(REWARD_CONFIG.baseTokenDrop)
+    ? REWARD_CONFIG.baseTokenDrop
+    : [1, 3];
+  let amount = randomInt(Math.max(1, minDrop), Math.max(minDrop, maxDrop));
+  const typeScale = Number(ENEMY_TYPES[typeId]?.tokenScale) || 1;
+  amount = Math.max(1, Math.round(amount * typeScale));
+  if (isBoss) amount = Math.max(amount, Math.round(amount * (REWARD_CONFIG.bossTokenMultiplier || 2)));
+  return amount;
 }
 
-function buildQueueSnapshot(queue) {
-  return {
-    queuedCount: queue.entries.length,
-    entries: queue.entries.map(function mapEntry(entry) {
-      return {
-        socketId: entry.socketId,
-        username: entry.username,
-        displayName: entry.displayName,
-        joinedAt: entry.joinedAt,
-      };
-    }),
-    startsAt: queue.startsAt,
-    timerEndsAt: queue.timerEndsAt,
-    targetSize: queue.targetSize,
-    ownerSocketId: queue.ownerSocketId,
-    minPlayers: MATCHMAKING.minPlayers,
-    maxPlayers: MATCHMAKING.maxPlayers,
-  };
+function computeLootDrop() {
+  if (!chance(0.2)) return null;
+  const rolled = rollLoot(Math.random);
+  return rolled ? { ...rolled } : null;
 }
 
-function serializeCooldowns(member, currentTime) {
-  return Object.fromEntries(
-    Object.entries(member.cooldowns).map(function mapCooldown(entry) {
-      return [entry[0], Math.max(0, entry[1] - currentTime)];
-    }),
-  );
+function getActivePlayers(participants) {
+  return participants.filter((entry) => entry && entry.connected !== false);
 }
 
-function serializeArenaPlayer(member) {
-  return {
-    socketId: member.socketId,
-    username: member.username,
-    displayName: member.displayName,
-    hp: member.hp,
-    maxHp: member.maxHp,
-    alive: member.alive,
-    spectating: member.spectating,
-    selectedSlot: member.selectedSlot,
-    activeItemId: member.hotbar[member.selectedSlot] || null,
-    pendingTokens: member.pendingTokens,
-    roundWins: member.roundWins || 0,
-    pendingLoot: { ...member.pendingLoot },
-    bankedTokens: member.tokens,
-    buffs: member.buffs.map(function mapBuff(buff) {
-      return { type: buff.type, endsAt: buff.endsAt };
-    }),
-  };
+function getAlivePlayers(participants) {
+  return participants.filter((entry) => entry && entry.connected !== false && entry.alive);
 }
 
-function serializeEnemy(enemy) {
-  return {
-    id: enemy.id,
-    type: enemy.type,
-    label: enemy.label,
-    color: enemy.color,
-    x: enemy.x,
-    y: enemy.y,
-    z: enemy.z,
-    hp: enemy.hp,
-    maxHp: enemy.maxHp,
-    targetId: enemy.targetId,
-    phase: enemy.phase,
-    statusEffects: enemy.statusEffects.map(function mapStatus(status) {
-      return { type: status.type, endsAt: status.endsAt };
-    }),
-  };
-}
-
-function serializeProjectile(projectile) {
-  return {
-    id: projectile.id,
-    ownerType: projectile.ownerType,
-    ownerId: projectile.ownerId,
-    x: projectile.x,
-    y: projectile.y,
-    z: projectile.z,
-    color: projectile.color,
-    radius: projectile.radius,
-  };
+function getMajorityTarget(count) {
+  return Math.max(1, Math.floor(count / 2) + 1);
 }
 
 export function createArenaRuntime(args) {
-  const io = args.io;
-  const players = args.players;
-  const persistPlayerProgress = args.persistPlayerProgress;
-  const queue = {
-    entries: [],
-    startsAt: 0,
-    timerEndsAt: 0,
-    targetSize: 0,
-    ownerSocketId: null,
-  };
+  const io = args?.io;
+  const players = args?.players;
+  const persistPlayerProgress = typeof args?.persistPlayerProgress === 'function'
+    ? args.persistPlayerProgress
+    : async () => {};
+
+  if (!io || !players) {
+    throw new Error('createArenaRuntime requires io and players');
+  }
+
+  const lanes = QUEUE_PADS.map(buildQueueLaneFromConfig);
+  const laneById = new Map(lanes.map((lane) => [lane.id, lane]));
+  const socketLaneMap = new Map();
+
   const matches = new Map();
-  const socketToMatchId = new Map();
-  const sockets = new Map();
+  const socketMatchMap = new Map();
+  let matchCounter = 0;
+
+  const queueHubMembers = new Set();
 
   function getPlayer(socketId) {
-    return players && players[socketId] ? players[socketId] : null;
+    return players.get(socketId) || null;
   }
 
-  function getSocket(socketId) {
-    return sockets.get(socketId) || io.sockets.sockets.get(socketId) || null;
-  }
-
-  function getArenaProgress(socketId) {
+  function ensureProgressForSocket(socketId) {
     const player = getPlayer(socketId);
-    if (!player) {
-      return null;
-    }
+    if (!player) return null;
     player.progress = ensureArenaProgress(player.progress);
-    return player.progress.arena;
+    return player;
   }
 
-  async function flushProgress(socketId) {
+  async function persistProgress(socketId) {
     const player = getPlayer(socketId);
-    if (!player || !player.username) {
-      return;
-    }
+    if (!player) return;
     player.progress = ensureArenaProgress(player.progress);
-    await persistPlayerProgress(player.username, player.progress);
+    await persistPlayerProgress(socketId, player.progress);
   }
 
-  function emitProfile(socketId) {
+  function emitArenaProfile(socketId) {
+    const player = ensureProgressForSocket(socketId);
+    if (!player) return;
+    const snapshot = snapshotArenaProgress(player.progress);
+    io.to(socketId).emit('arena:profile', snapshot);
+  }
+
+  function emitQueueState() {
+    const state = buildQueueHubState(lanes, getPlayer);
+    io.emit('arena:queueHubState', state);
+    io.emit('arena:queueState', state);
+  }
+
+  function clearLaneTimerIfEmpty(lane) {
+    if (lane.members.size < 1) {
+      lane.timerEndsAt = 0;
+      lane.createdAt = 0;
+    }
+  }
+
+  function removeSocketFromLane(socketId) {
+    const laneId = socketLaneMap.get(socketId);
+    if (!laneId) return;
+    const lane = laneById.get(laneId);
+    if (!lane) {
+      socketLaneMap.delete(socketId);
+      return;
+    }
+    lane.members.delete(socketId);
+    socketLaneMap.delete(socketId);
+    clearLaneTimerIfEmpty(lane);
+    emitQueueState();
+  }
+
+  function setPlayerToQueueHub(socketId) {
     const player = getPlayer(socketId);
-    if (!player) {
-      return;
-    }
-    player.progress = ensureArenaProgress(player.progress);
-    io.to(socketId).emit('arena:profile', snapshotArenaProgress(player.progress));
-  }
-
-  function broadcastQueueState() {
-    io.emit('arena:queueState', buildQueueSnapshot(queue));
-  }
-
-  function leaveQueue(socketId) {
-    const before = queue.entries.length;
-    queue.entries = queue.entries.filter(function filterEntry(entry) {
-      return entry.socketId !== socketId;
-    });
-    if (before !== queue.entries.length) {
-      if (!queue.entries.length) {
-        queue.startsAt = 0;
-        queue.timerEndsAt = 0;
-        queue.targetSize = 0;
-        queue.ownerSocketId = null;
-      } else if (queue.ownerSocketId === socketId) {
-        queue.ownerSocketId = queue.entries[0].socketId;
-      }
-      broadcastQueueState();
-    }
-  }
-
-  function cleanupSocketRooms(socketId) {
-    const socket = getSocket(socketId);
-    const player = getPlayer(socketId);
-    if (!socket || !player) {
-      return;
-    }
-    socket.leave('world');
-    socket.leave(player.currentRoomId || '');
-    socket.leave('home:' + (player.currentRoomId || ''));
-  }
-
-  function movePlayerToArena(socketId, position, roomId) {
-    const player = getPlayer(socketId);
-    const socket = getSocket(socketId);
-    if (!player || !socket) {
-      return;
-    }
-    cleanupSocketRooms(socketId);
-    player.currentRoomId = roomId;
-    player.x = position.x;
-    player.y = position.y;
-    player.z = position.z;
-    player.rotation = Math.atan2(ARENA_WORLD.hubCenter.x - position.x, ARENA_WORLD.hubCenter.z - position.z);
-    socket.join(roomId);
-  }
-
-  function returnPlayerFromArena(member) {
-    const player = getPlayer(member.socketId);
-    const socket = getSocket(member.socketId);
-    if (!player || !socket) {
-      return;
-    }
-    socket.leave(member.roomId);
-    player.currentRoomId = null;
-    player.x = member.returnPosition.x;
-    player.y = member.returnPosition.y;
-    player.z = member.returnPosition.z;
-    player.rotation = member.returnPosition.rotation || 0;
-    socket.join('world');
-    io.to(member.socketId).emit('arena:returnToLobby', {
+    if (!player) return;
+    player.currentRoomId = QUEUE_HUB_ROOM_ID;
+    const offset = ARENA_WORLD.queueHubTeleportOffset || { x: 0, y: 0, z: 0 };
+    player.x = safeNumber(ARENA_WORLD.queueHubCenter?.x) + safeNumber(offset.x);
+    player.y = safeNumber(ARENA_WORLD.queueHubCenter?.y, 1.35) + safeNumber(offset.y);
+    player.z = safeNumber(ARENA_WORLD.queueHubCenter?.z) + safeNumber(offset.z);
+    queueHubMembers.add(socketId);
+    io.to(socketId).emit('arena:returnToLobby', {
       x: player.x,
       y: player.y,
       z: player.z,
-      rotation: player.rotation,
+      roomId: QUEUE_HUB_ROOM_ID,
+      mode: 'queue-hub',
     });
   }
 
-  function createMember(socketId, index, total) {
+  function returnToMainLobby(socketId) {
     const player = getPlayer(socketId);
-    if (!player) {
-      return null;
-    }
-    const arenaProgress = getArenaProgress(socketId);
-    const spawnPoint = buildSpawnPoint(index, total);
-    return {
-      socketId,
+    if (!player) return;
+    player.currentRoomId = null;
+    player.x = LOBBY_RETURN_POS.x;
+    player.y = LOBBY_RETURN_POS.y;
+    player.z = LOBBY_RETURN_POS.z;
+    queueHubMembers.delete(socketId);
+    removeSocketFromLane(socketId);
+    io.to(socketId).emit('arena:returnToLobby', {
+      ...LOBBY_RETURN_POS,
       roomId: null,
-      username: player.username || player.accountUsername || ('guest_' + socketId.slice(0, 5)),
-      displayName: player.displayName || player.username || 'Guest',
-      hp: PLAYER_COMBAT.maxHealth,
-      maxHp: PLAYER_COMBAT.maxHealth,
-      alive: true,
-      spectating: false,
-      selectedSlot: arenaProgress.selectedSlot,
-      hotbar: arenaProgress.hotbar.slice(),
-      cooldowns: {},
-      pendingTokens: 0,
-      pendingLoot: {},
-      tokens: arenaProgress.tokens,
-      ownedItems: new Set(arenaProgress.ownedItems),
-      consumables: { ...arenaProgress.consumables },
-      buffs: [],
-      returnPosition: {
-        x: Number(player.x) || 0,
-        y: Number(player.y) || ARENA_WORLD.hubCenter.y,
-        z: Number(player.z) || 0,
-        rotation: Number(player.rotation) || 0,
-      },
-      spawnPoint,
-      kills: 0,
-      damageDone: 0,
-      decision: null,
-      matchWave: 0,
-      roundWins: 0,
+      mode: 'main-world',
+    });
+  }
+
+  function ensureSocketLeavesArenaState(socketId) {
+    removeSocketFromLane(socketId);
+    const matchId = socketMatchMap.get(socketId);
+    if (!matchId) return;
+    const match = matches.get(matchId);
+    if (!match) {
+      socketMatchMap.delete(socketId);
+      return;
+    }
+    const participant = match.participants.get(socketId);
+    if (participant) {
+      participant.connected = false;
+      participant.alive = false;
+      participant.health = 0;
+    }
+  }
+
+  function joinQueuePad(socketId, padId) {
+    const lane = laneById.get(padId);
+    const player = getPlayer(socketId);
+    if (!lane || !player) return;
+    if (socketMatchMap.has(socketId)) return;
+
+    queueHubMembers.add(socketId);
+    if (player.currentRoomId !== QUEUE_HUB_ROOM_ID) {
+      setPlayerToQueueHub(socketId);
+    }
+
+    const existingLaneId = socketLaneMap.get(socketId);
+    if (existingLaneId && existingLaneId !== lane.id) removeSocketFromLane(socketId);
+
+    if (lane.members.size >= lane.capacity && !lane.members.has(socketId)) {
+      io.to(socketId).emit('arena:message', { message: `${lane.label} queue is full.` });
+      return;
+    }
+
+    lane.members.add(socketId);
+    socketLaneMap.set(socketId, lane.id);
+    if (lane.timerEndsAt < 1) {
+      lane.createdAt = nowMs();
+      lane.timerEndsAt = lane.createdAt + MAX_QUEUE_TIMER_MS;
+    }
+    emitQueueState();
+  }
+
+  function buildMatchSnapshot(match) {
+    const participants = Array.from(match.participants.values());
+    const aliveCount = getAlivePlayers(participants).length;
+    const activeCount = getActivePlayers(participants).length;
+    const votes = {
+      cashout: 0,
+      continue: 0,
+      required: getMajorityTarget(Math.max(1, activeCount)),
     };
-  }
-
-  function awardLootToMember(member, lootItemId, quantity) {
-    const item = getCatalogItem(lootItemId);
-    if (!item) {
-      return;
-    }
-    if (item.category === 'consumable') {
-      member.pendingLoot[lootItemId] = (member.pendingLoot[lootItemId] || 0) + (quantity || 1);
-      return;
-    }
-    if (member.ownedItems.has(lootItemId)) {
-      member.pendingTokens += Math.max(8, Math.floor((RARITY_CONFIG[item.rarity] ? RARITY_CONFIG[item.rarity].tokenMultiplier : 1) * 18));
-      return;
-    }
-    member.pendingLoot[lootItemId] = 1;
-  }
-
-  function rollLoot(member, enemy) {
-    const chance = enemy.type === 'boss' ? 0.85 : enemy.type === 'elite' ? 0.34 : 0.16;
-    if (Math.random() > chance) {
-      return;
-    }
-    const weightedEntries = LOOT_TABLE.map(function mapLoot(entry) {
-      return { itemId: entry.itemId, weight: entry.weight * rarityWeight(entry.rarity) };
+    participants.forEach((participant) => {
+      if (!participant || participant.connected === false) return;
+      const vote = match.decisions.get(participant.socketId);
+      if (vote === 'cashout') votes.cashout += 1;
+      if (vote === 'continue') votes.continue += 1;
     });
-    const rolled = pickWeighted(weightedEntries);
-    if (rolled) {
-      awardLootToMember(member, rolled.itemId, 1);
-    }
-  }
 
-  function bankMemberRewards(member) {
-    const player = getPlayer(member.socketId);
-    if (!player) {
-      return;
+    const enemies = Array.from(match.enemies.values());
+    const enemySummary = {};
+    for (let i = 0; i < enemies.length; i += 1) {
+      const enemy = enemies[i];
+      enemySummary[enemy.typeId] = (enemySummary[enemy.typeId] || 0) + 1;
     }
-    player.progress = ensureArenaProgress(player.progress);
-    const arena = player.progress.arena;
-    arena.tokens += member.pendingTokens;
-    Object.entries(member.pendingLoot).forEach(function eachLoot(entry) {
-      const itemId = entry[0];
-      const amount = entry[1];
-      const item = getCatalogItem(itemId);
-      if (!item) {
-        return;
-      }
-      if (item.category === 'consumable') {
-        arena.consumables[itemId] = (arena.consumables[itemId] || 0) + amount;
-        return;
-      }
-      if (!arena.ownedItems.includes(itemId)) {
-        arena.ownedItems.push(itemId);
-      }
-      if (!arena.unlockedLoot.includes(itemId)) {
-        arena.unlockedLoot.push(itemId);
-      }
-      const emptySlot = arena.hotbar.findIndex(function findEmpty(slot) {
-        return !slot;
-      });
-      if (emptySlot >= 0 && !arena.hotbar.includes(itemId)) {
-        arena.hotbar[emptySlot] = itemId;
-      }
-    });
-    arena.selectedSlot = member.selectedSlot;
-    arena.stats.highestWave = Math.max(arena.stats.highestWave, member.matchWave || 0);
-    arena.stats.lifetimeKills += member.kills;
-    arena.stats.matchesPlayed += 1;
-    member.pendingTokens = 0;
-    member.pendingLoot = {};
-    member.tokens = arena.tokens;
-    emitProfile(member.socketId);
-  }
 
-  function buildEnemy(type, wave) {
-    const base = ENEMY_TYPES[type];
-    const scale = getEnemyScale(wave);
-    const spawn = buildEnemySpawnPoint();
-    const hpValue = Math.round(base.baseHp * scale.hp * (type === 'boss' ? 1.2 : 1));
     return {
-      id: createId('enemy'),
-      type,
-      label: base.label,
-      color: base.color,
-      x: spawn.x,
-      y: spawn.y,
-      z: spawn.z,
-      hp: hpValue,
-      maxHp: hpValue,
-      damage: Math.round(base.baseDamage * scale.damage),
-      moveSpeed: base.moveSpeed * scale.moveSpeed,
-      attackRange: base.attackRange,
-      attackCooldownMs: base.attackCooldownMs,
-      preferredRange: base.preferredRange || 0,
-      projectileSpeed: base.projectileSpeed || 0,
-      targetId: null,
-      lastAttackAt: 0,
-      lastSpecialAt: 0,
-      phase: 0,
-      statusEffects: [],
-      tokenScale: base.tokenScale || 1,
-      baseType: base,
+      roomId: match.roomId,
+      laneId: match.laneId,
+      phase: match.phase,
+      round: match.round,
+      isBossRound: match.round > 0 && (match.round % 5 === 0),
+      partySize: participants.length,
+      activePlayers: activeCount,
+      alivePlayers: aliveCount,
+      enemiesRemaining: enemies.length,
+      enemies: enemies.map((enemy) => ({
+        id: enemy.id,
+        type: enemy.typeId,
+        color: enemy.color,
+        x: enemy.x,
+        y: enemy.y + (enemy.typeId === 'boss' ? 1.6 : 1.0),
+        z: enemy.z,
+        hp: enemy.hp,
+        maxHp: enemy.maxHp,
+      })),
+      projectiles: [],
+      enemySummary,
+      intermissionEndsAt: match.intermissionEndsAt,
+      intermissionSeconds: match.intermissionEndsAt > 0 ? formatSeconds(match.intermissionEndsAt - nowMs()) : 0,
+      decisionSeconds: match.intermissionEndsAt > 0 ? formatSeconds(match.intermissionEndsAt - nowMs()) : 0,
+      voteCounts: votes,
+      players: participants.map((participant) => ({
+        socketId: participant.socketId,
+        username: participant.username,
+        displayName: participant.displayName,
+        alive: participant.alive,
+        connected: participant.connected !== false,
+        health: participant.health,
+        maxHealth: participant.maxHealth,
+        unclaimedTokens: participant.unclaimedTokens,
+        unclaimedLoot: serializeLoot(participant.unclaimedLoot),
+      })),
     };
   }
 
-  function sendSystemMessage(match, message) {
+  function broadcastMatchState(match, force = false) {
+    const now = nowMs();
+    if (!force && now - match.lastBroadcastAt < MATCH_STATE_THROTTLE_MS) return;
+    match.lastBroadcastAt = now;
+    const snapshot = buildMatchSnapshot(match);
+    io.to(match.roomId).emit('arena:state', snapshot);
+  }
+
+  function notifyMatch(match, message) {
     io.to(match.roomId).emit('arena:message', { message, at: nowMs() });
   }
 
-  function grantKillRewards(member, enemy) {
-    member.kills += 1;
-    if (Math.random() <= REWARD_CONFIG.dropTokenChance) {
-      const dropped = Math.round(randomInt(REWARD_CONFIG.baseTokenDrop[0], REWARD_CONFIG.baseTokenDrop[1]) * enemy.tokenScale * (enemy.type === 'boss' ? REWARD_CONFIG.bossTokenMultiplier : 1));
-      member.pendingTokens += dropped;
-    }
-    rollLoot(member, enemy);
-  }
-
-  function applyStatusEffect(enemy, statusConfig, currentTime) {
-    if (!statusConfig || !statusConfig.type || !STATUS_EFFECTS[statusConfig.type]) {
-      return;
-    }
-    enemy.statusEffects = enemy.statusEffects.filter(function filterStatus(status) {
-      return status.type !== statusConfig.type;
-    });
-    enemy.statusEffects.push({
-      type: statusConfig.type,
-      endsAt: currentTime + (statusConfig.durationMs || STATUS_EFFECTS[statusConfig.type].durationMs),
-      lastTickAt: currentTime,
-    });
-  }
-
-  function damageEnemy(match, member, enemy, amount, statusConfig, currentTime) {
-    enemy.hp = Math.max(0, enemy.hp - amount);
-    member.damageDone += amount;
-    if (statusConfig) {
-      applyStatusEffect(enemy, statusConfig, currentTime);
-    }
-    if (enemy.hp <= 0) {
-      match.enemies.delete(enemy.id);
-      grantKillRewards(member, enemy);
-      if (!match.enemies.size && match.status === 'combat') {
-        beginIntermission(match);
-      }
-    }
-  }
-
-  function calculateDamage(item, member) {
-    const critChance = item.critChance == null ? PLAYER_COMBAT.defaultCritChance : item.critChance;
-    const critMultiplier = item.critMultiplier == null ? PLAYER_COMBAT.defaultCritMultiplier : item.critMultiplier;
-    const buffMultiplier = member.buffs.reduce(function reduceBuff(product, buff) {
-      return product * (buff.damageMultiplier || 1);
-    }, 1);
-    let damage = item.damage * buffMultiplier;
-    if (Math.random() < critChance) {
-      damage *= critMultiplier;
-    }
-    return Math.round(damage);
-  }
-
-  function useMelee(match, member, item, currentTime, direction) {
-    const player = getPlayer(member.socketId);
-    if (!player) {
-      return;
-    }
-    const facing = normalize2D(direction.x || 0, direction.z || 1);
-    if (match.mode === 'pvp') {
-      match.members.forEach(function eachTarget(target) {
-        if (!target.alive || target.socketId === member.socketId) {
-          return;
-        }
-        const targetPlayer = getPlayer(target.socketId);
-        if (!targetPlayer) {
-          return;
-        }
-        const dx = Number(targetPlayer.x) - Number(player.x);
-        const dz = Number(targetPlayer.z) - Number(player.z);
-        const dist = Math.hypot(dx, dz);
-        if (dist > item.range) {
-          return;
-        }
-        const toTarget = normalize2D(dx, dz);
-        if (facing.x * toTarget.x + facing.z * toTarget.z < -0.1) {
-          return;
-        }
-        damageMember(match, target, calculateDamage(item, member), member);
-      });
-      return;
-    }
-    Array.from(match.enemies.values()).forEach(function eachEnemy(enemy) {
-      const dx = enemy.x - Number(player.x);
-      const dz = enemy.z - Number(player.z);
-      const dist = Math.hypot(dx, dz);
-      if (dist > item.range) {
-        return;
-      }
-      const toEnemy = normalize2D(dx, dz);
-      if (facing.x * toEnemy.x + facing.z * toEnemy.z < -0.1) {
-        return;
-      }
-      damageEnemy(match, member, enemy, calculateDamage(item, member), item.status, currentTime);
-      if (!item.splashRadius) {
-        return;
-      }
-      Array.from(match.enemies.values()).forEach(function eachSplashEnemy(splashEnemy) {
-        if (splashEnemy.id === enemy.id) {
-          return;
-        }
-        if (distance2D(enemy.x, enemy.z, splashEnemy.x, splashEnemy.z) <= item.splashRadius) {
-          damageEnemy(match, member, splashEnemy, Math.round(item.damage * 0.45), null, currentTime);
-        }
-      });
-    });
-  }
-
-  function spawnProjectile(match, projectile) {
-    match.projectiles.set(projectile.id, projectile);
-  }
-
-  function useGun(match, member, item, currentTime, direction) {
-    const player = getPlayer(member.socketId);
-    if (!player) {
-      return;
-    }
-    const pelletCount = item.pelletCount || 1;
-    for (let i = 0; i < pelletCount; i += 1) {
-      const spread = item.spread || 0;
-      const angleOffset = spread ? randomRange(-spread, spread) : 0;
-      const rotated = {
-        x: direction.x * Math.cos(angleOffset) - direction.z * Math.sin(angleOffset),
-        z: direction.x * Math.sin(angleOffset) + direction.z * Math.cos(angleOffset),
-      };
-      const normalized = normalize2D(rotated.x, rotated.z);
-      spawnProjectile(match, {
-        id: createId('proj'),
-        ownerType: 'player',
-        ownerId: member.socketId,
-        itemId: item.id,
-        x: Number(player.x),
-        y: ARENA_WORLD.hubCenter.y + 1.2,
-        z: Number(player.z),
-        vx: normalized.x * item.projectileSpeed,
-        vz: normalized.z * item.projectileSpeed,
-        radius: item.pelletCount ? 0.18 : 0.24,
-        damage: item.damage,
-        color: item.color,
-        expiresAt: currentTime + item.projectileLifeMs,
-        pierce: item.pierce || 0,
-        status: item.status || null,
-        sourceMemberId: member.socketId,
+  function placePlayersIntoMatchRoom(match) {
+    const participants = Array.from(match.participants.values());
+    const radius = Math.max(2.4, ARENA_WORLD.spawnRingRadius || 7.5);
+    const center = {
+      x: safeNumber(ARENA_WORLD.combatCenter?.x),
+      y: safeNumber(ARENA_WORLD.combatCenter?.y, 1.35),
+      z: safeNumber(ARENA_WORLD.combatCenter?.z),
+    };
+    for (let i = 0; i < participants.length; i += 1) {
+      const participant = participants[i];
+      const angle = (Math.PI * 2 * i) / Math.max(1, participants.length);
+      const pos = anglePoint(center, radius, angle);
+      const player = getPlayer(participant.socketId);
+      if (!player) continue;
+      player.currentRoomId = match.roomId;
+      player.x = pos.x;
+      player.y = pos.y;
+      player.z = pos.z;
+      queueHubMembers.delete(participant.socketId);
+      io.to(participant.socketId).emit('arena:returnToLobby', {
+        x: pos.x,
+        y: pos.y,
+        z: pos.z,
+        roomId: match.roomId,
+        mode: 'match',
       });
     }
   }
 
-  function useAbility(match, member, item, currentTime, direction) {
-    const player = getPlayer(member.socketId);
-    if (!player) {
+  function spawnEnemy(match, typeId, hpScale, damageScale) {
+    const def = ENEMY_TYPES[typeId];
+    if (!def) return;
+    const enemyId = `${match.id}:enemy:${match.nextEnemyId++}`;
+    const angle = randomBetween(0, Math.PI * 2);
+    const spawn = anglePoint(
+      {
+        x: safeNumber(ARENA_WORLD.combatCenter?.x),
+        y: safeNumber(ARENA_WORLD.combatCenter?.y, 1.35),
+        z: safeNumber(ARENA_WORLD.combatCenter?.z),
+      },
+      Math.max(ARENA_WORLD.enemySpawnRadius || 10.5, 4.5),
+      angle,
+    );
+    const maxHp = Math.max(20, Math.floor((def.baseHp || 60) * hpScale));
+    const damage = Math.max(1, Math.floor((def.baseDamage || 10) * damageScale));
+    match.enemies.set(enemyId, {
+      id: enemyId,
+      typeId,
+      label: def.label || typeId,
+      color: def.color || '#ffffff',
+      maxHp,
+      hp: maxHp,
+      damage,
+      role: def.role || 'melee',
+      attackRange: Number(def.attackRange) || 1.8,
+      attackCooldownMs: Number(def.attackCooldownMs) || ENEMY_ATTACK_INTERVAL_MS,
+      x: spawn.x,
+      y: spawn.y,
+      z: spawn.z,
+      statusEffects: [],
+      cooldownUntil: nowMs() + randomInt(200, 900),
+      spawnAt: nowMs(),
+    });
+  }
+
+  function startRound(match, nextRound) {
+    match.round = nextRound;
+    match.phase = 'combat';
+    match.intermissionEndsAt = 0;
+    match.decisions.clear();
+    match.enemies.clear();
+
+    const participants = Array.from(match.participants.values());
+    const alive = getAlivePlayers(participants);
+    if (alive.length < 1) {
+      endMatchFailure(match, 'team-wipe');
       return;
     }
-    if (match.mode === 'pvp') {
-      const otherMembers = match.members
-        .filter(function filterMember(entry) { return entry.alive && entry.socketId !== member.socketId; })
-        .map(function mapMember(entry) {
-          return { member: entry, player: getPlayer(entry.socketId) };
-        })
-        .filter(function filterMissing(entry) { return !!entry.player; });
-      if (item.id === 'frost_nova' || item.id === 'venom_pulse') {
-        otherMembers.forEach(function eachTarget(entry) {
-          if (distance2D(Number(player.x), Number(player.z), Number(entry.player.x), Number(entry.player.z)) <= item.radius) {
-            damageMember(match, entry.member, item.damage, member);
-          }
-        });
-        return;
+
+    const difficulty = computeEnemyDifficulty(match.round, participants.length);
+    const counts = computeWaveCounts(match.round, participants.length);
+    const orderedSpawns = ['basic', 'tank', 'ranged', 'elite', 'boss'];
+    for (let i = 0; i < orderedSpawns.length; i += 1) {
+      const typeId = orderedSpawns[i];
+      const count = Math.max(0, counts[typeId] || 0);
+      for (let n = 0; n < count; n += 1) {
+        spawnEnemy(match, typeId, difficulty.hpScale, difficulty.damageScale);
       }
-      if (item.id === 'arc_surge') {
-        otherMembers
-          .sort(function sortEntry(a, b) {
-            return distance2D(Number(player.x), Number(player.z), Number(a.player.x), Number(a.player.z))
-              - distance2D(Number(player.x), Number(player.z), Number(b.player.x), Number(b.player.z));
-          })
-          .slice(0, item.chainTargets || 3)
-          .forEach(function eachTarget(entry) {
-            damageMember(match, entry.member, item.damage, member);
+    }
+
+    notifyMatch(match, `Round ${match.round} started. Defeat all enemies.`);
+    broadcastMatchState(match, true);
+  }
+
+  function beginIntermission(match) {
+    match.phase = 'intermission';
+    match.intermissionEndsAt = nowMs() + INTERMISSION_MS;
+    match.decisions.clear();
+
+    const isBossRound = match.round % 5 === 0;
+    const reward = computeRoundWaveReward(match.round, isBossRound);
+    const participants = Array.from(match.participants.values());
+    const aliveParticipants = getAlivePlayers(participants);
+    for (let i = 0; i < aliveParticipants.length; i += 1) {
+      aliveParticipants[i].unclaimedTokens += reward;
+    }
+
+    notifyMatch(
+      match,
+      `Round ${match.round} cleared. +${reward} unclaimed PvP tokens. Vote: Cash Out or Continue.`,
+    );
+    broadcastMatchState(match, true);
+  }
+
+  function applyBurnTicks(entity) {
+    const timestamp = nowMs();
+    if (!Array.isArray(entity.statusEffects) || entity.statusEffects.length < 1) return 0;
+    let totalDamage = 0;
+    const nextEffects = [];
+    for (let i = 0; i < entity.statusEffects.length; i += 1) {
+      const effect = entity.statusEffects[i];
+      if (!effect || timestamp >= effect.endsAt) continue;
+      if (effect.type === 'burn' && timestamp >= effect.nextTickAt) {
+        totalDamage += Math.max(1, Math.floor(effect.damage || 1));
+        effect.nextTickAt = timestamp + Math.max(160, Number(effect.tickMs) || STATUS_TICK_MS);
+      }
+      nextEffects.push(effect);
+    }
+    entity.statusEffects = nextEffects;
+    return totalDamage;
+  }
+
+  function findNearestEnemy(match, source, maxRange = Infinity) {
+    let nearest = null;
+    let nearestDist = maxRange;
+    const enemies = Array.from(match.enemies.values());
+    for (let i = 0; i < enemies.length; i += 1) {
+      const enemy = enemies[i];
+      const dist = distanceXZ(source, enemy);
+      if (dist <= nearestDist) {
+        nearest = enemy;
+        nearestDist = dist;
+      }
+    }
+    return nearest;
+  }
+
+  function findNearestOpponent(match, sourceSocketId, sourcePos, maxRange = Infinity) {
+    let nearest = null;
+    let nearestDist = maxRange;
+    const participants = Array.from(match.participants.values());
+    for (let i = 0; i < participants.length; i += 1) {
+      const participant = participants[i];
+      if (participant.socketId === sourceSocketId || !participant.alive || participant.connected === false) continue;
+      const player = getPlayer(participant.socketId);
+      if (!player) continue;
+      const dist = distanceXZ(sourcePos, player);
+      if (dist <= nearestDist) {
+        nearest = participant;
+        nearestDist = dist;
+      }
+    }
+    return nearest;
+  }
+
+  function awardKillDrops(match, participant, enemyTypeId) {
+    if (!participant) return;
+    const tokenDrop = computeEnemyDropTokens(enemyTypeId, enemyTypeId === 'boss');
+    if (tokenDrop > 0) participant.unclaimedTokens += tokenDrop;
+    const loot = computeLootDrop();
+    if (!loot) return;
+    participant.unclaimedLoot[loot.itemId] = (participant.unclaimedLoot[loot.itemId] || 0) + 1;
+  }
+
+function dealDamageToParticipant(match, participant, amount, sourceLabel = 'enemy') {
+  if (!participant || !participant.alive) return;
+  const applied = Math.max(1, Math.floor(amount));
+  participant.health = Math.max(0, participant.health - applied);
+  if (participant.health > 0) return;
+  participant.alive = false;
+  participant.unclaimedTokens = 0;
+  participant.unclaimedLoot = {};
+  notifyMatch(match, `${participant.displayName} was defeated by ${sourceLabel}.`);
+    const alivePlayers = getAlivePlayers(Array.from(match.participants.values()));
+    if (alivePlayers.length < 1) {
+      endMatchFailure(match, 'team-wipe');
+      return;
+    }
+    broadcastMatchState(match, true);
+  }
+
+  function applyStatusEffect(entity, effect) {
+    if (!entity.statusEffects) entity.statusEffects = [];
+    entity.statusEffects.push(effect);
+  }
+
+  function damageEnemy(match, enemy, damageAmount, sourceParticipant, sourceLabel = 'player') {
+    if (!enemy || !match.enemies.has(enemy.id)) return;
+    const damage = Math.max(1, Math.floor(damageAmount));
+    enemy.hp = Math.max(0, enemy.hp - damage);
+    if (enemy.hp > 0) return;
+    match.enemies.delete(enemy.id);
+    if (sourceParticipant) awardKillDrops(match, sourceParticipant, enemy.typeId);
+    notifyMatch(match, `${sourceLabel} defeated ${enemy.label}.`);
+    if (match.enemies.size < 1 && match.phase === 'combat') {
+      beginIntermission(match);
+    } else {
+      broadcastMatchState(match);
+    }
+  }
+
+  function computeItemDamageAndCrit(itemStats) {
+    const baseDamage = Math.max(1, Math.floor(Number(itemStats.damage) || 10));
+    const critChance = clamp(Number(itemStats.critChance) || PLAYER_COMBAT.defaultCritChance, 0, 0.95);
+    const critMultiplier = Math.max(1.1, Number(itemStats.critMultiplier) || PLAYER_COMBAT.defaultCritMultiplier);
+    const isCrit = chance(critChance);
+    const damage = isCrit ? Math.round(baseDamage * critMultiplier) : baseDamage;
+    return { damage, isCrit };
+  }
+
+  function buildItemRuntimeStats(playerProgress, itemId) {
+    const arenaProgress = getArenaProgress(playerProgress);
+    const item = getCatalogItem(itemId);
+    if (!item) return null;
+    const upgradeLevel = Number(arenaProgress.itemUpgrades[itemId]) || 0;
+    const stats = getUpgradedItemStats(itemId, upgradeLevel) || item.baseStats;
+    return {
+      item,
+      stats,
+      upgradeLevel,
+    };
+  }
+
+  function useMeleeLikeItem(match, sourceParticipant, sourcePlayer, itemRuntime) {
+    const maxRange = Number(itemRuntime.stats.range) || 2.2;
+    const enemy = findNearestEnemy(match, sourcePlayer, maxRange);
+    const opponent = findNearestOpponent(match, sourceParticipant.socketId, sourcePlayer, maxRange);
+    const targetEnemyDist = enemy ? distanceXZ(sourcePlayer, enemy) : Infinity;
+    const targetPlayerDist = opponent ? distanceXZ(sourcePlayer, getPlayer(opponent.socketId)) : Infinity;
+    const { damage } = computeItemDamageAndCrit(itemRuntime.stats);
+
+    if (targetEnemyDist <= targetPlayerDist && enemy) {
+      damageEnemy(match, enemy, damage, sourceParticipant, sourceParticipant.displayName);
+    } else if (opponent) {
+      dealDamageToParticipant(match, opponent, damage, sourceParticipant.displayName);
+      broadcastMatchState(match, true);
+    }
+
+    if (Number(itemRuntime.stats.splashRadius) > 0) {
+      const splashRadius = Number(itemRuntime.stats.splashRadius);
+      const splashScale = clamp(Number(itemRuntime.stats.splashScale) || 0.25, 0.1, 0.8);
+      const enemies = Array.from(match.enemies.values());
+      for (let i = 0; i < enemies.length; i += 1) {
+        const enemyCandidate = enemies[i];
+        if (distanceXZ(sourcePlayer, enemyCandidate) <= splashRadius) {
+          damageEnemy(match, enemyCandidate, Math.max(1, Math.round(damage * splashScale)), sourceParticipant, sourceParticipant.displayName);
+        }
+      }
+    }
+  }
+
+  function useAbilityItem(match, sourceParticipant, sourcePlayer, itemRuntime) {
+    const stats = itemRuntime.stats;
+    const baseRange = Number(stats.range) || 4.5;
+    const damage = computeItemDamageAndCrit(stats).damage;
+    const radius = Number(stats.radius) || 0;
+
+    if (itemRuntime.item.id === 'ability_arc_dash') {
+      const targetEnemy = findNearestEnemy(match, sourcePlayer, baseRange);
+      if (targetEnemy) {
+        damageEnemy(match, targetEnemy, Math.round(damage * 1.1), sourceParticipant, sourceParticipant.displayName);
+      }
+      const targetPlayer = findNearestOpponent(match, sourceParticipant.socketId, sourcePlayer, baseRange);
+      if (targetPlayer) {
+        dealDamageToParticipant(match, targetPlayer, Math.round(damage * 0.95), sourceParticipant.displayName);
+      }
+      return;
+    }
+
+    const enemies = Array.from(match.enemies.values());
+    const participants = Array.from(match.participants.values());
+
+    for (let i = 0; i < enemies.length; i += 1) {
+      const enemy = enemies[i];
+      const dist = distanceXZ(sourcePlayer, enemy);
+      if (dist <= Math.max(baseRange, radius > 0 ? radius : baseRange)) {
+        damageEnemy(match, enemy, damage, sourceParticipant, sourceParticipant.displayName);
+        if (itemRuntime.item.id === 'ability_fireburst' && stats.burnDamage > 0) {
+          applyStatusEffect(enemy, {
+            type: 'burn',
+            damage: stats.burnDamage,
+            nextTickAt: nowMs() + (stats.burnTickMs || STATUS_TICK_MS),
+            tickMs: stats.burnTickMs || STATUS_TICK_MS,
+            endsAt: nowMs() + ((stats.burnTickMs || STATUS_TICK_MS) * Math.max(1, stats.burnTicks || 1)),
           });
-        return;
+        }
+        if (itemRuntime.item.id === 'ability_frost_nova' && stats.slowRatio > 0) {
+          applyStatusEffect(enemy, {
+            type: 'slow',
+            slowRatio: clamp(Number(stats.slowRatio) || 0.35, 0.05, 0.85),
+            endsAt: nowMs() + Math.max(400, Number(stats.slowMs) || 1800),
+          });
+        }
       }
     }
-    if (item.id === 'frost_nova' || item.id === 'venom_pulse') {
-      Array.from(match.enemies.values()).forEach(function eachEnemy(enemy) {
-        if (distance2D(Number(player.x), Number(player.z), enemy.x, enemy.z) <= item.radius) {
-          damageEnemy(match, member, enemy, item.damage, item.status, currentTime);
-        }
-      });
-      return;
-    }
-    if (item.id === 'arc_surge') {
-      Array.from(match.enemies.values())
-        .sort(function sortEnemy(a, b) {
-          return distance2D(Number(player.x), Number(player.z), a.x, a.z) - distance2D(Number(player.x), Number(player.z), b.x, b.z);
-        })
-        .slice(0, item.chainTargets || 3)
-        .forEach(function eachTarget(enemy) {
-          damageEnemy(match, member, enemy, item.damage, item.status, currentTime);
-        });
-      return;
-    }
-    useGun(match, member, item, currentTime, direction);
-  }
 
-  function useConsumable(member, item, currentTime) {
-    if ((member.consumables[item.id] || 0) <= 0) {
-      return;
-    }
-    member.consumables[item.id] -= 1;
-    if (item.healAmount) {
-      member.hp = clamp(member.hp + item.healAmount, 0, member.maxHp);
-    }
-    if (item.buff) {
-      member.buffs.push({
-        type: item.id,
-        damageMultiplier: item.buff.damageMultiplier || 1,
-        endsAt: currentTime + item.buff.durationMs,
-      });
+    for (let i = 0; i < participants.length; i += 1) {
+      const target = participants[i];
+      if (target.socketId === sourceParticipant.socketId || !target.alive || target.connected === false) continue;
+      const targetPlayer = getPlayer(target.socketId);
+      if (!targetPlayer) continue;
+      const dist = distanceXZ(sourcePlayer, targetPlayer);
+      if (dist <= Math.max(baseRange, radius > 0 ? radius : baseRange)) {
+        dealDamageToParticipant(match, target, Math.round(damage * 0.9), sourceParticipant.displayName);
+      }
     }
   }
 
   function handleUseItem(socketId, payload) {
-    const match = matches.get(socketToMatchId.get(socketId));
-    if (!match || match.status !== 'combat') {
-      return;
+    const matchId = socketMatchMap.get(socketId);
+    if (!matchId) return;
+    const match = matches.get(matchId);
+    if (!match || match.phase !== 'combat') return;
+
+    const participant = match.participants.get(socketId);
+    const player = getPlayer(socketId);
+    if (!participant || !player || !participant.alive || participant.connected === false) return;
+
+    player.progress = ensureArenaProgress(player.progress);
+    const arenaProgress = getArenaProgress(player.progress);
+    const slotRaw = Number(payload?.slotIndex);
+    const slotIndex = Number.isInteger(slotRaw) ? clamp(slotRaw, 0, 8) : arenaProgress.selectedSlot;
+    const itemId = arenaProgress.hotbar[slotIndex];
+    if (!itemId) return;
+
+    const runtimeStats = buildItemRuntimeStats(player.progress, itemId);
+    if (!runtimeStats) return;
+
+    const now = nowMs();
+    const cooldownKey = runtimeStats.item.id;
+    const nextUse = Number(participant.cooldowns[cooldownKey]) || 0;
+    if (now < nextUse) return;
+    participant.cooldowns[cooldownKey] = now + Math.max(220, Number(runtimeStats.stats.cooldownMs) || 650);
+
+    if (runtimeStats.item.category === 'ability') {
+      useAbilityItem(match, participant, player, runtimeStats);
+    } else {
+      useMeleeLikeItem(match, participant, player, runtimeStats);
     }
-    const member = match.members.find(function findMember(entry) {
-      return entry.socketId === socketId;
-    });
-    if (!member || !member.alive) {
-      return;
-    }
-    const itemId = member.hotbar[member.selectedSlot];
-    const item = getCatalogItem(itemId);
-    if (!item) {
-      return;
-    }
-    const currentTime = nowMs();
-    if ((member.cooldowns[item.id] || 0) > currentTime) {
-      return;
-    }
-    member.cooldowns[item.id] = currentTime + (item.cooldownMs || 0);
-    const rawDirection = payload && payload.direction ? payload.direction : { x: 0, z: 1 };
-    const direction = normalize2D(Number(rawDirection.x) || 0, Number(rawDirection.z) || 1);
-    if (item.category === 'melee') {
-      useMelee(match, member, item, currentTime, direction);
-    } else if (item.category === 'gun') {
-      useGun(match, member, item, currentTime, direction);
-    } else if (item.category === 'ability') {
-      useAbility(match, member, item, currentTime, direction);
-    } else if (item.category === 'consumable') {
-      useConsumable(member, item, currentTime);
-    }
-    broadcastMatchState(match);
+
+    broadcastMatchState(match, true);
   }
 
-  function damageMember(match, member, amount, attacker) {
-    if (!member.alive) {
+  function processEnemyActions(match) {
+    if (match.phase !== 'combat') return;
+    const now = nowMs();
+    const participants = getAlivePlayers(Array.from(match.participants.values()));
+    if (participants.length < 1) {
+      endMatchFailure(match, 'team-wipe');
       return;
     }
-    member.hp = clamp(member.hp - amount, 0, member.maxHp);
-    if (member.hp <= 0) {
-      member.alive = false;
-      member.spectating = match.mode === 'coop' || match.mode === 'pvp';
-      const player = getPlayer(member.socketId);
-      if (player) {
-        player.y = ARENA_WORLD.hubCenter.y + ARENA_WORLD.spectatorHeight;
-      }
-      sendSystemMessage(match, member.displayName + ' was knocked out.');
-      if (attacker && attacker.socketId !== member.socketId) {
-        attacker.kills += 1;
-        attacker.pendingTokens += 12;
-      }
-      if (match.mode === 'pvp') {
-        const aliveMembers = match.members.filter(function findAlive(entry) { return entry.alive; });
-        if (!aliveMembers.length) {
-          sendSystemMessage(match, 'Round ' + match.wave + ' ended in a draw.');
-          beginIntermission(match);
-          return;
-        }
-        if (aliveMembers.length === 1) {
-          const winner = aliveMembers[0];
-          winner.roundWins = (winner.roundWins || 0) + 1;
-          winner.pendingTokens += 35;
-          sendSystemMessage(match, winner.displayName + ' won round ' + match.wave + '.');
-          if (winner.roundWins >= (match.roundsToWin || 3)) {
-            winner.pendingTokens += 60;
-            endMatch(match, 'victory');
-            return;
-          }
-          beginIntermission(match);
-          return;
-        }
-      }
-      if (!match.members.some(function findAlive(entry) { return entry.alive; })) {
-        endMatch(match, 'defeat');
-      }
-    }
-  }
 
-  function processEnemyStatuses(match, enemy, currentTime) {
-    enemy.statusEffects = enemy.statusEffects.filter(function filterStatus(status) {
-      return status.endsAt > currentTime;
-    });
-    enemy.statusEffects.forEach(function eachStatus(status) {
-      if (currentTime - status.lastTickAt < PLAYER_COMBAT.statusTickMs) {
-        return;
+    const enemies = Array.from(match.enemies.values());
+    for (let i = 0; i < enemies.length; i += 1) {
+      const enemy = enemies[i];
+      const burnDamage = applyBurnTicks(enemy);
+      if (burnDamage > 0) {
+        damageEnemy(match, enemy, burnDamage, null, 'Burn');
+        continue;
       }
-      status.lastTickAt = currentTime;
-      const template = STATUS_EFFECTS[status.type];
-      if (template && template.tickDamage) {
-        const killer = match.members.find(function findAlive(entry) { return entry.alive; }) || match.members[0];
-        if (killer) {
-          damageEnemy(match, killer, enemy, template.tickDamage, null, currentTime);
-        }
-      }
-    });
-  }
+      if (!match.enemies.has(enemy.id)) continue;
+      if (now < enemy.cooldownUntil) continue;
 
-  function getNearestAliveMember(match, enemy) {
-    let nearest = null;
-    let nearestDistance = Infinity;
-    match.members.forEach(function eachMember(member) {
-      if (!member.alive) {
-        return;
-      }
-      const player = getPlayer(member.socketId);
-      if (!player) {
-        return;
-      }
-      const dist = distance2D(enemy.x, enemy.z, Number(player.x) || 0, Number(player.z) || 0);
-      if (dist < nearestDistance) {
-        nearestDistance = dist;
-        nearest = { member, player, dist };
-      }
-    });
-    return nearest;
-  }
-
-  function tickEnemy(match, enemy, currentTime) {
-    processEnemyStatuses(match, enemy, currentTime);
-    if (!match.enemies.has(enemy.id)) {
-      return;
-    }
-    const nearest = getNearestAliveMember(match, enemy);
-    if (!nearest) {
-      return;
-    }
-    enemy.targetId = nearest.member.socketId;
-    const slowMultiplier = enemy.statusEffects.reduce(function reduceStatus(multiplier, status) {
-      return status.type === 'freeze' ? multiplier * (STATUS_EFFECTS.freeze.speedMultiplier || 1) : multiplier;
-    }, 1);
-    const dx = Number(nearest.player.x) - enemy.x;
-    const dz = Number(nearest.player.z) - enemy.z;
-    const dir = normalize2D(dx, dz);
-    if (enemy.type === 'ranged' && nearest.dist < enemy.preferredRange) {
-      enemy.x -= dir.x * enemy.moveSpeed * slowMultiplier * (MATCHMAKING.tickMs / 1000);
-      enemy.z -= dir.z * enemy.moveSpeed * slowMultiplier * (MATCHMAKING.tickMs / 1000);
-    } else if (nearest.dist > enemy.attackRange) {
-      enemy.x += dir.x * enemy.moveSpeed * slowMultiplier * (MATCHMAKING.tickMs / 1000);
-      enemy.z += dir.z * enemy.moveSpeed * slowMultiplier * (MATCHMAKING.tickMs / 1000);
-    }
-    if (distance2D(enemy.x, enemy.z, ARENA_WORLD.hubCenter.x, ARENA_WORLD.hubCenter.z) > ARENA_WORLD.innerCombatRadius + 1) {
-      const towardCenter = normalize2D(ARENA_WORLD.hubCenter.x - enemy.x, ARENA_WORLD.hubCenter.z - enemy.z);
-      enemy.x += towardCenter.x * 0.75;
-      enemy.z += towardCenter.z * 0.75;
-    }
-    if (enemy.type === 'elite' && currentTime - enemy.lastSpecialAt >= enemy.baseType.specialCooldownMs && nearest.dist <= enemy.baseType.dashRange) {
-      enemy.lastSpecialAt = currentTime;
-      enemy.x += dir.x * 2.8;
-      enemy.z += dir.z * 2.8;
-      damageMember(match, nearest.member, enemy.damage + 6);
-      return;
-    }
-    if (enemy.type === 'boss') {
-      const ratio = enemy.hp / enemy.maxHp;
-      enemy.phase = ratio <= enemy.baseType.phaseThresholds[1] ? 2 : ratio <= enemy.baseType.phaseThresholds[0] ? 1 : 0;
-      if (currentTime - enemy.lastSpecialAt >= enemy.baseType.aoeCooldownMs) {
-        enemy.lastSpecialAt = currentTime;
-        match.members.forEach(function eachTarget(member) {
-          if (!member.alive) {
-            return;
-          }
-          const player = getPlayer(member.socketId);
-          if (!player) {
-            return;
-          }
-          if (distance2D(enemy.x, enemy.z, Number(player.x), Number(player.z)) <= 5.5) {
-            damageMember(match, member, enemy.damage + 10 + enemy.phase * 4);
-          }
-        });
-      }
-      if (currentTime - enemy.lastAttackAt >= enemy.baseType.summonCooldownMs) {
-        enemy.lastAttackAt = currentTime;
-        const summonCount = 2 + enemy.phase;
-        for (let i = 0; i < summonCount; i += 1) {
-          const summon = buildEnemy(i % 2 === 0 ? 'basic' : 'ranged', match.wave);
-          summon.x = enemy.x + randomRange(-2, 2);
-          summon.z = enemy.z + randomRange(-2, 2);
-          match.enemies.set(summon.id, summon);
-        }
-      }
-    }
-    if (nearest.dist <= enemy.attackRange && currentTime - enemy.lastAttackAt >= enemy.attackCooldownMs) {
-      enemy.lastAttackAt = currentTime;
-      if (enemy.type === 'ranged' || enemy.type === 'boss') {
-        spawnProjectile(match, {
-          id: createId('proj'),
-          ownerType: 'enemy',
-          ownerId: enemy.id,
-          x: enemy.x,
-          y: enemy.y + 1,
-          z: enemy.z,
-          vx: dir.x * (enemy.projectileSpeed || 12),
-          vz: dir.z * (enemy.projectileSpeed || 12),
-          radius: enemy.type === 'boss' ? 0.4 : 0.26,
-          damage: enemy.damage + enemy.phase * 3,
-          color: enemy.color,
-          expiresAt: currentTime + 2200,
-        });
+      const target = pickRandom(participants);
+      if (!target) continue;
+      const targetPlayer = getPlayer(target.socketId);
+      if (!targetPlayer) continue;
+      const dist = distanceXZ(enemy, targetPlayer);
+      if (dist <= Math.max(2.1, enemy.attackRange + 0.4)) {
+        dealDamageToParticipant(match, target, enemy.damage, enemy.label);
       } else {
-        damageMember(match, nearest.member, enemy.damage);
+        const heading = Math.atan2(targetPlayer.z - enemy.z, targetPlayer.x - enemy.x);
+        const step = (ENEMY_TYPES[enemy.typeId]?.moveSpeed || 2.2) * 0.35;
+        enemy.x += Math.cos(heading) * step;
+        enemy.z += Math.sin(heading) * step;
       }
+
+      enemy.cooldownUntil = now + Math.max(300, enemy.attackCooldownMs || ENEMY_ATTACK_INTERVAL_MS);
+    }
+
+    const allParticipants = Array.from(match.participants.values());
+    for (let i = 0; i < allParticipants.length; i += 1) {
+      const participant = allParticipants[i];
+      if (!participant.alive) continue;
+      const burnDamage = applyBurnTicks(participant);
+      if (burnDamage > 0) dealDamageToParticipant(match, participant, burnDamage, 'Burn');
+    }
+
+    if (match.phase === 'combat' && match.enemies.size < 1) {
+      beginIntermission(match);
     }
   }
 
-  function tickProjectiles(match, currentTime) {
-    Array.from(match.projectiles.values()).forEach(function eachProjectile(projectile) {
-      if (projectile.expiresAt <= currentTime) {
-        match.projectiles.delete(projectile.id);
-        return;
-      }
-      projectile.x += projectile.vx * (MATCHMAKING.tickMs / 1000);
-      projectile.z += projectile.vz * (MATCHMAKING.tickMs / 1000);
-      if (distance2D(projectile.x, projectile.z, ARENA_WORLD.hubCenter.x, ARENA_WORLD.hubCenter.z) > ARENA_WORLD.innerCombatRadius + 2) {
-        match.projectiles.delete(projectile.id);
-        return;
-      }
-      if (projectile.ownerType === 'player') {
-        const member = match.members.find(function findMember(entry) { return entry.socketId === projectile.sourceMemberId; });
-        if (!member) {
-          match.projectiles.delete(projectile.id);
-          return;
-        }
-        if (match.mode === 'pvp') {
-          match.members.some(function hitTarget(target) {
-            if (!target.alive || target.socketId === projectile.sourceMemberId) {
-              return false;
-            }
-            const player = getPlayer(target.socketId);
-            if (!player) {
-              return false;
-            }
-            if (distance2D(projectile.x, projectile.z, Number(player.x), Number(player.z)) <= projectile.radius + 0.9) {
-              damageMember(match, target, projectile.damage, member);
-              if (projectile.pierce > 0) {
-                projectile.pierce -= 1;
-              } else {
-                match.projectiles.delete(projectile.id);
-              }
-              return true;
-            }
-            return false;
-          });
-          return;
-        }
-        Array.from(match.enemies.values()).some(function hitEnemy(enemy) {
-          if (distance2D(projectile.x, projectile.z, enemy.x, enemy.z) <= projectile.radius + 0.8) {
-            damageEnemy(match, member, enemy, projectile.damage, projectile.status, currentTime);
-            if (projectile.pierce > 0) {
-              projectile.pierce -= 1;
-            } else {
-              match.projectiles.delete(projectile.id);
-            }
-            return true;
-          }
-          return false;
-        });
-        return;
-      }
-      match.members.some(function hitMember(member) {
-        if (!member.alive) {
-          return false;
-        }
-        const player = getPlayer(member.socketId);
-        if (!player) {
-          return false;
-        }
-        if (distance2D(projectile.x, projectile.z, Number(player.x), Number(player.z)) <= projectile.radius + 0.9) {
-          damageMember(match, member, projectile.damage);
-          match.projectiles.delete(projectile.id);
-          return true;
-        }
-        return false;
-      });
-    });
-  }
+  async function bankParticipantRunRewards(socketId, participant) {
+    const player = getPlayer(socketId);
+    if (!player || !participant) return;
+    player.progress = ensureArenaProgress(player.progress);
+    const arenaProgress = getArenaProgress(player.progress);
+    arenaProgress.tokens += Math.max(0, Math.floor(participant.unclaimedTokens || 0));
 
-  function beginIntermission(match) {
-    match.status = 'intermission';
-    match.intermissionEndsAt = nowMs() + (match.mode === 'pvp' ? 5000 : MATCHMAKING.intermissionMs);
-    match.projectiles.clear();
-    if (match.mode === 'pvp') {
-      match.members.forEach(function eachMember(member) {
-        member.decision = null;
-      });
-      broadcastMatchState(match);
-      return;
-    }
-    const waveReward = REWARD_CONFIG.waveTokenBase + (match.wave - 1) * REWARD_CONFIG.waveTokenGrowth + (match.wave % 5 === 0 ? REWARD_CONFIG.bossWaveBonus : 0);
-    match.members.forEach(function eachMember(member) {
-      member.pendingTokens += waveReward;
-      member.decision = null;
-    });
-    sendSystemMessage(match, 'Wave ' + match.wave + ' cleared. Cash out or continue.');
-    broadcastMatchState(match);
-  }
-
-  async function endMatch(match, outcome) {
-    if (match.status === 'ended') {
-      return;
-    }
-    match.status = 'ended';
-    const shouldBank = outcome === 'cashout' || outcome === 'victory';
-    const summary = { outcome, wave: match.wave, rewards: {} };
-    for (const member of match.members) {
-      if (shouldBank) {
-        bankMemberRewards(member);
-        await flushProgress(member.socketId);
+    const lootEntries = Object.entries(serializeLoot(participant.unclaimedLoot));
+    for (let i = 0; i < lootEntries.length; i += 1) {
+      const [itemId, amount] = lootEntries[i];
+      if (amount < 1) continue;
+      const item = getCatalogItem(itemId);
+      if (!item) continue;
+      if (!arenaProgress.ownedItems.includes(itemId)) {
+        ownArenaItem(player.progress, itemId);
       } else {
-        emitProfile(member.socketId);
+        const duplicateValue = Math.max(8, Math.floor((item.tokenCost || 50) * 0.2));
+        arenaProgress.tokens += duplicateValue * amount;
       }
-      const player = getPlayer(member.socketId);
-      summary.rewards[member.socketId] = {
-        bankedTokens: player && player.progress && player.progress.arena ? player.progress.arena.tokens : member.tokens,
-        pendingLoot: { ...member.pendingLoot },
-        kills: member.kills,
-      };
     }
-    io.to(match.roomId).emit('arena:matchEnded', summary);
-    setTimeout(function cleanupMatch() {
-      match.members.forEach(function eachMember(member) {
-        socketToMatchId.delete(member.socketId);
-        returnPlayerFromArena(member);
-      });
-      matches.delete(match.id);
-    }, MATCHMAKING.endDelayMs);
+
+    arenaProgress.matchesPlayed += 1;
+    arenaProgress.matchesWon += 1;
+    participant.unclaimedTokens = 0;
+    participant.unclaimedLoot = {};
+
+    await persistProgress(socketId);
+    emitArenaProfile(socketId);
   }
 
-  function resolveIntermission(match, forcedDecision) {
-    if (match.mode === 'pvp') {
-      if (forcedDecision === 'continue' || nowMs() >= match.intermissionEndsAt) {
-        startNextWave(match);
-      }
-      return;
-    }
-    const continueVotes = match.members.filter(function filterDecision(member) { return member.decision === 'continue'; }).length;
-    const cashoutVotes = match.members.filter(function filterCashout(member) { return member.decision === 'cashout'; }).length;
-    const eligibleCount = Math.max(1, Math.ceil(match.members.length / 2));
-    if (forcedDecision === 'cashout' || cashoutVotes >= eligibleCount) {
-      endMatch(match, 'cashout');
-      return;
-    }
-    if (forcedDecision === 'continue' || continueVotes >= eligibleCount || nowMs() >= match.intermissionEndsAt) {
-      startNextWave(match);
+  async function markFailedMatchProgress(socketId) {
+    const player = getPlayer(socketId);
+    if (!player) return;
+    player.progress = ensureArenaProgress(player.progress);
+    const arenaProgress = getArenaProgress(player.progress);
+    arenaProgress.matchesPlayed += 1;
+    await persistProgress(socketId);
+    emitArenaProfile(socketId);
+  }
+
+  function cleanupMatchRoom(match) {
+    match.phase = 'ended';
+    matches.delete(match.id);
+    const members = Array.from(match.participants.values());
+    for (let i = 0; i < members.length; i += 1) {
+      socketMatchMap.delete(members[i].socketId);
+      match.participants.delete(members[i].socketId);
     }
   }
 
-  function startNextWave(match) {
-    match.wave += 1;
-    match.status = 'combat';
-    match.intermissionEndsAt = 0;
-    match.projectiles.clear();
-    match.enemies.clear();
-    match.members.forEach(function eachMember(member) {
-      member.decision = null;
-      member.matchWave = match.wave;
-      member.alive = true;
-      member.spectating = false;
-      member.hp = member.maxHp;
-      const player = getPlayer(member.socketId);
-      if (player) {
-        player.x = member.spawnPoint.x;
-        player.y = member.spawnPoint.y;
-        player.z = member.spawnPoint.z;
-      }
+  async function endMatchSuccess(match, reason = 'cashout') {
+    if (!matches.has(match.id) || match.phase === 'ended') return;
+    match.phase = 'ending';
+    const participants = Array.from(match.participants.values());
+
+    for (let i = 0; i < participants.length; i += 1) {
+      const participant = participants[i];
+      if (participant.connected === false) continue;
+      await bankParticipantRunRewards(participant.socketId, participant);
+    }
+
+    io.to(match.roomId).emit('arena:matchEnded', {
+      outcome: 'cashout',
+      reason,
+      roundReached: match.round,
+      banked: true,
     });
-    if (match.mode === 'pvp') {
-      if (match.members.length === 1) {
-        match.members[0].roundWins = match.roundsToWin || 3;
-        match.members[0].pendingTokens += 60;
-        endMatch(match, 'victory');
-        return;
-      }
-      sendSystemMessage(match, 'Round ' + match.wave + ' started.');
-      broadcastMatchState(match);
+
+    for (let i = 0; i < participants.length; i += 1) {
+      const participant = participants[i];
+      returnToMainLobby(participant.socketId);
+    }
+
+    cleanupMatchRoom(match);
+  }
+
+  async function endMatchFailure(match, reason = 'team-wipe') {
+    if (!matches.has(match.id) || match.phase === 'ended') return;
+    match.phase = 'ending';
+    const participants = Array.from(match.participants.values());
+
+    for (let i = 0; i < participants.length; i += 1) {
+      const participant = participants[i];
+      participant.unclaimedTokens = 0;
+      participant.unclaimedLoot = {};
+      if (participant.connected === false) continue;
+      await markFailedMatchProgress(participant.socketId);
+    }
+
+    io.to(match.roomId).emit('arena:matchEnded', {
+      outcome: 'failed',
+      reason,
+      roundReached: match.round,
+      banked: false,
+    });
+
+    for (let i = 0; i < participants.length; i += 1) {
+      returnToMainLobby(participants[i].socketId);
+    }
+
+    cleanupMatchRoom(match);
+  }
+
+  function processIntermission(match) {
+    if (match.phase !== 'intermission') return;
+    const participants = getActivePlayers(Array.from(match.participants.values()));
+    if (participants.length < 1) {
+      void endMatchFailure(match, 'all-left');
       return;
     }
-    buildWaveComposition(match.wave).forEach(function eachWaveEntry(entry) {
-      for (let i = 0; i < entry.count; i += 1) {
-        const enemy = buildEnemy(entry.type, match.wave);
-        match.enemies.set(enemy.id, enemy);
-      }
+
+    const votes = { cashout: 0, continue: 0 };
+    participants.forEach((participant) => {
+      const vote = match.decisions.get(participant.socketId);
+      if (vote === 'cashout') votes.cashout += 1;
+      if (vote === 'continue') votes.continue += 1;
     });
+
+    const majority = getMajorityTarget(participants.length);
+    if (votes.cashout >= majority) {
+      void endMatchSuccess(match, 'majority-cashout');
+      return;
+    }
+    if (votes.continue >= majority) {
+      startRound(match, match.round + 1);
+      return;
+    }
+
+    if (match.intermissionEndsAt > 0 && nowMs() >= match.intermissionEndsAt) {
+      if (votes.cashout > votes.continue) {
+        void endMatchSuccess(match, 'timer-cashout-majority');
+      } else {
+        startRound(match, match.round + 1);
+      }
+    }
+  }
+
+  function tickMatch(match) {
+    if (!matches.has(match.id)) return;
+    if (match.phase === 'combat') {
+      processEnemyActions(match);
+    } else if (match.phase === 'intermission') {
+      processIntermission(match);
+    }
     broadcastMatchState(match);
   }
 
-  function createMatch(mode, socketIds) {
-    const matchId = createId('match');
-    const roomId = ARENA_ROOM_PREFIX + matchId;
+  function launchMatchFromLane(lane, memberSocketIds) {
+    const validSockets = memberSocketIds.filter((socketId) => {
+      const player = getPlayer(socketId);
+      return Boolean(player);
+    });
+    if (validSockets.length < 1) return;
+
+    matchCounter += 1;
+    const matchId = `${MATCH_PREFIX}${matchCounter}`;
     const match = {
       id: matchId,
-      roomId,
-      mode,
+      roomId: matchId,
+      laneId: lane.id,
       createdAt: nowMs(),
-      status: 'starting',
-      wave: 0,
-      intermissionEndsAt: 0,
+      round: 0,
+      phase: 'preparing',
+      participants: new Map(),
       enemies: new Map(),
-      projectiles: new Map(),
-      roundsToWin: mode === 'pvp' ? 3 : 0,
-      members: socketIds.map(function mapSocket(socketId, index) {
-        return createMember(socketId, index, socketIds.length);
-      }).filter(Boolean),
+      nextEnemyId: 1,
+      decisions: new Map(),
+      intermissionEndsAt: 0,
+      lastBroadcastAt: 0,
     };
-    match.members.forEach(function eachMember(member) {
-      member.roomId = roomId;
-      movePlayerToArena(member.socketId, member.spawnPoint, roomId);
-      socketToMatchId.set(member.socketId, matchId);
-    });
-    matches.set(matchId, match);
-    startNextWave(match);
-    return match;
+
+    for (let i = 0; i < validSockets.length; i += 1) {
+      const socketId = validSockets[i];
+      const player = getPlayer(socketId);
+      if (!player) continue;
+      const participant = createParticipantFromPlayer(player);
+      match.participants.set(socketId, participant);
+      socketMatchMap.set(socketId, match.id);
+      socketLaneMap.delete(socketId);
+      lane.members.delete(socketId);
+    }
+
+    clearLaneTimerIfEmpty(lane);
+    matches.set(match.id, match);
+
+    placePlayersIntoMatchRoom(match);
+    notifyMatch(match, `Match started with ${match.participants.size} player(s).`);
+    startRound(match, 1);
+    emitQueueState();
   }
 
-  function maybeStartQueue() {
-    if (!queue.entries.length) {
-      return;
-    }
-    if (!queue.startsAt) {
-      queue.startsAt = nowMs();
-      queue.timerEndsAt = queue.startsAt + MATCHMAKING.queueTimerMs;
-    }
-    const targetSize = Math.max(2, Math.min(queue.targetSize || MATCHMAKING.maxPlayers, MATCHMAKING.maxPlayers));
-    if (queue.entries.length >= targetSize || nowMs() >= queue.timerEndsAt) {
-      const startCount = Math.max(1, Math.min(queue.entries.length, targetSize));
-      const socketIds = queue.entries.splice(0, startCount).map(function mapEntry(entry) { return entry.socketId; });
-      queue.startsAt = 0;
-      queue.timerEndsAt = 0;
-      queue.targetSize = 0;
-      queue.ownerSocketId = null;
-      createMatch('pvp', socketIds);
-      broadcastQueueState();
+  function processQueueLanes() {
+    const now = nowMs();
+    for (let i = 0; i < lanes.length; i += 1) {
+      const lane = lanes[i];
+      if (lane.members.size < 1) {
+        clearLaneTimerIfEmpty(lane);
+        continue;
+      }
+
+      if (lane.timerEndsAt < 1) {
+        lane.createdAt = now;
+        lane.timerEndsAt = now + MAX_QUEUE_TIMER_MS;
+      }
+
+      const members = Array.from(lane.members).filter((socketId) => {
+        if (!getPlayer(socketId)) {
+          lane.members.delete(socketId);
+          socketLaneMap.delete(socketId);
+          return false;
+        }
+        return true;
+      });
+
+      if (members.length < 1) {
+        clearLaneTimerIfEmpty(lane);
+        continue;
+      }
+
+      const full = members.length >= lane.capacity;
+      const timerDone = lane.timerEndsAt > 0 && now >= lane.timerEndsAt;
+      if (full || timerDone) {
+        launchMatchFromLane(lane, members.slice(0, lane.capacity));
+      }
     }
   }
 
-  function startSolo(socketId) {
-    leaveQueue(socketId);
-    if (socketToMatchId.has(socketId)) {
-      return;
+  function processTick() {
+    processQueueLanes();
+    const liveMatches = Array.from(matches.values());
+    for (let i = 0; i < liveMatches.length; i += 1) {
+      tickMatch(liveMatches[i]);
     }
-    createMatch('solo', [socketId]);
   }
 
-  function joinCoopQueue(socketId, options) {
-    if (socketToMatchId.has(socketId)) {
-      return;
-    }
-    const player = getPlayer(socketId);
-    if (!player || queue.entries.some(function hasPlayer(entry) { return entry.socketId === socketId; })) {
-      broadcastQueueState();
-      return;
-    }
-    if (!queue.entries.length) {
-      queue.targetSize = clamp(Math.floor(Number(options && options.targetSize) || MATCHMAKING.maxPlayers), 2, MATCHMAKING.maxPlayers);
-      queue.ownerSocketId = socketId;
-      queue.startsAt = nowMs();
-      queue.timerEndsAt = queue.startsAt + MATCHMAKING.queueTimerMs;
-    }
-    queue.entries.push({
-      socketId,
-      username: player.username || player.accountUsername || ('guest_' + socketId.slice(0, 5)),
-      displayName: player.displayName || player.username || 'Guest',
-      joinedAt: nowMs(),
-    });
-    broadcastQueueState();
-    maybeStartQueue();
+  const intervalHandle = setInterval(processTick, Math.max(40, Number(MATCHMAKING.tickMs) || 100));
+  if (typeof intervalHandle.unref === 'function') intervalHandle.unref();
+
+  function setDecision(socketId, decision) {
+    const matchId = socketMatchMap.get(socketId);
+    if (!matchId) return;
+    const match = matches.get(matchId);
+    if (!match || match.phase !== 'intermission') return;
+    if (decision !== 'cashout' && decision !== 'continue') return;
+
+    const participant = match.participants.get(socketId);
+    if (!participant || participant.connected === false) return;
+
+    match.decisions.set(socketId, decision);
+    notifyMatch(match, `${participant.displayName} voted ${decision}.`);
+    broadcastMatchState(match, true);
   }
 
-  async function buyShopItem(socketId, itemId) {
-    const player = getPlayer(socketId);
+  async function buyShopItem(socketId, payload) {
+    const player = ensureProgressForSocket(socketId);
+    if (!player) return;
+    const itemId = typeof payload === 'string' ? payload : payload?.itemId;
     const item = getCatalogItem(itemId);
-    if (!player || !item || !item.shop) {
+    if (!item) return;
+
+    const arenaProgress = getArenaProgress(player.progress);
+    if (arenaProgress.ownedItems.includes(itemId)) {
+      io.to(socketId).emit('arena:message', { message: `${item.name} already owned.` });
+      emitArenaProfile(socketId);
       return;
     }
-    player.progress = ensureArenaProgress(player.progress);
-    const arena = player.progress.arena;
-    if (arena.ownedItems.includes(itemId) || arena.tokens < item.price) {
-      emitProfile(socketId);
+
+    const cost = Math.max(0, Math.floor(Number(item.tokenCost) || 0));
+    if (arenaProgress.tokens < cost) {
+      io.to(socketId).emit('arena:message', { message: `Not enough PvP tokens for ${item.name}.` });
+      emitArenaProfile(socketId);
       return;
     }
-    arena.tokens -= item.price;
-    arena.ownedItems.push(itemId);
-    if (!arena.unlockedLoot.includes(itemId)) {
-      arena.unlockedLoot.push(itemId);
+
+    arenaProgress.tokens -= cost;
+    ownArenaItem(player.progress, itemId);
+    await persistProgress(socketId);
+
+    io.to(socketId).emit('arena:message', { message: `Bought ${item.name}.` });
+    emitArenaProfile(socketId);
+  }
+
+  async function upgradeShopItem(socketId, payload) {
+    const player = ensureProgressForSocket(socketId);
+    if (!player) return;
+    const itemId = typeof payload === 'string' ? payload : payload?.itemId;
+    const result = upgradeArenaItem(player.progress, itemId);
+    if (!result.ok) {
+      io.to(socketId).emit('arena:message', {
+        message: result.reason === 'maxed'
+          ? 'Item already max upgrade.'
+          : result.reason === 'not-owned'
+            ? 'Buy item first.'
+            : 'Not enough PvP tokens to upgrade.',
+      });
+      emitArenaProfile(socketId);
+      return;
     }
-    const emptySlot = arena.hotbar.findIndex(function findEmpty(slot) { return !slot; });
-    if (emptySlot >= 0) {
-      arena.hotbar[emptySlot] = itemId;
-    }
-    await flushProgress(socketId);
-    emitProfile(socketId);
+
+    await persistProgress(socketId);
+    const item = getCatalogItem(itemId);
+    io.to(socketId).emit('arena:message', { message: `${item?.name || itemId} upgraded to Lv ${result.level}.` });
+    emitArenaProfile(socketId);
   }
 
   async function setHotbar(socketId, hotbar) {
-    const player = getPlayer(socketId);
-    if (!player || !Array.isArray(hotbar)) {
-      return;
+    const player = ensureProgressForSocket(socketId);
+    if (!player) return;
+    if (!Array.isArray(hotbar)) return;
+
+    const arenaProgress = getArenaProgress(player.progress);
+    const owned = new Set(arenaProgress.ownedItems);
+    const next = hotbar.slice(0, 9);
+    while (next.length < 9) next.push(null);
+    for (let i = 0; i < next.length; i += 1) {
+      const itemId = typeof next[i] === 'string' ? next[i] : null;
+      next[i] = itemId && owned.has(itemId) ? itemId : null;
     }
-    player.progress = ensureArenaProgress(player.progress);
-    const arena = player.progress.arena;
-    arena.hotbar = Array.from({ length: 9 }, function mapSlot(_, index) {
-      const itemId = hotbar[index] || null;
-      return itemId && arena.ownedItems.includes(itemId) ? itemId : null;
-    });
-    if (!arena.hotbar[0]) {
-      arena.hotbar[0] = 'rust_sword';
+    if (!next[0]) next[0] = 'melee_rust_blade';
+    arenaProgress.hotbar = next;
+    if (!arenaProgress.hotbar[arenaProgress.selectedSlot]) {
+      arenaProgress.selectedSlot = 0;
     }
-    await flushProgress(socketId);
-    emitProfile(socketId);
+
+    await persistProgress(socketId);
+    emitArenaProfile(socketId);
   }
 
   async function selectSlot(socketId, slotIndex) {
-    const selectedSlot = clamp(Math.floor(Number(slotIndex) || 0), 0, 8);
-    const match = matches.get(socketToMatchId.get(socketId));
-    if (match) {
-      const member = match.members.find(function findMember(entry) { return entry.socketId === socketId; });
-      if (member) {
-        member.selectedSlot = selectedSlot;
-        broadcastMatchState(match);
-      }
-    }
-    const player = getPlayer(socketId);
-    if (!player) {
-      return;
-    }
-    player.progress = ensureArenaProgress(player.progress);
-    player.progress.arena.selectedSlot = selectedSlot;
-    await flushProgress(socketId);
-    emitProfile(socketId);
+    const player = ensureProgressForSocket(socketId);
+    if (!player) return;
+    const arenaProgress = getArenaProgress(player.progress);
+    const slot = clamp(Math.floor(Number(slotIndex) || 0), 0, 8);
+    arenaProgress.selectedSlot = slot;
+    await persistProgress(socketId);
+    emitArenaProfile(socketId);
   }
 
-  function setDecision(socketId, decision) {
-    const match = matches.get(socketToMatchId.get(socketId));
-    if (!match || match.status !== 'intermission') {
+  async function leaveMatch(socketId, reason = 'quit') {
+    const matchId = socketMatchMap.get(socketId);
+    if (!matchId) {
+      returnToMainLobby(socketId);
       return;
     }
-    if (match.mode === 'pvp') {
-      return;
-    }
-    const member = match.members.find(function findMember(entry) { return entry.socketId === socketId; });
-    if (!member) {
-      return;
-    }
-    member.decision = decision === 'cashout' ? 'cashout' : 'continue';
-    resolveIntermission(match, null);
-    broadcastMatchState(match);
-  }
 
-  async function leaveMatch(socketId) {
-    const match = matches.get(socketToMatchId.get(socketId));
+    const match = matches.get(matchId);
     if (!match) {
+      socketMatchMap.delete(socketId);
+      returnToMainLobby(socketId);
       return;
     }
-    const member = match.members.find(function findMember(entry) { return entry.socketId === socketId; });
-    if (!member) {
+
+    const participant = match.participants.get(socketId);
+    if (participant) {
+      participant.connected = false;
+      participant.alive = false;
+      participant.health = 0;
+      participant.unclaimedTokens = 0;
+      participant.unclaimedLoot = {};
+    }
+
+    socketMatchMap.delete(socketId);
+    returnToMainLobby(socketId);
+
+    const alive = getAlivePlayers(Array.from(match.participants.values()));
+    if (alive.length < 1) {
+      await endMatchFailure(match, reason);
       return;
     }
-    socketToMatchId.delete(socketId);
-    if (match.mode === 'solo') {
-      await endMatch(match, 'defeat');
-      return;
-    }
-    returnPlayerFromArena(member);
-    match.members = match.members.filter(function filterMember(entry) { return entry.socketId !== socketId; });
-    if (!match.members.some(function hasAlive(entry) { return entry.alive; })) {
-      await endMatch(match, 'defeat');
-      return;
-    }
-    broadcastMatchState(match);
+
+    notifyMatch(match, `${participant?.displayName || socketId} left match.`);
+    broadcastMatchState(match, true);
   }
 
-  function tickMatch(match, currentTime) {
-    if (match.status === 'combat') {
-      if (match.mode !== 'pvp') {
-        Array.from(match.enemies.values()).forEach(function eachEnemy(enemy) {
-          tickEnemy(match, enemy, currentTime);
-        });
-      }
-      tickProjectiles(match, currentTime);
-      match.members.forEach(function eachMember(member) {
-        member.buffs = member.buffs.filter(function filterBuff(buff) { return buff.endsAt > currentTime; });
-      });
-      if (match.mode !== 'pvp' && !match.enemies.size && match.status === 'combat') {
-        beginIntermission(match);
-      }
-    } else if (match.status === 'intermission' && currentTime >= match.intermissionEndsAt) {
-      resolveIntermission(match, 'continue');
-    }
-    broadcastMatchState(match);
+  function emitQueueHubStateToSocket(socketId) {
+    io.to(socketId).emit('arena:queueHubState', buildQueueHubState(lanes, getPlayer));
   }
 
   function attachSocket(socket) {
-    sockets.set(socket.id, socket);
-    socket.on('arena:requestSync', function onRequestSync() {
-      emitProfile(socket.id);
-      broadcastQueueState();
-      const match = matches.get(socketToMatchId.get(socket.id));
-      if (match) {
-        broadcastMatchState(match);
+    if (!socket || !socket.id) return;
+
+    socket.on('arena:requestSync', () => {
+      emitArenaProfile(socket.id);
+      emitQueueHubStateToSocket(socket.id);
+      const matchId = socketMatchMap.get(socket.id);
+      if (matchId && matches.has(matchId)) {
+        const match = matches.get(matchId);
+        io.to(socket.id).emit('arena:state', buildMatchSnapshot(match));
       }
     });
-    socket.on('arena:startSolo', function onStartSolo() { startSolo(socket.id); });
-    socket.on('arena:joinCoop', function onJoinCoop(options) { joinCoopQueue(socket.id, options || {}); });
-    socket.on('arena:leaveQueue', function onLeaveQueue() { leaveQueue(socket.id); });
-    socket.on('arena:buyItem', function onBuyItem(itemId) { buyShopItem(socket.id, itemId).catch(function swallow() {}); });
-    socket.on('arena:setHotbar', function onSetHotbar(hotbar) { setHotbar(socket.id, hotbar).catch(function swallow() {}); });
-    socket.on('arena:selectSlot', function onSelectSlot(slotIndex) { selectSlot(socket.id, slotIndex).catch(function swallow() {}); });
-    socket.on('arena:useItem', function onUseItem(payload) { handleUseItem(socket.id, payload); });
-    socket.on('arena:decision', function onDecision(decision) { setDecision(socket.id, decision); });
-    socket.on('arena:quitMatch', function onQuitMatch() { leaveMatch(socket.id).catch(function swallow() {}); });
-    socket.on('disconnect', function onDisconnect() {
-      sockets.delete(socket.id);
-      leaveQueue(socket.id);
-      leaveMatch(socket.id).catch(function swallow() {});
-    });
-  }
 
-  const interval = setInterval(function tickRuntime() {
-    maybeStartQueue();
-    const currentTime = nowMs();
-    Array.from(matches.values()).forEach(function eachMatch(match) {
-      tickMatch(match, currentTime);
+    socket.on('arena:enterQueueHub', () => {
+      ensureSocketLeavesArenaState(socket.id);
+      setPlayerToQueueHub(socket.id);
+      emitQueueHubStateToSocket(socket.id);
+      emitArenaProfile(socket.id);
     });
-  }, MATCHMAKING.tickMs);
 
-  if (typeof interval.unref === 'function') {
-    interval.unref();
+    socket.on('arena:joinQueuePad', (payload) => {
+      const padId = typeof payload === 'string' ? payload : payload?.padId;
+      if (!laneById.has(padId)) return;
+      joinQueuePad(socket.id, padId);
+    });
+
+    socket.on('arena:leaveQueuePad', () => {
+      removeSocketFromLane(socket.id);
+      emitQueueHubStateToSocket(socket.id);
+    });
+
+    // Legacy compatibility events
+    socket.on('arena:startSolo', () => joinQueuePad(socket.id, 'solo'));
+    socket.on('arena:joinCoop', (payload) => {
+      const targetSize = clamp(Math.floor(Number(payload?.targetSize) || 2), 1, 4);
+      const pad = QUEUE_PADS.find((entry) => entry.capacity === targetSize) || QUEUE_PADS[1] || QUEUE_PADS[0];
+      joinQueuePad(socket.id, pad.id);
+    });
+    socket.on('arena:leaveQueue', () => removeSocketFromLane(socket.id));
+
+    socket.on('arena:decision', (decision) => {
+      setDecision(socket.id, decision);
+    });
+
+    socket.on('arena:buyItem', (payload) => {
+      void buyShopItem(socket.id, payload);
+    });
+
+    socket.on('arena:upgradeItem', (payload) => {
+      void upgradeShopItem(socket.id, payload);
+    });
+
+    socket.on('arena:setHotbar', (hotbar) => {
+      void setHotbar(socket.id, hotbar);
+    });
+
+    socket.on('arena:selectSlot', (slotIndex) => {
+      void selectSlot(socket.id, slotIndex);
+    });
+
+    socket.on('arena:useItem', (payload) => {
+      handleUseItem(socket.id, payload || {});
+    });
+
+    socket.on('arena:quitMatch', () => {
+      void leaveMatch(socket.id, 'quit');
+    });
+
+    socket.on('disconnect', () => {
+      removeSocketFromLane(socket.id);
+      const matchId = socketMatchMap.get(socket.id);
+      if (!matchId) return;
+      const match = matches.get(matchId);
+      socketMatchMap.delete(socket.id);
+      if (!match) return;
+      const participant = match.participants.get(socket.id);
+      if (participant) {
+        participant.connected = false;
+        participant.alive = false;
+        participant.health = 0;
+        participant.unclaimedTokens = 0;
+        participant.unclaimedLoot = {};
+      }
+      const alive = getAlivePlayers(Array.from(match.participants.values()));
+      if (alive.length < 1) {
+        void endMatchFailure(match, 'disconnect-wipe');
+      } else {
+        broadcastMatchState(match, true);
+      }
+    });
+
+    // Prime profile quickly once socket is authenticated and present in players map.
+    setTimeout(() => {
+      if (!getPlayer(socket.id)) return;
+      emitArenaProfile(socket.id);
+      emitQueueHubStateToSocket(socket.id);
+    }, 350);
   }
 
   return {
     attachSocket,
-    getQueueSnapshot: function getQueueSnapshot() {
-      return buildQueueSnapshot(queue);
+    destroy() {
+      clearInterval(intervalHandle);
     },
-    getArenaHubConfig: function getArenaHubConfig() {
+    debugState() {
       return {
-        world: ARENA_WORLD,
-        shopInventory: getShopInventory(),
+        lanes: buildQueueHubState(lanes, getPlayer),
+        matchIds: Array.from(matches.keys()),
       };
     },
   };
