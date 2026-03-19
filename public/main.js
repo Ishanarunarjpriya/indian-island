@@ -3501,10 +3501,10 @@ function removePlayer(id) {
   refreshDebugPlayerLists();
 }
 
-function localEffectiveRoomId() {
+let localEffectiveRoomId = function localEffectiveRoomId() {
   const claimedId = normalizeHomeRoomState(questState.homeRoom).roomId;
   return inHouseRoom && claimedId ? claimedId : null;
-}
+};
 
 function updatePlayerVisibility(player) {
   if (!player || player.isLocal) return;
