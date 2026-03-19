@@ -8925,18 +8925,20 @@ requestAnimationFrame(animate);
 
 // Arena client context bridge
 
+const arenaState = { arenaState: null };
+
 window.__indianIslandArenaContext = {
   getScene: () => scene,
   getCamera: () => camera,
   getRenderer: () => renderer,
   getSocket: () => socket,
-  getLocalPlayer: () => localPlayer,
-  getLocalPlayerState: () => localPlayerState,
+  getLocalPlayer: () => players.get(localPlayerId),
+  getLocalPlayerState: () => arenaState,
 };
 if (typeof localEffectiveRoomId === 'function') {
   const __arenaOriginalLocalEffectiveRoomId = localEffectiveRoomId;
   localEffectiveRoomId = function wrappedLocalEffectiveRoomId() {
-    const arenaRoomId = localPlayerState && localPlayerState.arenaState ? localPlayerState.arenaState.roomId : null;
+    const arenaRoomId = arenaState.arenaState ? arenaState.arenaState.roomId : null;
     if (typeof arenaRoomId === 'string' && arenaRoomId.startsWith('arena:')) {
       return arenaRoomId;
     }
