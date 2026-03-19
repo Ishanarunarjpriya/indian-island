@@ -2,7 +2,7 @@ export const ARENA_CLIENT_CONFIG = {
   world: {
     hubCenter: { x: -48, y: 1.25, z: 86 },
     islandRadius: 18,
-    interactRadius: 10,
+    interactRadius: 26,
     stallOffset: { x: 0, y: 0.4, z: -6 },
   },
   ui: {

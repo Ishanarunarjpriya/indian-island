@@ -1,4 +1,12 @@
 import * as THREE from 'https://unpkg.com/three@0.165.0/build/three.module.js';
+import { ARENA_CLIENT_CONFIG } from '../arena/config.js';
+
+const ARENA_DOCK_YAW = 0;
+const ARENA_DOCK_POS = {
+  x: ARENA_CLIENT_CONFIG.world.hubCenter.x,
+  y: ARENA_CLIENT_CONFIG.world.hubCenter.y - 0.08,
+  z: ARENA_CLIENT_CONFIG.world.hubCenter.z + ARENA_CLIENT_CONFIG.world.islandRadius + 4.8
+};
 
 let scene = null;
 let addWorldCollider = null;
@@ -76,7 +84,8 @@ export function dockSlots() {
     { dock: layout.FISHING_DOCK_POS, yaw: layout.FISHING_DOCK_YAW },
     { dock: layout.MARKET_DOCK_POS, yaw: layout.MARKET_DOCK_YAW },
     { dock: layout.FURNITURE_DOCK_POS, yaw: layout.FURNITURE_DOCK_YAW },
-    { dock: layout.LEADERBOARD_DOCK_POS, yaw: layout.LEADERBOARD_DOCK_YAW }
+    { dock: layout.LEADERBOARD_DOCK_POS, yaw: layout.LEADERBOARD_DOCK_YAW },
+    { dock: ARENA_DOCK_POS, yaw: ARENA_DOCK_YAW }
   ];
 }
 
@@ -848,6 +857,51 @@ export function addBoat() {
   boatState.mesh = boat;
   boatState.paddleLeftPivot = paddleLeftPivot;
   boatState.paddleRightPivot = paddleRightPivot;
+}
+
+export function addArenaIsland() {
+  const arenaDockAnchor = new THREE.Vector3(ARENA_DOCK_POS.x, ARENA_DOCK_POS.y, ARENA_DOCK_POS.z);
+  addDock(arenaDockAnchor, ARENA_DOCK_YAW, {
+    segments: 8,
+    plankLength: 2.5,
+    plankWidth: 1.1,
+    spacing: 1.15,
+    railHeight: 0.56
+  });
+
+  const signPost = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.14, 0.16, 3.2, 10),
+    new THREE.MeshStandardMaterial({ color: 0x5a3b24, roughness: 0.92 })
+  );
+  signPost.position.set(ARENA_DOCK_POS.x - 3.1, 2.0, ARENA_DOCK_POS.z - 1.1);
+  signPost.castShadow = true;
+  signPost.receiveShadow = true;
+  scene.add(signPost);
+
+  const sign = makeTextSign('Arena', 2.8, 0.62, '#2b1d14', '#fff7ed');
+  sign.position.set(ARENA_DOCK_POS.x - 3.1, 3.95, ARENA_DOCK_POS.z - 1.1);
+  sign.rotation.y = Math.PI;
+  scene.add(sign);
+
+  const lanternPole = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.08, 0.1, 2.6, 8),
+    new THREE.MeshStandardMaterial({ color: 0x4a311f, roughness: 0.9 })
+  );
+  lanternPole.position.set(ARENA_DOCK_POS.x + 3.0, 1.55, ARENA_DOCK_POS.z - 1.0);
+  lanternPole.castShadow = true;
+  lanternPole.receiveShadow = true;
+  scene.add(lanternPole);
+
+  const lantern = new THREE.Mesh(
+    new THREE.SphereGeometry(0.22, 12, 12),
+    new THREE.MeshStandardMaterial({ color: 0xfbbf24, emissive: 0xf59e0b, emissiveIntensity: 0.7, roughness: 0.35 })
+  );
+  lantern.position.set(ARENA_DOCK_POS.x + 3.0, 2.9, ARENA_DOCK_POS.z - 1.0);
+  scene.add(lantern);
+
+  const glow = new THREE.PointLight(0xffd78c, 0.75, 11, 2);
+  glow.position.set(ARENA_DOCK_POS.x + 3.0, 2.9, ARENA_DOCK_POS.z - 1.0);
+  scene.add(glow);
 }
 
 export function addDecorBoat(x, z, yaw = 0, scale = 1.9, y = 1.06) {
