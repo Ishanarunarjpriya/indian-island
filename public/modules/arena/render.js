@@ -76,89 +76,42 @@ export function createArenaRenderer({ scene, world = ARENA_CLIENT_CONFIG.world }
   lobbyRoot.add(shore);
 
   const lobbyRing = new THREE.Mesh(
-    new THREE.RingGeometry(world.islandRadius - 6.5, world.islandRadius - 1.3, 48),
+    new THREE.RingGeometry(world.islandRadius - 5, world.islandRadius - 1.3, 48),
     new THREE.MeshBasicMaterial({ color: 0xff8a5b, transparent: true, opacity: 0.16, side: THREE.DoubleSide }),
   );
   lobbyRing.rotation.x = -Math.PI / 2;
   lobbyRing.position.set(lobbyCenter.x, lobbyCenter.y + 0.04, lobbyCenter.z);
   lobbyRoot.add(lobbyRing);
 
-  const teleporterPlaza = new THREE.Mesh(
-    new THREE.CylinderGeometry(6.8, 7.4, 0.36, 36),
-    new THREE.MeshLambertMaterial({ color: 0x2b3240 }),
+  const arrivalPad = new THREE.Mesh(
+    new THREE.CylinderGeometry(3.6, 3.9, 0.28, 28),
+    new THREE.MeshLambertMaterial({ color: 0x3b4657 }),
   );
-  teleporterPlaza.position.set(lobbyCenter.x, lobbyCenter.y + 0.12, lobbyCenter.z + 5.2);
-  lobbyRoot.add(teleporterPlaza);
+  arrivalPad.position.set(lobbyCenter.x, lobbyCenter.y + 0.12, lobbyCenter.z + 5.4);
+  lobbyRoot.add(arrivalPad);
 
-  const teleporterTrim = new THREE.Mesh(
-    new THREE.RingGeometry(4.2, 5.8, 48),
-    new THREE.MeshBasicMaterial({ color: 0xf4b24d, transparent: true, opacity: 0.35, side: THREE.DoubleSide }),
+  const arrivalGlow = new THREE.Mesh(
+    new THREE.RingGeometry(2.2, 3.1, 32),
+    new THREE.MeshBasicMaterial({ color: 0x73d3ff, transparent: true, opacity: 0.45, side: THREE.DoubleSide }),
   );
-  teleporterTrim.rotation.x = -Math.PI / 2;
-  teleporterTrim.position.set(lobbyCenter.x, lobbyCenter.y + 0.19, lobbyCenter.z + 5.2);
-  lobbyRoot.add(teleporterTrim);
+  arrivalGlow.rotation.x = -Math.PI / 2;
+  arrivalGlow.position.set(lobbyCenter.x, lobbyCenter.y + 0.18, lobbyCenter.z + 5.4);
+  lobbyRoot.add(arrivalGlow);
 
-  const teleporterPad = new THREE.Mesh(
-    new THREE.CylinderGeometry(2.8, 3.2, 0.24, 28),
-    new THREE.MeshLambertMaterial({ color: 0x1a2230 }),
-  );
-  teleporterPad.position.set(lobbyCenter.x, lobbyCenter.y + 0.24, lobbyCenter.z + 5.2);
-  lobbyRoot.add(teleporterPad);
+  const arrivalSign = makeTextSprite(THREE, 'Arena Gate', { scaleX: 5.6, scaleY: 1.25, background: 'rgba(20, 27, 38, 0.92)' });
+  arrivalSign.position.set(lobbyCenter.x, lobbyCenter.y + 4.2, lobbyCenter.z + 8.2);
+  lobbyRoot.add(arrivalSign);
 
-  const teleporterGlow = new THREE.Mesh(
-    new THREE.RingGeometry(1.75, 2.7, 32),
-    new THREE.MeshBasicMaterial({ color: 0xff6b4a, transparent: true, opacity: 0.55, side: THREE.DoubleSide }),
-  );
-  teleporterGlow.rotation.x = -Math.PI / 2;
-  teleporterGlow.position.set(lobbyCenter.x, lobbyCenter.y + 0.28, lobbyCenter.z + 5.2);
-  lobbyRoot.add(teleporterGlow);
-
-  const teleporterPortal = new THREE.Mesh(
-    new THREE.TorusGeometry(1.9, 0.22, 14, 38),
-    new THREE.MeshLambertMaterial({ color: 0x6a7cff, emissive: 0x1c39b1, emissiveIntensity: 0.8 }),
-  );
-  teleporterPortal.rotation.x = Math.PI / 2;
-  teleporterPortal.position.set(lobbyCenter.x, lobbyCenter.y + 2.2, lobbyCenter.z + 5.2);
-  lobbyRoot.add(teleporterPortal);
-
-  [-2.2, 2.2].forEach((offsetX) => {
-    const pillar = new THREE.Mesh(
-      new THREE.BoxGeometry(0.5, 3.4, 0.5),
-      new THREE.MeshLambertMaterial({ color: 0x4e3528 }),
+  const bridge = new THREE.Group();
+  for (let i = 0; i < 8; i += 1) {
+    const plank = new THREE.Mesh(
+      new THREE.BoxGeometry(2.4, 0.24, 1.7),
+      new THREE.MeshLambertMaterial({ color: 0x7a5838 }),
     );
-    pillar.position.set(lobbyCenter.x + offsetX, lobbyCenter.y + 1.7, lobbyCenter.z + 5.2);
-    lobbyRoot.add(pillar);
-  });
-
-  const teleporterSign = makeTextSprite(THREE, 'PVP TELEPORTER', {
-    scaleX: 7.2,
-    scaleY: 1.3,
-    background: 'rgba(20, 27, 38, 0.92)',
-    border: 'rgba(255,145,90,0.4)',
-  });
-  teleporterSign.position.set(lobbyCenter.x, lobbyCenter.y + 4.6, lobbyCenter.z + 8.3);
-  lobbyRoot.add(teleporterSign);
-
-  [
-    { x: -5.2, z: 1.1, label: '1-2' },
-    { x: 0, z: -1.1, label: '1-4' },
-    { x: 5.2, z: 1.1, label: 'FAST' },
-  ].forEach((slot) => {
-    const queuePad = new THREE.Mesh(
-      new THREE.BoxGeometry(3.2, 0.08, 2.2),
-      new THREE.MeshBasicMaterial({ color: 0xf0bb58, transparent: true, opacity: 0.35 }),
-    );
-    queuePad.position.set(lobbyCenter.x + slot.x, lobbyCenter.y + 0.26, lobbyCenter.z + 5.2 + slot.z);
-    lobbyRoot.add(queuePad);
-    const queueLabel = makeTextSprite(THREE, slot.label, {
-      scaleX: 2.8,
-      scaleY: 0.9,
-      background: 'rgba(15, 20, 32, 0.9)',
-      color: '#ffe5b2',
-    });
-    queueLabel.position.set(lobbyCenter.x + slot.x, lobbyCenter.y + 1.2, lobbyCenter.z + 5.2 + slot.z);
-    lobbyRoot.add(queueLabel);
-  });
+    plank.position.set(lobbyCenter.x, lobbyCenter.y - 0.05, lobbyCenter.z + world.islandRadius + 1.6 + i * 1.75);
+    bridge.add(plank);
+  }
+  lobbyRoot.add(bridge);
 
   const stall = new THREE.Group();
   const stallBase = world.stallOffset;
@@ -188,7 +141,7 @@ export function createArenaRenderer({ scene, world = ARENA_CLIENT_CONFIG.world }
   );
   counter.position.set(lobbyCenter.x + stallBase.x, lobbyCenter.y + 1.25 + stallBase.y, lobbyCenter.z + stallBase.z + 1.4);
   stall.add(counter);
-  const sign = makeTextSprite(THREE, 'PVP Shop', { scaleX: 5.8, scaleY: 1.4 });
+  const sign = makeTextSprite(THREE, 'Arena Shop', { scaleX: 5.8, scaleY: 1.4 });
   sign.position.set(lobbyCenter.x + stallBase.x, lobbyCenter.y + 4.7 + stallBase.y, lobbyCenter.z + stallBase.z - 0.1);
   stall.add(sign);
   const backShelf = new THREE.Mesh(
@@ -230,7 +183,7 @@ export function createArenaRenderer({ scene, world = ARENA_CLIENT_CONFIG.world }
     potionRack.add(bottle);
   }
   stall.add(potionRack);
-  const priceBoard = makeTextSprite(THREE, 'Blades • Guns • Powers', {
+  const priceBoard = makeTextSprite(THREE, 'Gear • Guns • Abilities', {
     scaleX: 6.2,
     scaleY: 1.1,
     background: 'rgba(12, 17, 28, 0.94)',
