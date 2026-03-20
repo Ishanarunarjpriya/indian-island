@@ -107,7 +107,6 @@ export function initArenaClient(context) {
     onUpgradeItem: (itemId) => socket.emit('arena:upgradeItem', { itemId }),
     onDecision: (decision) => socket.emit('arena:decision', decision),
   });
-  ui.setVisible(false);
 
   function getNearbyPadId(pos) {
     const pads = Array.isArray(ARENA_CLIENT_CONFIG.queuePads) ? ARENA_CLIENT_CONFIG.queuePads : [];
@@ -130,7 +129,12 @@ export function initArenaClient(context) {
   }
 
   function refreshUI() {
-    const shouldShowArenaUi = Boolean(state.match && state.match.phase === 'combat');
+    const shouldShowArenaUi = Boolean(
+      state.match
+      || state.nearGateway
+      || state.nearQueueHub
+      || state.queue
+    );
     ui.setVisible(shouldShowArenaUi);
     ui.renderProfile(state.profile);
     ui.renderQueueHubState(state.queue);

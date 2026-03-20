@@ -1773,8 +1773,7 @@ async function toggleFullscreenPointerLock() {
   if (!isAuthenticated) return;
   if (!getFullscreenElement()) {
     try {
-      const target = isMobileLayout() ? document.documentElement : renderer.domElement;
-      const fsResult = requestFullscreenFor(target) || requestFullscreenFor(document.documentElement);
+      const fsResult = requestFullscreenFor(document.documentElement);
       if (fsResult?.catch) await fsResult;
     } catch {
       return;
