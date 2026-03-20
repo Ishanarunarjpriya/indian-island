@@ -2298,7 +2298,7 @@ function addLandmarks() {
    addLighthouseInterior();
    populateMainIslandNature();
    addBeaconIslandLights();
-   addWoodHouse(HOUSE_POS.x, HOUSE_POS.z, 0, { collisions: false });
+   refreshMainIslandHouse();
    addMainHouseRoomInterior();
    addHouseHallInterior();
    addFishingShopInterior();
@@ -2316,6 +2316,14 @@ function addLandmarks() {
   );
   addMineArea();
   addBoat();
+}
+
+function refreshMainIslandHouse() {
+  addWoodHouse(HOUSE_POS.x, HOUSE_POS.z, 0, {
+    collisions: false,
+    isMainIslandHouse: true,
+    onlinePlayerCount: players.size || 1
+  });
 }
 
 addLandmarks();
@@ -6580,6 +6588,7 @@ socket.on('init', (payload) => {
 
   players.forEach((_, id) => removePlayer(id));
   payload.players.forEach(addPlayer);
+  refreshMainIslandHouse();
 
   interactables.clear();
   (payload.interactables || []).forEach(updateBeaconState);
@@ -6654,6 +6663,7 @@ socket.on('debug:kicked', (payload) => {
 socket.on('playerJoined', (payload) => {
   if (!isAuthenticated) return;
   addPlayer(payload);
+  refreshMainIslandHouse();
   if (localRoomTransitioning) return;
   const id = payload.id;
   const name = displayNameWithTag(payload.name || 'A player', payload?.accountTag);
@@ -6671,6 +6681,7 @@ socket.on('playerLeft', (id) => {
   if (!isAuthenticated) return;
   const player = players.get(id);
   removePlayer(id);
+  refreshMainIslandHouse();
   if (localRoomTransitioning) return;
   const name = displayNameWithTag(player?.name || `Player-${id.slice(0, 4)}`, player?.accountTag);
   const timer = setTimeout(() => {

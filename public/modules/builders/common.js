@@ -2,6 +2,7 @@ import * as THREE from 'https://unpkg.com/three@0.165.0/build/three.module.js';
 
 let scene = null;
 let addWallCollisionFromMesh = null;
+let mainIslandHouseGroup = null;
 
 export function initCommonBuilders({ sceneRef = null, addWallCollisionFromMeshRef = null } = {}) {
   scene = sceneRef;
@@ -186,6 +187,22 @@ export function createMarketStall(x, z, yaw = 0, options = {}) {
 
 export function addWoodHouse(x, z, yaw = 0, options = {}) {
   const collisions = options?.collisions !== false;
+  const isMainIslandHouse = options?.isMainIslandHouse === true;
+  const onlinePlayerCount = Math.max(1, Math.floor(Number(options?.onlinePlayerCount) || 1));
+  const expansionTier = isMainIslandHouse ? Math.min(8, Math.max(0, onlinePlayerCount - 1)) : 0;
+  if (isMainIslandHouse && mainIslandHouseGroup) {
+    scene?.remove(mainIslandHouseGroup);
+    mainIslandHouseGroup.traverse((node) => {
+      if (!node?.isMesh) return;
+      node.geometry?.dispose?.();
+      if (Array.isArray(node.material)) {
+        node.material.forEach((mat) => mat?.dispose?.());
+      } else {
+        node.material?.dispose?.();
+      }
+    });
+    mainIslandHouseGroup = null;
+  }
   const house = new THREE.Group();
   house.position.set(x, 1.35, z);
   house.rotation.y = yaw;
@@ -197,12 +214,12 @@ export function addWoodHouse(x, z, yaw = 0, options = {}) {
   const doorMat = new THREE.MeshStandardMaterial({ color: 0x3f2510, roughness: 0.82 });
 
   const houseScale = 1.18;
-  const houseW = 9.4 * houseScale;
-  const houseD = 8.0 * houseScale;
-  const wallH = 3.2 * houseScale;
+  const houseW = (9.4 + expansionTier * 0.58) * houseScale;
+  const houseD = (8.0 + expansionTier * 0.44) * houseScale;
+  const wallH = (3.2 + expansionTier * 0.16) * houseScale;
   const wallT = 0.22;
-  const doorW = 1.9 * houseScale;
-  const doorH = 2.45 * houseScale;
+  const doorW = Math.min(2.45 * houseScale, (1.9 + expansionTier * 0.05) * houseScale);
+  const doorH = Math.min(3.0 * houseScale, (2.45 + expansionTier * 0.04) * houseScale);
   const floor = new THREE.Mesh(new THREE.BoxGeometry(houseW, 0.2, houseD), wallMat);
   floor.position.y = 0.08;
   floor.receiveShadow = true;
@@ -305,10 +322,10 @@ export function addWoodHouse(x, z, yaw = 0, options = {}) {
   eave.receiveShadow = true;
 
   const roof = new THREE.Mesh(
-    new THREE.ConeGeometry(Math.max(houseW, houseD) * 0.68, 2.45 * houseScale, 4),
+    new THREE.ConeGeometry(Math.max(houseW, houseD) * 0.68, (2.45 + expansionTier * 0.12) * houseScale, 4),
     roofMat
   );
-  roof.position.set(0, wallH + 1.34 * houseScale, 0);
+  roof.position.set(0, wallH + (1.34 + expansionTier * 0.06) * houseScale, 0);
   roof.rotation.y = Math.PI * 0.25;
   roof.castShadow = true;
   roof.receiveShadow = true;
@@ -317,7 +334,7 @@ export function addWoodHouse(x, z, yaw = 0, options = {}) {
     new THREE.CylinderGeometry(0.1 * houseScale, 0.14 * houseScale, 0.46 * houseScale, 8),
     trimMat
   );
-  roofPeak.position.set(0, wallH + 2.74 * houseScale, 0);
+  roofPeak.position.set(0, wallH + (2.74 + expansionTier * 0.12) * houseScale, 0);
   roofPeak.castShadow = true;
   roofPeak.receiveShadow = true;
 
@@ -458,6 +475,9 @@ export function addWoodHouse(x, z, yaw = 0, options = {}) {
     addWallCollisionFromMesh(frontLeft, 'house');
     addWallCollisionFromMesh(frontRight, 'house');
     addWallCollisionFromMesh(frontTop, 'house');
+  }
+  if (isMainIslandHouse) {
+    mainIslandHouseGroup = house;
   }
 }
 
