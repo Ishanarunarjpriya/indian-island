@@ -583,14 +583,14 @@ drownIndicatorEl.className = 'panel';
 drownIndicatorEl.style.display = 'none';
 drownIndicatorEl.style.position = 'fixed';
 drownIndicatorEl.style.left = '50%';
-drownIndicatorEl.style.bottom = '88px';
+drownIndicatorEl.style.bottom = '112px';
 drownIndicatorEl.style.transform = 'translateX(-50%)';
-drownIndicatorEl.style.padding = '6px 10px';
-drownIndicatorEl.style.gap = '6px';
+drownIndicatorEl.style.padding = '8px 12px';
+drownIndicatorEl.style.gap = '4px';
 drownIndicatorEl.style.zIndex = '18';
-drownIndicatorEl.style.fontSize = '18px';
-drownIndicatorEl.style.lineHeight = '1';
-drownIndicatorEl.style.letterSpacing = '1px';
+drownIndicatorEl.style.fontSize = '14px';
+drownIndicatorEl.style.lineHeight = '1.1';
+drownIndicatorEl.style.letterSpacing = '0.4px';
 document.body.appendChild(drownIndicatorEl);
 
 const npcDialogueEl = document.createElement('div');
@@ -3187,10 +3187,17 @@ function updateDrowningState(local, delta) {
   const bubbleCount = 10;
   const filled = Math.max(0, Math.ceil((remaining / DROWN_MAX_TIME) * bubbleCount));
   if (drownIndicatorEl) {
-    drownIndicatorEl.style.display = 'flex';
-    drownIndicatorEl.innerHTML = Array.from({ length: bubbleCount }, (_, i) => (
+    drownIndicatorEl.style.display = 'grid';
+    const bubbles = Array.from({ length: bubbleCount }, (_, i) => (
       `<span style="color:${i < filled ? '#7dd3fc' : 'rgba(125,211,252,0.22)'}">◉</span>`
     )).join('');
+    drownIndicatorEl.innerHTML = `
+      <div style="font-weight:700;font-size:11px;color:#bae6fd;">Air</div>
+      <div style="display:flex;align-items:center;gap:5px;">
+        ${bubbles}
+      </div>
+      <div style="font-size:10px;color:#cbd5e1;">${remaining.toFixed(0)}s left</div>
+    `;
   }
   if (drownTimer < DROWN_MAX_TIME) return;
   drownTimer = 0;
