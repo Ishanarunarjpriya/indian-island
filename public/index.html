@@ -2263,9 +2263,9 @@
         position: absolute;
         left: 50%;
         top: 50%;
-        width: 88px;
-        height: 88px;
-        border-radius: 28px;
+        width: 74px;
+        height: 74px;
+        border-radius: 24px;
         padding: 0;
         display: flex;
         flex-direction: column;
@@ -2324,7 +2324,7 @@
       }
 
       #btn-use.is-contextual {
-        transform: translate(-50%, -118%);
+        transform: translate(-50%, -132%);
       }
 
       #btn-use.is-contextual::after {
@@ -2335,7 +2335,7 @@
         left: auto;
         top: auto;
         right: max(10px, env(safe-area-inset-right));
-        bottom: calc(88px + env(safe-area-inset-bottom));
+        bottom: calc(82px + env(safe-area-inset-bottom));
         transform: none;
       }
 
@@ -2371,20 +2371,21 @@
       body.mobile-ui #top-left-toolbar {
         left: max(8px, env(safe-area-inset-left));
         top: calc(8px + env(safe-area-inset-top));
-        gap: 3px;
-        padding: 3px;
+        gap: 2px;
+        padding: 3px 4px;
       }
 
       body.mobile-ui .toolbar-btn {
-        width: 32px;
-        height: 32px;
-        font-size: 13px;
+        width: 30px;
+        height: 30px;
+        font-size: 12px;
       }
 
       body.mobile-ui #world-state {
         top: calc(8px + env(safe-area-inset-top));
         padding: 4px 6px;
         font-size: 9px;
+        width: min(34vw, 150px);
       }
 
       body.mobile-ui #chat-panel {
@@ -2416,11 +2417,11 @@
       body.mobile-ui #quest-tracker {
         left: 50%;
         right: auto;
-        top: calc(54px + env(safe-area-inset-top));
+        top: calc(58px + env(safe-area-inset-top));
         bottom: auto;
         transform: translateX(-50%);
-        width: min(52vw, 220px);
-        padding: 6px 8px;
+        width: min(40vw, 164px);
+        padding: 5px 7px;
         gap: 2px;
         border-radius: 12px;
         z-index: 13;
@@ -2458,16 +2459,16 @@
       body.mobile-ui #mini-panel {
         left: auto;
         right: max(8px, env(safe-area-inset-right));
-        top: calc(188px + env(safe-area-inset-top));
+        top: calc(168px + env(safe-area-inset-top));
         bottom: auto;
-        width: 100px;
-        padding: 5px;
+        width: 92px;
+        padding: 4px;
         z-index: 12;
       }
 
       body.mobile-ui #mini-map {
-        width: 90px;
-        height: 90px;
+        width: 82px;
+        height: 82px;
       }
 
       body.mobile-ui #mini-panel.expanded {
