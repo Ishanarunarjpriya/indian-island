@@ -305,72 +305,27 @@ export function createArenaRenderer({ scene, world = buildWorldConfig() }) {
   combatRoot.visible = false;
   root.add(combatRoot);
 
-  const combatCliff = new THREE.Mesh(
-    new THREE.CylinderGeometry(24.6, 27.2, 3.8, 56, 1, true),
-    new THREE.MeshLambertMaterial({ color: 0x594637 }),
+  const combatBase = new THREE.Mesh(
+    new THREE.CylinderGeometry(24, 26.8, 3.2, 56),
+    new THREE.MeshLambertMaterial({ color: 0x5d4635 }),
   );
-  combatCliff.position.set(combatCenter.x, combatCenter.y - 1.2, combatCenter.z);
-  combatRoot.add(combatCliff);
+  combatBase.position.set(combatCenter.x, combatCenter.y - 1.45, combatCenter.z);
+  combatRoot.add(combatBase);
 
-  const combatShelf = new THREE.Mesh(
-    new THREE.CylinderGeometry(23.1, 24.4, 0.9, 56, 1, true),
-    new THREE.MeshLambertMaterial({ color: 0x726251 }),
+  const combatTop = new THREE.Mesh(
+    new THREE.CylinderGeometry(21.5, 23.3, 1.1, 56),
+    new THREE.MeshLambertMaterial({ color: 0x6f7f55 }),
   );
-  combatShelf.position.set(combatCenter.x, combatCenter.y - 0.15, combatCenter.z);
-  combatRoot.add(combatShelf);
-
-  const combatDeck = new THREE.Mesh(
-    new THREE.CircleGeometry(22.2, 56),
-    new THREE.MeshLambertMaterial({ color: 0x7a816f }),
-  );
-  combatDeck.rotation.x = -Math.PI / 2;
-  combatDeck.position.set(combatCenter.x, combatCenter.y + 0.02, combatCenter.z);
-  combatRoot.add(combatDeck);
-
-  const combatOuterTrim = new THREE.Mesh(
-    new THREE.RingGeometry(18.8, 22.2, 56),
-    new THREE.MeshLambertMaterial({ color: 0x8d765b, side: THREE.DoubleSide }),
-  );
-  combatOuterTrim.rotation.x = -Math.PI / 2;
-  combatOuterTrim.position.set(combatCenter.x, combatCenter.y + 0.03, combatCenter.z);
-  combatRoot.add(combatOuterTrim);
-
-  const combatTrack = new THREE.Mesh(
-    new THREE.RingGeometry(9.6, 18.2, 56),
-    new THREE.MeshLambertMaterial({ color: 0x60655a, side: THREE.DoubleSide }),
-  );
-  combatTrack.rotation.x = -Math.PI / 2;
-  combatTrack.position.set(combatCenter.x, combatCenter.y + 0.035, combatCenter.z);
-  combatRoot.add(combatTrack);
+  combatTop.position.set(combatCenter.x, combatCenter.y - 0.1, combatCenter.z);
+  combatRoot.add(combatTop);
 
   const arenaRing = new THREE.Mesh(
     new THREE.RingGeometry(9.8, 13.3, 56),
     new THREE.MeshBasicMaterial({ color: 0xff8a5b, transparent: true, opacity: 0.22, side: THREE.DoubleSide }),
   );
   arenaRing.rotation.x = -Math.PI / 2;
-  arenaRing.position.set(combatCenter.x, combatCenter.y + 0.05, combatCenter.z);
+  arenaRing.position.set(combatCenter.x, combatCenter.y + 0.04, combatCenter.z);
   combatRoot.add(arenaRing);
-
-  const outerWall = new THREE.Mesh(
-    new THREE.CylinderGeometry(22.7, 23.1, 2.4, 56, 1, true),
-    new THREE.MeshLambertMaterial({ color: 0x48505c }),
-  );
-  outerWall.position.set(combatCenter.x, combatCenter.y + 1.15, combatCenter.z);
-  combatRoot.add(outerWall);
-
-  for (let i = 0; i < 10; i += 1) {
-    const angle = (i / 10) * Math.PI * 2 + 0.17;
-    const rock = new THREE.Mesh(
-      new THREE.DodecahedronGeometry(0.85 + (i % 3) * 0.2),
-      new THREE.MeshLambertMaterial({ color: 0x4e5561 }),
-    );
-    rock.position.set(
-      combatCenter.x + Math.cos(angle) * 20.3,
-      combatCenter.y + 0.75,
-      combatCenter.z + Math.sin(angle) * 20.3
-    );
-    combatRoot.add(rock);
-  }
 
   const centerPad = new THREE.Mesh(
     new THREE.CylinderGeometry(4.8, 5.2, 0.3, 28),
