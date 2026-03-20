@@ -2234,6 +2234,10 @@
         pointer-events: auto;
       }
 
+      #mobile-actions.compact {
+        gap: 8px;
+      }
+
       .mobile-btn {
         width: 68px;
         height: 68px;
@@ -2247,6 +2251,12 @@
         box-shadow:
           inset 0 1px 0 rgba(255, 255, 255, 0.08),
           0 10px 22px rgba(0, 0, 0, 0.2);
+      }
+
+      .mobile-btn.secondary {
+        width: 54px;
+        height: 54px;
+        font-size: 11px;
       }
 
       #btn-use {
@@ -2383,14 +2393,14 @@
         right: auto;
         bottom: auto;
         width: min(280px, calc(100vw - 16px));
-        max-height: 24vh;
+        max-height: 28vh;
         z-index: 22;
         padding: 8px;
         gap: 6px;
       }
 
       body.mobile-ui #chat-log {
-        max-height: 70px;
+        max-height: 88px;
       }
 
       body.mobile-ui #hud {
@@ -3228,7 +3238,8 @@
         <span class="mobile-use-caption">Tap</span>
         <span class="mobile-use-label">Use</span>
       </button>
-      <div id="mobile-actions">
+      <div id="mobile-actions" class="compact">
+        <button id="btn-emote" class="mobile-btn secondary" type="button">Emote</button>
         <button id="btn-jump" class="mobile-btn" type="button">Jump</button>
         <button id="btn-consume" class="mobile-btn hidden" type="button">Consume</button>
       </div>

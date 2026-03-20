@@ -2120,12 +2120,14 @@ io.on('connection', (socket) => {
     const boundedZ = clamp(nextZ, -PLAYABLE_BOUND, PLAYABLE_BOUND);
     const inMine = payload?.inMine === true;
     const isFishing = payload?.isFishing === true && current?.progress?.hasFishingRod === true;
+    const isSwimming = payload?.isSwimming === true;
     const next = clampToPlayableGround(boundedX, boundedZ, inMine);
 
     current.x = next.x;
     current.y = clamp(nextY, SWIM_MIN_Y, 30);
     current.z = next.z;
     current.isFishing = isFishing;
+    current.isSwimming = isSwimming;
     players.set(socket.id, current);
     persistPlayerProgress(current);
 
@@ -2143,6 +2145,7 @@ io.on('connection', (socket) => {
       hasFishingRod: current?.progress?.hasFishingRod === true,
       fishingRodTier: sanitizeFishingRodTier(current?.progress?.fishingRodTier, 'basic'),
       isFishing: current.isFishing === true,
+      isSwimming: current.isSwimming === true,
       currentRoomId: current.currentRoomId || null
     });
   });

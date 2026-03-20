@@ -1667,6 +1667,7 @@ const mobileUseEl = document.getElementById('btn-use');
 const mobileUseCaptionEl = mobileUseEl?.querySelector('.mobile-use-caption') ?? null;
 const mobileUseLabelEl = mobileUseEl?.querySelector('.mobile-use-label') ?? null;
 const mobileConsumeEl = document.getElementById('btn-consume');
+const mobileEmoteEl = document.getElementById('btn-emote');
 
 let localVoiceStream = null;
 const voicePeers = new Map();
@@ -1831,6 +1832,37 @@ const water = new THREE.Mesh(
 water.rotation.x = -Math.PI / 2;
 water.position.y = 0.38;
 scene.add(water);
+const waterCanvas = document.createElement('canvas');
+waterCanvas.width = 256;
+waterCanvas.height = 256;
+const waterCtx = waterCanvas.getContext('2d');
+if (waterCtx) {
+  waterCtx.fillStyle = '#2c7ea1';
+  waterCtx.fillRect(0, 0, waterCanvas.width, waterCanvas.height);
+  waterCtx.strokeStyle = 'rgba(200, 240, 255, 0.18)';
+  waterCtx.lineWidth = 3;
+  for (let y = -24; y < waterCanvas.height + 24; y += 18) {
+    waterCtx.beginPath();
+    for (let x = -12; x <= waterCanvas.width + 12; x += 16) {
+      const waveY = y + Math.sin((x + y) * 0.05) * 4;
+      if (x === -12) waterCtx.moveTo(x, waveY);
+      else waterCtx.lineTo(x, waveY);
+    }
+    waterCtx.stroke();
+  }
+}
+const waterTexture = new THREE.CanvasTexture(waterCanvas);
+waterTexture.wrapS = THREE.RepeatWrapping;
+waterTexture.wrapT = THREE.RepeatWrapping;
+waterTexture.repeat.set(7, 7);
+waterTexture.anisotropy = 4;
+const waterMaterial = water.material;
+waterMaterial.map = waterTexture;
+waterMaterial.transparent = true;
+waterMaterial.opacity = 0.96;
+waterMaterial.emissive = new THREE.Color(0x0b3148);
+waterMaterial.emissiveIntensity = 0.18;
+waterMaterial.needsUpdate = true;
 
 const PLAYER_COLLISION_RADIUS = 0.46;
 const worldColliders = [];
@@ -3042,6 +3074,10 @@ function preserveLocalInWater(local, prevY) {
 }
 
 function computeRemoteSwimState(player) {
+  if (typeof player.serverIsSwimming === 'boolean') {
+    player.isSwimming = player.serverIsSwimming;
+    return;
+  }
   const remoteDockY = dockFloorHeightAt(player.mesh.position.x, player.mesh.position.z, 2.2, 2.2);
   if (Number.isFinite(remoteDockY)) {
     player.isSwimming = false;
@@ -3120,6 +3156,29 @@ function applyVerticalMovement(local, delta, nowMs) {
 
 function updateRemoteSurfaceState(player) {
   computeRemoteSwimState(player);
+}
+
+function updateDrowningState(local, delta) {
+  if (!local || !local.isSwimming) {
+    drownTimer = 0;
+    return;
+  }
+  const underwater = local.y < SWIM_SURFACE_Y - 0.42;
+  if (!underwater) {
+    drownTimer = Math.max(0, drownTimer - delta * 2.2);
+    return;
+  }
+  drownTimer += delta;
+  if (drownTimer < DROWN_MAX_TIME) return;
+  drownTimer = 0;
+  const dockSlot = nearestDockSlot(local, 999);
+  const respawn = dockSlot
+    ? { x: dockSlot.dock.x, y: GROUND_Y, z: dockSlot.dock.z }
+    : { x: HOUSE_POS.x + 6, y: GROUND_Y, z: HOUSE_POS.z + 10 };
+  local.isSwimming = false;
+  local.vy = 0;
+  teleportLocal(local, respawn, dockSlot?.yaw || 0);
+  appendChatLine({ text: 'You stayed underwater too long and washed back to shore.', isSystem: true });
 }
 
 function swimSyncRange(x, z) {
@@ -6250,6 +6309,15 @@ function getManualInteractTarget(local) {
   if (isNearHouseHallExit(local)) {
     return { mode: 'world', label: 'Exit', caption: 'Tap', worldPos: getHallExitPos(), offsetY: 0.95 };
   }
+  if (isNearFishingShopExit(local)) {
+    return { mode: 'world', label: 'Exit', caption: 'Tap', worldPos: FISHING_SHOP_EXIT_POS, offsetY: 0.95 };
+  }
+  if (isNearMarketShopExit(local)) {
+    return { mode: 'world', label: 'Exit', caption: 'Tap', worldPos: MARKET_SHOP_EXIT_POS, offsetY: 0.95 };
+  }
+  if (isNearFurnitureShopExit(local)) {
+    return { mode: 'world', label: 'Exit', caption: 'Tap', worldPos: FURNITURE_SHOP_EXIT_POS, offsetY: 0.95 };
+  }
   const hallDoor = getNearbyHouseHallDoor(local);
   if (hallDoor) {
     const claimedId = normalizeHomeRoomState(questState.homeRoom).roomId;
@@ -6736,6 +6804,7 @@ socket.on('playerMoved', ({
   hasFishingRod,
   fishingRodTier,
   isFishing,
+  isSwimming,
   currentRoomId: movedRoomId
 }) => {
   const player = players.get(id);
@@ -6755,6 +6824,10 @@ socket.on('playerMoved', ({
   }
   if (typeof hasFishingRod === 'boolean') {
     player.hasFishingRod = hasFishingRod;
+  }
+  if (typeof isSwimming === 'boolean') {
+    player.serverIsSwimming = isSwimming;
+    player.isSwimming = isSwimming;
   }
   if (typeof fishingRodTier === 'string') {
     player.heldFishingRodTier = normalizeRodTier(fishingRodTier, player.heldFishingRodTier || 'basic');
@@ -7846,6 +7919,11 @@ mobileJumpEl?.addEventListener('click', () => {
   if (!isAuthenticated || menuOpen || isAnyGameplayOverlayOpen() || !customizeModalEl.classList.contains('hidden')) return;
   pendingJump = true;
 });
+mobileJumpEl?.addEventListener('pointerdown', (event) => {
+  if (!isAuthenticated || menuOpen || isAnyGameplayOverlayOpen() || !customizeModalEl.classList.contains('hidden')) return;
+  event.preventDefault();
+  pendingJump = true;
+});
 mobileUseEl?.addEventListener('pointerdown', (event) => {
   if (!fishingMiniGame.active && !fishingMiniGame.starting) return;
   event.preventDefault();
@@ -7862,6 +7940,11 @@ mobileUseEl?.addEventListener('pointerleave', () => {
 });
 mobileUseEl?.addEventListener('click', tryInteract);
 mobileConsumeEl?.addEventListener('click', () => consumeFish(1));
+mobileEmoteEl?.addEventListener('click', () => {
+  if (!isAuthenticated || menuOpen || isAnyGameplayOverlayOpen() || !customizeModalEl.classList.contains('hidden')) return;
+  emoteWheelOpen = !emoteWheelOpen;
+  emoteWheelEl?.classList.toggle('hidden', !emoteWheelOpen);
+});
 
 let lastSentAt = 0;
 const WALK_SPEED = 12;
@@ -7879,6 +7962,8 @@ let stamina = STAMINA_BASE_MAX;
 let slideUntil = 0;
 let slideDirX = 0;
 let slideDirZ = 0;
+const DROWN_MAX_TIME = 6;
+let drownTimer = 0;
 
 const CAMERA_PITCH_MIN = 0.2;
 const CAMERA_PITCH_MAX = 1.18;
@@ -8126,10 +8211,10 @@ function updateLocalPlayer(delta, nowMs) {
   const prevZ = local.z;
 
   if (boatState.onboard && boatState.mesh) {
-    const throttle = (keys.has('w') || keys.has('arrowup') ? 1 : 0) + (keys.has('s') || keys.has('arrowdown') ? -0.55 : 0);
-    const steer = (keys.has('a') || keys.has('arrowleft') ? 1 : 0) + (keys.has('d') || keys.has('arrowright') ? -1 : 0);
+    const throttle = (keys.has('w') || keys.has('arrowup') ? 1 : 0) + (keys.has('s') || keys.has('arrowdown') ? -0.55 : 0) + (-joystickY);
+    const steer = (keys.has('a') || keys.has('arrowleft') ? 1 : 0) + (keys.has('d') || keys.has('arrowright') ? -1 : 0) + (-joystickX);
     boatState.yaw += steer * delta * 1.9;
-    boatState.speed = THREE.MathUtils.lerp(boatState.speed, throttle * 10.5, Math.min(1, delta * 3.5));
+    boatState.speed = THREE.MathUtils.lerp(boatState.speed, THREE.MathUtils.clamp(throttle, -0.7, 1) * 10.5, Math.min(1, delta * 3.5));
     boatState.x += Math.sin(boatState.yaw) * boatState.speed * delta;
     boatState.z += Math.cos(boatState.yaw) * boatState.speed * delta;
     const shore = resolveBoatShoreCollision(boatState.x, boatState.z);
@@ -8258,6 +8343,7 @@ function updateLocalPlayer(delta, nowMs) {
   if (tryAutoTeleport(local, nowMs)) {
     return;
   }
+  updateDrowningState(local, delta);
   if (staminaFillEl) {
     const pct = Math.round((stamina / getStaminaMax()) * 100);
     staminaFillEl.style.width = `${pct}%`;
@@ -8275,7 +8361,8 @@ function updateLocalPlayer(delta, nowMs) {
         y: local.y,
         z: local.z,
         inMine,
-        isFishing: Boolean(fishingMiniGame.active || fishingMiniGame.starting)
+        isFishing: Boolean(fishingMiniGame.active || fishingMiniGame.starting),
+        isSwimming: local.isSwimming === true
       });
       lastSentAt = nowMs;
     }
@@ -8531,6 +8618,14 @@ function updateInteractionHint() {
   }
   if (distance2D(local, LEADERBOARD_ISLAND_POS) < LEADERBOARD_ISLAND_RADIUS - 2.1) {
     interactHintEl.textContent = 'Leaderboard Island: top players are shown on the board';
+    return;
+  }
+  if (
+    (inFishingShop && isNearFishingShopExit(local))
+    || (inMarketShop && isNearMarketShopExit(local))
+    || (inFurnitureShop && isNearFurnitureShopExit(local))
+  ) {
+    interactHintEl.textContent = 'Tap Use to leave shop';
     return;
   }
   if (
@@ -8808,6 +8903,8 @@ function animate(nowMs) {
 
   updateDayAndWeather(delta, nowSeconds);
   beaconCore.rotation.y += delta * 1.2;
+  waterTexture.offset.x = (nowMs * 0.000018) % 1;
+  waterTexture.offset.y = (nowMs * 0.000026) % 1;
 
   const beacon = interactables.get('beacon');
   if (beacon?.active) {
