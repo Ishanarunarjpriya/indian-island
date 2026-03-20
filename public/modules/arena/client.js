@@ -60,8 +60,6 @@ export function initArenaClient(context) {
   });
 
   function refreshUI() {
-    const shouldShowArenaUi = Boolean(state.match) || state.nearGateway || state.nearQueueHub;
-    ui.setVisible(shouldShowArenaUi);
     ui.renderProfile(state.profile);
     ui.renderQueueHubState(state.queue);
     ui.renderMatch(state.match);

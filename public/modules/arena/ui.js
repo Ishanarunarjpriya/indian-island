@@ -40,7 +40,6 @@ function ensureRoot() {
   root.style.backdropFilter = 'blur(8px)';
   root.style.zIndex = '1200';
   root.style.pointerEvents = 'auto';
-  root.style.display = 'none';
   document.body.appendChild(root);
   return root;
 }
@@ -357,9 +356,6 @@ export function createArenaUI(callbacks) {
     },
     setMessage(text) {
       message.textContent = text || '';
-    },
-    setVisible(value) {
-      root.style.display = value ? '' : 'none';
     },
     destroy() {
       root.remove();

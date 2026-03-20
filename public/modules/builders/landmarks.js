@@ -8,7 +8,7 @@ const ARENA_GATEWAY_CENTER = {
   z: ARENA_CLIENT_CONFIG.gatewayCenter.z
 };
 const ARENA_ISLAND_RADIUS = 12.6;
-const ARENA_ISLAND_RIM_RADIUS = 14.1;
+const ARENA_ISLAND_RIM_RADIUS = 15.4;
 const ARENA_DOCK_POS = {
   x: ARENA_GATEWAY_CENTER.x,
   y: ARENA_GATEWAY_CENTER.y - 0.08,
@@ -867,23 +867,27 @@ export function addBoat() {
 }
 
 export function addArenaIsland() {
-  const shore = new THREE.Mesh(
-    new THREE.CylinderGeometry(ARENA_ISLAND_RIM_RADIUS, ARENA_ISLAND_RIM_RADIUS + 1.0, 1.36, 44),
-    new THREE.MeshStandardMaterial({ color: 0x8f6e4a, roughness: 0.9 })
-  );
-  shore.position.set(ARENA_GATEWAY_CENTER.x, ARENA_GATEWAY_CENTER.y - 0.68, ARENA_GATEWAY_CENTER.z);
-  shore.receiveShadow = true;
-  shore.castShadow = false;
-  scene.add(shore);
-
   const ground = new THREE.Mesh(
-    new THREE.CylinderGeometry(ARENA_ISLAND_RADIUS, ARENA_ISLAND_RADIUS + 0.35, 0.88, 44),
+    new THREE.CylinderGeometry(ARENA_ISLAND_RADIUS, ARENA_ISLAND_RADIUS + 0.85, 1.18, 42),
     new THREE.MeshStandardMaterial({ color: 0x6d9a61, roughness: 0.93 })
   );
-  ground.position.set(ARENA_GATEWAY_CENTER.x, ARENA_GATEWAY_CENTER.y - 0.44, ARENA_GATEWAY_CENTER.z);
+  ground.position.set(ARENA_GATEWAY_CENTER.x, ARENA_GATEWAY_CENTER.y - 0.59, ARENA_GATEWAY_CENTER.z);
   ground.receiveShadow = true;
   ground.castShadow = false;
   scene.add(ground);
+
+  const rim = new THREE.Mesh(
+    new THREE.TorusGeometry(ARENA_ISLAND_RIM_RADIUS, 1.2, 14, 64),
+    new THREE.MeshStandardMaterial({ color: 0x8f6e4a, roughness: 0.9 })
+  );
+  rim.rotation.x = Math.PI / 2;
+  rim.position.set(ARENA_GATEWAY_CENTER.x, ARENA_GATEWAY_CENTER.y - 0.5, ARENA_GATEWAY_CENTER.z);
+  rim.receiveShadow = true;
+  scene.add(rim);
+
+  if (typeof addWorldCollider === 'function') {
+    addWorldCollider(ARENA_GATEWAY_CENTER.x, ARENA_GATEWAY_CENTER.z, ARENA_ISLAND_RADIUS - 0.4, 'island');
+  }
 
   const pylon = new THREE.Mesh(
     new THREE.CylinderGeometry(0.86, 0.86, 2.4, 16),
