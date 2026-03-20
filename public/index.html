@@ -2404,11 +2404,31 @@
       }
 
       body.mobile-ui #quest-tracker {
-        left: auto;
-        right: max(8px, env(safe-area-inset-right));
-        bottom: calc(92px + env(safe-area-inset-bottom));
-        width: min(42vw, 172px);
-        top: auto;
+        left: 50%;
+        right: auto;
+        top: calc(54px + env(safe-area-inset-top));
+        bottom: auto;
+        transform: translateX(-50%);
+        width: min(52vw, 220px);
+        padding: 6px 8px;
+        gap: 2px;
+        border-radius: 12px;
+        z-index: 13;
+      }
+
+      body.mobile-ui #quest-title {
+        font-size: 10px !important;
+        line-height: 1.15;
+      }
+
+      body.mobile-ui #quest-progress,
+      body.mobile-ui #quest-status-msg {
+        font-size: 9px !important;
+        line-height: 1.15;
+      }
+
+      body.mobile-ui #quest-status-msg {
+        min-height: 0 !important;
       }
 
       body.mobile-ui #hud .title {
