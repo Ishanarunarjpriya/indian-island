@@ -233,6 +233,10 @@ const {
   LEADERBOARD_ISLAND_RADIUS,
   ARENA_GATEWAY_ISLAND_POS,
   ARENA_GATEWAY_ISLAND_RADIUS,
+  ARENA_QUEUE_HUB_POS,
+  ARENA_QUEUE_HUB_RADIUS,
+  ARENA_COMBAT_POS,
+  ARENA_COMBAT_RADIUS,
   FISHING_SHOP_BASE,
   MARKET_SHOP_BASE,
   FURNITURE_SHOP_BASE,
@@ -2739,6 +2743,12 @@ function clampToPlayableGround(x, z, allowMine = false) {
   const dxA = x - ARENA_GATEWAY_ISLAND_POS.x;
   const dzA = z - ARENA_GATEWAY_ISLAND_POS.z;
   const inArenaIsland = Math.hypot(dxA, dzA) <= ARENA_RADIUS;
+  const dxAH = x - ARENA_QUEUE_HUB_POS.x;
+  const dzAH = z - ARENA_QUEUE_HUB_POS.z;
+  const inArenaQueueHub = Math.hypot(dxAH, dzAH) <= ARENA_QUEUE_HUB_RADIUS;
+  const dxAC = x - ARENA_COMBAT_POS.x;
+  const dzAC = z - ARENA_COMBAT_POS.z;
+  const inArenaCombat = Math.hypot(dxAC, dzAC) <= ARENA_COMBAT_RADIUS;
   const dxI = x - LIGHTHOUSE_INTERIOR_BASE.x;
   const dzI = z - LIGHTHOUSE_INTERIOR_BASE.z;
   const inInterior = Math.hypot(dxI, dzI) <= INTERIOR_RADIUS;
@@ -2768,6 +2778,8 @@ function clampToPlayableGround(x, z, allowMine = false) {
     || inMarketIsland
     || inLeaderboardIsland
     || inArenaIsland
+    || inArenaQueueHub
+    || inArenaCombat
     || inInterior
     || inHouseRoomZone
     || inHouseHallZone
@@ -2818,6 +2830,18 @@ function clampToPlayableGround(x, z, allowMine = false) {
     z: ARENA_GATEWAY_ISLAND_POS.z + (dzA / lenA) * ARENA_RADIUS
   };
   const distArena = Math.hypot(x - toArena.x, z - toArena.z);
+  const lenAH = Math.hypot(dxAH, dzAH) || 1;
+  const toArenaQueueHub = {
+    x: ARENA_QUEUE_HUB_POS.x + (dxAH / lenAH) * ARENA_QUEUE_HUB_RADIUS,
+    z: ARENA_QUEUE_HUB_POS.z + (dzAH / lenAH) * ARENA_QUEUE_HUB_RADIUS
+  };
+  const distArenaQueueHub = Math.hypot(x - toArenaQueueHub.x, z - toArenaQueueHub.z);
+  const lenAC = Math.hypot(dxAC, dzAC) || 1;
+  const toArenaCombat = {
+    x: ARENA_COMBAT_POS.x + (dxAC / lenAC) * ARENA_COMBAT_RADIUS,
+    z: ARENA_COMBAT_POS.z + (dzAC / lenAC) * ARENA_COMBAT_RADIUS
+  };
+  const distArenaCombat = Math.hypot(x - toArenaCombat.x, z - toArenaCombat.z);
   const lenI = Math.hypot(dxI, dzI) || 1;
   const toInterior = {
     x: LIGHTHOUSE_INTERIOR_BASE.x + (dxI / lenI) * INTERIOR_RADIUS,
@@ -2864,6 +2888,8 @@ function clampToPlayableGround(x, z, allowMine = false) {
     { pos: toMarket, dist: distMarket },
     { pos: toLeaderboard, dist: distLeaderboard },
     { pos: toArena, dist: distArena },
+    { pos: toArenaQueueHub, dist: distArenaQueueHub },
+    { pos: toArenaCombat, dist: distArenaCombat },
     { pos: toInterior, dist: distInterior },
     { pos: toHouseRoom, dist: distHouseRoom },
     { pos: toFishingShop, dist: distFishingShop },
@@ -3380,12 +3406,14 @@ function isWithinPlayableWorld(x, z, allowMine = false) {
   const onMarketIsland = Math.hypot(x - MARKET_ISLAND_POS.x, z - MARKET_ISLAND_POS.z) <= MARKET_RADIUS;
   const onLeaderboardIsland = Math.hypot(x - LEADERBOARD_ISLAND_POS.x, z - LEADERBOARD_ISLAND_POS.z) <= LEADERBOARD_RADIUS;
   const onArenaGatewayIsland = Math.hypot(x - ARENA_GATEWAY_ISLAND_POS.x, z - ARENA_GATEWAY_ISLAND_POS.z) <= ARENA_RADIUS;
+  const onArenaQueueHub = Math.hypot(x - ARENA_QUEUE_HUB_POS.x, z - ARENA_QUEUE_HUB_POS.z) <= ARENA_QUEUE_HUB_RADIUS;
+  const onArenaCombat = Math.hypot(x - ARENA_COMBAT_POS.x, z - ARENA_COMBAT_POS.z) <= ARENA_COMBAT_RADIUS;
   const inInterior = Math.hypot(x - LIGHTHOUSE_INTERIOR_BASE.x, z - LIGHTHOUSE_INTERIOR_BASE.z) <= INTERIOR_RADIUS;
   const inHouseRoomZone = Math.hypot(x - HOUSE_ROOM_BASE.x, z - HOUSE_ROOM_BASE.z) <= HOUSE_ROOM_RADIUS;
   const inHouseHallZone = Math.hypot(x - HOUSE_HALL_BASE.x, z - HOUSE_HALL_BASE.z) <= getHallPlayRadius();
   const inMine = allowMine && mineDistance(x, z) <= MINE_PLAY_RADIUS;
   const inSwim = isSwimZone(x, z) && !mineSwimBlocked;
-  return onMain || onLighthouse || onMineEntryIsland || onFishingIsland || onMarketIsland || onLeaderboardIsland || onArenaGatewayIsland || inInterior || inHouseRoomZone || inHouseHallZone || inMine || inSwim;
+  return onMain || onLighthouse || onMineEntryIsland || onFishingIsland || onMarketIsland || onLeaderboardIsland || onArenaGatewayIsland || onArenaQueueHub || onArenaCombat || inInterior || inHouseRoomZone || inHouseHallZone || inMine || inSwim;
 }
 
 function setBeaconVisual(active) {

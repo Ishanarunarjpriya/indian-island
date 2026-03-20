@@ -301,29 +301,38 @@ export function createArenaRuntime(args) {
 
   function setPlayerToQueueHub(socketId) {
     const player = getPlayer(socketId);
-    if (!player) return;
+    const socket = io?.sockets?.sockets?.get(socketId) || null;
+    if (!player || !socket) return;
     player.currentRoomId = QUEUE_HUB_ROOM_ID;
     const offset = ARENA_WORLD.queueHubTeleportOffset || { x: 0, y: 0, z: 0 };
     player.x = safeNumber(ARENA_WORLD.queueHubCenter?.x) + safeNumber(offset.x);
     player.y = safeNumber(ARENA_WORLD.queueHubCenter?.y, 1.35) + safeNumber(offset.y);
     player.z = safeNumber(ARENA_WORLD.queueHubCenter?.z) + safeNumber(offset.z);
+    player.rotation = 0;
+    socket.leave('world');
+    socket.join(QUEUE_HUB_ROOM_ID);
     queueHubMembers.add(socketId);
     io.to(socketId).emit('arena:returnToLobby', {
       x: player.x,
       y: player.y,
       z: player.z,
+      rotation: player.rotation,
       roomId: QUEUE_HUB_ROOM_ID,
       mode: 'queue-hub',
     });
+    emitQueueHubStateToSocket(socketId);
   }
 
   function returnToMainLobby(socketId) {
     const player = getPlayer(socketId);
-    if (!player) return;
+    const socket = io?.sockets?.sockets?.get(socketId) || null;
+    if (!player || !socket) return;
     player.currentRoomId = null;
     player.x = LOBBY_RETURN_POS.x;
     player.y = LOBBY_RETURN_POS.y;
     player.z = LOBBY_RETURN_POS.z;
+    socket.leave(QUEUE_HUB_ROOM_ID);
+    socket.join('world');
     queueHubMembers.delete(socketId);
     removeSocketFromLane(socketId);
     io.to(socketId).emit('arena:returnToLobby', {

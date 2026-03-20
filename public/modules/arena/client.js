@@ -71,14 +71,38 @@ export function initArenaClient(context) {
       localState.x = x;
       localState.y = y;
       localState.z = z;
+      if (Number.isFinite(position.rotation)) {
+        localState.rotation = Number(position.rotation);
+      }
     }
+  }
+
+  function syncLocalArenaRoom(roomId) {
+    const localState = typeof context.getLocalPlayerState === 'function' ? context.getLocalPlayerState() : null;
+    if (!localState) return;
+    localState.arenaState = typeof roomId === 'string' && roomId ? { roomId } : null;
   }
 
   const ui = createArenaUI({
     getSocketId: () => socket.id,
-    onEnterQueueHub: () => socket.emit('arena:enterQueueHub'),
-    onJoinQueuePad: (padId) => socket.emit('arena:joinQueuePad', { padId }),
-    onLeaveQueuePad: () => socket.emit('arena:leaveQueuePad'),
+    onEnterQueueHub: () => {
+      state.lastMessage = 'Entering PvP queue hub...';
+      socket.emit('arena:enterQueueHub');
+      socket.emit('arena:requestSync');
+      refreshUI();
+    },
+    onJoinQueuePad: (padId) => {
+      state.lastMessage = `Joining ${String(padId || '').toUpperCase()} queue...`;
+      socket.emit('arena:joinQueuePad', { padId });
+      socket.emit('arena:requestSync');
+      refreshUI();
+    },
+    onLeaveQueuePad: () => {
+      state.lastMessage = 'Left queue lane.';
+      socket.emit('arena:leaveQueuePad');
+      socket.emit('arena:requestSync');
+      refreshUI();
+    },
     onBuyItem: (itemId) => socket.emit('arena:buyItem', { itemId }),
     onUpgradeItem: (itemId) => socket.emit('arena:upgradeItem', { itemId }),
     onDecision: (decision) => socket.emit('arena:decision', decision),
@@ -105,7 +129,7 @@ export function initArenaClient(context) {
   }
 
   function refreshUI() {
-    const shouldShowArenaUi = Boolean(state.match);
+    const shouldShowArenaUi = Boolean(state.match || state.nearGateway || state.nearQueueHub);
     ui.setVisible(shouldShowArenaUi);
     ui.renderProfile(state.profile);
     ui.renderQueueHubState(state.queue);
@@ -128,6 +152,7 @@ export function initArenaClient(context) {
 
   function onMatch(matchState) {
     state.match = matchState || null;
+    syncLocalArenaRoom(matchState?.roomId || null);
     refreshUI();
   }
 
@@ -138,6 +163,7 @@ export function initArenaClient(context) {
 
   function onMatchEnded(summary) {
     state.match = null;
+    syncLocalArenaRoom(null);
     const outcome = summary?.outcome === 'cashout' ? 'Cashout complete.' : 'Run failed. Unclaimed rewards lost.';
     state.lastMessage = outcome;
     refreshUI();
@@ -145,13 +171,20 @@ export function initArenaClient(context) {
 
   function onReturnToLobby(payload) {
     teleportLocal(payload);
+    syncLocalArenaRoom(payload?.roomId || null);
     if (payload?.mode === 'queue-hub') {
       state.nearQueueHub = true;
       state.nearGateway = false;
       state.lastMessage = 'Entered PvP queue hub.';
     } else if (payload?.mode === 'main-world') {
+      state.nearGateway = false;
+      state.nearQueueHub = false;
+      state.nearbyPadId = null;
       state.lastMessage = 'Returned to main world.';
     } else if (payload?.mode === 'match') {
+      state.nearGateway = false;
+      state.nearQueueHub = false;
+      state.nearbyPadId = null;
       state.lastMessage = 'PvP match started.';
     }
     refreshUI();
@@ -173,13 +206,6 @@ export function initArenaClient(context) {
     if (event.key.toLowerCase() === 'e') {
       if (state.match) return;
       if (state.nearGateway) {
-        teleportLocal({
-          x: ARENA_CLIENT_CONFIG.queueHubCenter.x,
-          y: ARENA_CLIENT_CONFIG.queueHubCenter.y,
-          z: ARENA_CLIENT_CONFIG.queueHubCenter.z,
-        });
-        state.nearGateway = false;
-        state.nearQueueHub = true;
         state.lastMessage = 'Entering PvP queue hub...';
         socket.emit('arena:enterQueueHub');
         socket.emit('arena:requestSync');
