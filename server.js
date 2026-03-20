@@ -490,6 +490,12 @@ function clampToPlayableGround(x, z, allowMine = false) {
   const FURNITURE_RADIUS = FURNITURE_ISLAND_RADIUS;
   const LEADERBOARD_RADIUS = LEADERBOARD_ISLAND_RADIUS;
   const HOUSE_ROOM_PLAY_RADIUS = HOUSE_ROOM_RADIUS;
+  const ARENA_GATEWAY_RADIUS = 14.6;
+  const ARENA_GATEWAY_POS = { x: -43.37, z: 110.14 };
+  const ARENA_QUEUE_HUB_RADIUS = 20.5;
+  const ARENA_QUEUE_HUB_POS = { x: -172, z: 164 };
+  const ARENA_COMBAT_RADIUS = 26.5;
+  const ARENA_COMBAT_POS = { x: -236, z: 164 };
   const mineDist = Math.hypot(x - MINE_POS.x, z - MINE_POS.z);
   const mineSwimBlocked = allowMine && mineDist <= MINE_SWIM_BLOCK_RADIUS;
   const onMain = Math.hypot(x, z) <= MAIN_RADIUS;
@@ -501,11 +507,51 @@ function clampToPlayableGround(x, z, allowMine = false) {
   const onLeaderboardIsland = Math.hypot(x - LEADERBOARD_ISLAND_POS.x, z - LEADERBOARD_ISLAND_POS.z) <= LEADERBOARD_RADIUS;
   const onInterior = Math.hypot(x - INTERIOR_POS.x, z - INTERIOR_POS.z) <= INTERIOR_RADIUS;
   const onHouseRoom = Math.hypot(x - HOUSE_ROOM_POS.x, z - HOUSE_ROOM_POS.z) <= HOUSE_ROOM_PLAY_RADIUS;
+  const onArenaGateway = Math.hypot(x - ARENA_GATEWAY_POS.x, z - ARENA_GATEWAY_POS.z) <= ARENA_GATEWAY_RADIUS;
+  const onArenaQueueHub = Math.hypot(x - ARENA_QUEUE_HUB_POS.x, z - ARENA_QUEUE_HUB_POS.z) <= ARENA_QUEUE_HUB_RADIUS;
+  const onArenaCombat = Math.hypot(x - ARENA_COMBAT_POS.x, z - ARENA_COMBAT_POS.z) <= ARENA_COMBAT_RADIUS;
   const onMine = allowMine && mineDist <= MINE_PLAY_RADIUS;
   const radius = Math.hypot(x, z);
   const onSwimRing = radius >= SWIM_MIN_RADIUS && radius <= SWIM_MAX_RADIUS && !mineSwimBlocked;
-  if (onMain || onLighthouse || onMineEntryIsland || onFishingIsland || onMarketIsland || onFurnitureIsland || onLeaderboardIsland || onInterior || onHouseRoom || onMine || onSwimRing) {
+  if (
+    onMain
+    || onLighthouse
+    || onMineEntryIsland
+    || onFishingIsland
+    || onMarketIsland
+    || onFurnitureIsland
+    || onLeaderboardIsland
+    || onInterior
+    || onHouseRoom
+    || onArenaGateway
+    || onArenaQueueHub
+    || onArenaCombat
+    || onMine
+    || onSwimRing
+  ) {
     return { x, z };
+  }
+
+  const clampToCircleAround = (cx, cz, limit) => {
+    const dx = x - cx;
+    const dz = z - cz;
+    const len = Math.hypot(dx, dz) || 1;
+    return {
+      x: cx + (dx / len) * limit,
+      z: cz + (dz / len) * limit
+    };
+  };
+
+  // Arena zones are intentionally outside the main-world radius, so keep players
+  // snapped to the nearest arena island edge instead of the global swim ring.
+  if (Math.hypot(x - ARENA_GATEWAY_POS.x, z - ARENA_GATEWAY_POS.z) <= ARENA_GATEWAY_RADIUS + 30) {
+    return clampToCircleAround(ARENA_GATEWAY_POS.x, ARENA_GATEWAY_POS.z, ARENA_GATEWAY_RADIUS);
+  }
+  if (Math.hypot(x - ARENA_QUEUE_HUB_POS.x, z - ARENA_QUEUE_HUB_POS.z) <= ARENA_QUEUE_HUB_RADIUS + 30) {
+    return clampToCircleAround(ARENA_QUEUE_HUB_POS.x, ARENA_QUEUE_HUB_POS.z, ARENA_QUEUE_HUB_RADIUS);
+  }
+  if (Math.hypot(x - ARENA_COMBAT_POS.x, z - ARENA_COMBAT_POS.z) <= ARENA_COMBAT_RADIUS + 36) {
+    return clampToCircleAround(ARENA_COMBAT_POS.x, ARENA_COMBAT_POS.z, ARENA_COMBAT_RADIUS);
   }
 
   const toMain = clampToIsland(x, z, MAIN_RADIUS);
@@ -3758,7 +3804,7 @@ const __arenaRuntimePromise = import('./server/modules/arena/index.js')
     const arenaRuntime = arenaModule.createArenaRuntime({
       io,
       players,
-      persistPlayerProgress: savePlayerProgress,
+      persistPlayerProgress,
     });
     io.on('connection', (socket) => {
       arenaRuntime.attachSocket(socket);
