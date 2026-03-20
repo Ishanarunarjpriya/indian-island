@@ -345,7 +345,15 @@ let dbClient = null;
 let dbReady = false;
 let accountsBanColumn = false;
 
-app.use(express.static('public'));
+app.use(express.static('public', {
+  setHeaders(res, filePath) {
+    if (typeof filePath === 'string' && (filePath.endsWith('.html') || filePath.endsWith('.js'))) {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+    }
+  }
+}));
 
 app.get('/voice-config', (req, res) => {
   res.json({ ok: true, iceServers: VOICE_ICE_SERVERS });
