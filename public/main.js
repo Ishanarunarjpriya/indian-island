@@ -2064,7 +2064,7 @@ const interiorLayout = {
 const SWIM_MIN_RADIUS = worldLimit + 0.6;
 const SWIM_MAX_RADIUS = worldLimit * 3.9;
 const SWIM_SURFACE_Y = 0.38;
-const SWIM_SINK_Y = -3.6;
+const SWIM_SINK_Y = -6.4;
 let lighthouseInteriorGroup = null;
 let lighthouseInteriorPortal = null;
 let lighthouseTopPortal = null;
@@ -3163,22 +3163,14 @@ function updateDrowningState(local, delta) {
     drownTimer = 0;
     return;
   }
-  const underwater = local.y < SWIM_SURFACE_Y - 0.42;
-  if (!underwater) {
-    drownTimer = Math.max(0, drownTimer - delta * 2.2);
-    return;
-  }
   drownTimer += delta;
   if (drownTimer < DROWN_MAX_TIME) return;
   drownTimer = 0;
-  const dockSlot = nearestDockSlot(local, 999);
-  const respawn = dockSlot
-    ? { x: dockSlot.dock.x, y: GROUND_Y, z: dockSlot.dock.z }
-    : { x: HOUSE_POS.x + 6, y: GROUND_Y, z: HOUSE_POS.z + 10 };
+  const respawn = { x: HOUSE_POS.x + 6, y: GROUND_Y, z: HOUSE_POS.z + 10 };
   local.isSwimming = false;
   local.vy = 0;
-  teleportLocal(local, respawn, dockSlot?.yaw || 0);
-  appendChatLine({ text: 'You stayed underwater too long and washed back to shore.', isSystem: true });
+  teleportLocal(local, respawn, Math.PI);
+  appendChatLine({ text: 'You stayed in the water too long and respawned on the main island.', isSystem: true });
 }
 
 function swimSyncRange(x, z) {
@@ -7962,7 +7954,7 @@ let stamina = STAMINA_BASE_MAX;
 let slideUntil = 0;
 let slideDirX = 0;
 let slideDirZ = 0;
-const DROWN_MAX_TIME = 6;
+const DROWN_MAX_TIME = 10;
 let drownTimer = 0;
 
 const CAMERA_PITCH_MIN = 0.2;
