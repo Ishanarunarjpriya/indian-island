@@ -2,17 +2,10 @@ import * as THREE from 'https://unpkg.com/three@0.165.0/build/three.module.js';
 import { ARENA_CLIENT_CONFIG } from '../arena/config.js';
 
 const ARENA_DOCK_YAW = 0;
-const ARENA_GATEWAY_CENTER = {
-  x: ARENA_CLIENT_CONFIG.gatewayCenter.x,
-  y: ARENA_CLIENT_CONFIG.gatewayCenter.y,
-  z: ARENA_CLIENT_CONFIG.gatewayCenter.z
-};
-const ARENA_ISLAND_RADIUS = 12.6;
-const ARENA_ISLAND_RIM_RADIUS = 15.4;
 const ARENA_DOCK_POS = {
-  x: ARENA_GATEWAY_CENTER.x,
-  y: ARENA_GATEWAY_CENTER.y - 0.08,
-  z: ARENA_GATEWAY_CENTER.z + ARENA_ISLAND_RIM_RADIUS + 4.8
+  x: ARENA_CLIENT_CONFIG.world.hubCenter.x,
+  y: ARENA_CLIENT_CONFIG.world.hubCenter.y - 0.08,
+  z: ARENA_CLIENT_CONFIG.world.hubCenter.z + ARENA_CLIENT_CONFIG.world.islandRadius + 4.8
 };
 
 let scene = null;
@@ -867,80 +860,48 @@ export function addBoat() {
 }
 
 export function addArenaIsland() {
-  const ground = new THREE.Mesh(
-    new THREE.CylinderGeometry(ARENA_ISLAND_RADIUS, ARENA_ISLAND_RADIUS + 0.85, 1.18, 42),
-    new THREE.MeshStandardMaterial({ color: 0x6d9a61, roughness: 0.93 })
-  );
-  ground.position.set(ARENA_GATEWAY_CENTER.x, ARENA_GATEWAY_CENTER.y - 0.59, ARENA_GATEWAY_CENTER.z);
-  ground.receiveShadow = true;
-  ground.castShadow = false;
-  scene.add(ground);
-
-  const rim = new THREE.Mesh(
-    new THREE.TorusGeometry(ARENA_ISLAND_RIM_RADIUS, 1.2, 14, 64),
-    new THREE.MeshStandardMaterial({ color: 0x8f6e4a, roughness: 0.9 })
-  );
-  rim.rotation.x = Math.PI / 2;
-  rim.position.set(ARENA_GATEWAY_CENTER.x, ARENA_GATEWAY_CENTER.y - 0.5, ARENA_GATEWAY_CENTER.z);
-  rim.receiveShadow = true;
-  scene.add(rim);
-
-  if (typeof addWorldCollider === 'function') {
-    addWorldCollider(ARENA_GATEWAY_CENTER.x, ARENA_GATEWAY_CENTER.z, ARENA_ISLAND_RADIUS - 0.4, 'island');
-  }
-
-  const pylon = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.86, 0.86, 2.4, 16),
-    new THREE.MeshStandardMaterial({ color: 0x2e3d57, roughness: 0.35, metalness: 0.15 })
-  );
-  pylon.position.set(ARENA_GATEWAY_CENTER.x, ARENA_GATEWAY_CENTER.y + 0.62, ARENA_GATEWAY_CENTER.z);
-  pylon.castShadow = true;
-  pylon.receiveShadow = true;
-  scene.add(pylon);
-
-  const portal = new THREE.Mesh(
-    new THREE.TorusGeometry(1.42, 0.24, 20, 54),
-    new THREE.MeshStandardMaterial({
-      color: 0x5ac8ff,
-      emissive: 0x2b7dff,
-      emissiveIntensity: 1.25,
-      metalness: 0.25,
-      roughness: 0.2
-    })
-  );
-  portal.rotation.x = Math.PI / 2;
-  portal.position.set(ARENA_GATEWAY_CENTER.x, ARENA_GATEWAY_CENTER.y + 1.48, ARENA_GATEWAY_CENTER.z);
-  scene.add(portal);
-
-  const core = new THREE.Mesh(
-    new THREE.SphereGeometry(0.58, 14, 14),
-    new THREE.MeshStandardMaterial({
-      color: 0xb8e6ff,
-      emissive: 0x5a93ff,
-      emissiveIntensity: 1.1,
-      roughness: 0.18
-    })
-  );
-  core.position.set(ARENA_GATEWAY_CENTER.x, ARENA_GATEWAY_CENTER.y + 1.48, ARENA_GATEWAY_CENTER.z);
-  scene.add(core);
-
-  const light = new THREE.PointLight(0x8cd8ff, 1.45, 18, 2);
-  light.position.set(ARENA_GATEWAY_CENTER.x, ARENA_GATEWAY_CENTER.y + 2.6, ARENA_GATEWAY_CENTER.z);
-  scene.add(light);
+  const arenaDockAnchor = new THREE.Vector3(ARENA_DOCK_POS.x, ARENA_DOCK_POS.y, ARENA_DOCK_POS.z);
+  addDock(arenaDockAnchor, ARENA_DOCK_YAW, {
+    segments: 8,
+    plankLength: 2.5,
+    plankWidth: 1.1,
+    spacing: 1.15,
+    railHeight: 0.56
+  });
 
   const signPost = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.12, 0.15, 2.8, 10),
+    new THREE.CylinderGeometry(0.14, 0.16, 3.2, 10),
     new THREE.MeshStandardMaterial({ color: 0x5a3b24, roughness: 0.92 })
   );
-  signPost.position.set(ARENA_GATEWAY_CENTER.x + 4.7, ARENA_GATEWAY_CENTER.y + 0.8, ARENA_GATEWAY_CENTER.z + 4.9);
+  signPost.position.set(ARENA_DOCK_POS.x - 3.1, 2.0, ARENA_DOCK_POS.z - 1.1);
   signPost.castShadow = true;
   signPost.receiveShadow = true;
   scene.add(signPost);
 
-  const sign = makeTextSign('PVP ARENA', 3.2, 0.72, '#2b1d14', '#fff7ed');
-  sign.position.set(ARENA_GATEWAY_CENTER.x + 4.7, ARENA_GATEWAY_CENTER.y + 2.65, ARENA_GATEWAY_CENTER.z + 4.9);
-  sign.rotation.y = -Math.PI * 0.72;
+  const sign = makeTextSign('Arena', 2.8, 0.62, '#2b1d14', '#fff7ed');
+  sign.position.set(ARENA_DOCK_POS.x - 3.1, 3.95, ARENA_DOCK_POS.z - 1.1);
+  sign.rotation.y = Math.PI;
   scene.add(sign);
+
+  const lanternPole = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.08, 0.1, 2.6, 8),
+    new THREE.MeshStandardMaterial({ color: 0x4a311f, roughness: 0.9 })
+  );
+  lanternPole.position.set(ARENA_DOCK_POS.x + 3.0, 1.55, ARENA_DOCK_POS.z - 1.0);
+  lanternPole.castShadow = true;
+  lanternPole.receiveShadow = true;
+  scene.add(lanternPole);
+
+  const lantern = new THREE.Mesh(
+    new THREE.SphereGeometry(0.22, 12, 12),
+    new THREE.MeshStandardMaterial({ color: 0xfbbf24, emissive: 0xf59e0b, emissiveIntensity: 0.7, roughness: 0.35 })
+  );
+  lantern.position.set(ARENA_DOCK_POS.x + 3.0, 2.9, ARENA_DOCK_POS.z - 1.0);
+  scene.add(lantern);
+
+  const glow = new THREE.PointLight(0xffd78c, 0.75, 11, 2);
+  glow.position.set(ARENA_DOCK_POS.x + 3.0, 2.9, ARENA_DOCK_POS.z - 1.0);
+  scene.add(glow);
 }
 
 export function addDecorBoat(x, z, yaw = 0, scale = 1.9, y = 1.06) {
