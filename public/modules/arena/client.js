@@ -19,14 +19,6 @@ export function initArenaClient(context) {
     return null;
   }
 
-  // Use getter functions so we always get the live player/state references
-  const getLocalPlayer = typeof context.getLocalPlayer === 'function'
-    ? context.getLocalPlayer
-    : () => context.localPlayer;
-  const getLocalPlayerState = typeof context.getLocalPlayerState === 'function'
-    ? context.getLocalPlayerState
-    : () => context.localPlayerState;
-
   const state = {
     profile: null,
     queue: null,
@@ -40,12 +32,12 @@ export function initArenaClient(context) {
   const ui = createArenaUI();
 
   function localPosition() {
-    const player = getLocalPlayer();
-    const playerState = getLocalPlayerState();
+    const mesh = context.localPlayer;
+    const localState = context.localPlayerState;
     return {
-      x: Number(playerState?.x ?? player?.x ?? player?.mesh?.position?.x ?? 0),
-      y: Number(playerState?.y ?? player?.y ?? player?.mesh?.position?.y ?? 0),
-      z: Number(playerState?.z ?? player?.z ?? player?.mesh?.position?.z ?? 0),
+      x: Number(localState?.x ?? mesh?.position?.x ?? 0),
+      y: Number(localState?.y ?? mesh?.position?.y ?? 0),
+      z: Number(localState?.z ?? mesh?.position?.z ?? 0),
     };
   }
 
@@ -53,34 +45,26 @@ export function initArenaClient(context) {
     if (!position) {
       return;
     }
-    const player = getLocalPlayer();
-    if (player?.mesh) {
-      player.mesh.position.set(position.x, position.y, position.z);
+    if (context.localPlayer) {
+      context.localPlayer.position.set(position.x, position.y, position.z);
     }
-    if (player) {
-      player.x = position.x;
-      player.y = position.y;
-      player.z = position.z;
-    }
-    const playerState = getLocalPlayerState();
-    if (playerState) {
-      playerState.x = position.x;
-      playerState.y = position.y;
-      playerState.z = position.z;
-      playerState.rotation = position.rotation || 0;
+    if (context.localPlayerState) {
+      context.localPlayerState.x = position.x;
+      context.localPlayerState.y = position.y;
+      context.localPlayerState.z = position.z;
+      context.localPlayerState.rotation = position.rotation || 0;
     }
   }
 
   function syncRoomState() {
-    const playerState = getLocalPlayerState();
-    if (!playerState) {
+    if (!context.localPlayerState) {
       return;
     }
     if (state.match && state.match.roomId) {
-      playerState.arenaState = { roomId: state.match.roomId };
+      context.localPlayerState.arenaState = { roomId: state.match.roomId };
       return;
     }
-    playerState.arenaState = null;
+    context.localPlayerState.arenaState = null;
   }
 
   function renderAll() {

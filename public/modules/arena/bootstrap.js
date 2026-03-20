@@ -6,11 +6,6 @@ function waitForContext() {
     requestAnimationFrame(waitForContext);
     return;
   }
-  // Wait until the local player is available (i.e. user has logged in)
-  if (!context.getLocalPlayer()) {
-    requestAnimationFrame(waitForContext);
-    return;
-  }
   if (window.__arenaClientInstance) {
     return;
   }
@@ -19,8 +14,8 @@ function waitForContext() {
     camera: context.getCamera(),
     renderer: context.getRenderer(),
     socket: context.getSocket(),
-    getLocalPlayer: context.getLocalPlayer,
-    getLocalPlayerState: context.getLocalPlayerState,
+    localPlayer: context.getLocalPlayer(),
+    localPlayerState: context.getLocalPlayerState(),
   });
   window.__arenaClientInstance = instance;
 }
