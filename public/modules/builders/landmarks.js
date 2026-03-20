@@ -868,19 +868,19 @@ export function addBoat() {
 
 export function addArenaIsland() {
   const shore = new THREE.Mesh(
-    new THREE.CylinderGeometry(ARENA_ISLAND_RIM_RADIUS, ARENA_ISLAND_RIM_RADIUS + 1.0, 1.25, 44),
+    new THREE.CylinderGeometry(ARENA_ISLAND_RIM_RADIUS, ARENA_ISLAND_RIM_RADIUS + 1.0, 1.22, 44),
     new THREE.MeshStandardMaterial({ color: 0x8f6e4a, roughness: 0.9 })
   );
-  shore.position.set(ARENA_GATEWAY_CENTER.x, ARENA_GATEWAY_CENTER.y - 0.88, ARENA_GATEWAY_CENTER.z);
+  shore.position.set(ARENA_GATEWAY_CENTER.x, ARENA_GATEWAY_CENTER.y - 0.8, ARENA_GATEWAY_CENTER.z);
   shore.receiveShadow = true;
   shore.castShadow = false;
   scene.add(shore);
 
   const ground = new THREE.Mesh(
-    new THREE.CylinderGeometry(ARENA_ISLAND_RADIUS, ARENA_ISLAND_RADIUS + 0.35, 1.02, 44),
+    new THREE.CylinderGeometry(ARENA_ISLAND_RADIUS, ARENA_ISLAND_RADIUS + 0.35, 0.92, 44),
     new THREE.MeshStandardMaterial({ color: 0x6d9a61, roughness: 0.93 })
   );
-  ground.position.set(ARENA_GATEWAY_CENTER.x, ARENA_GATEWAY_CENTER.y - 0.37, ARENA_GATEWAY_CENTER.z);
+  ground.position.set(ARENA_GATEWAY_CENTER.x, ARENA_GATEWAY_CENTER.y - 0.43, ARENA_GATEWAY_CENTER.z);
   ground.receiveShadow = true;
   ground.castShadow = false;
   scene.add(ground);
