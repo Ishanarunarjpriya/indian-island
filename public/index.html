@@ -131,13 +131,15 @@
       }
 
       #quest-tracker {
-        position: absolute;
-        left: 0;
-        right: 0;
-        bottom: calc(100% + 8px);
+        position: fixed;
+        left: 16px;
+        right: auto;
+        bottom: 228px;
+        width: min(280px, calc(100vw - 32px));
         padding: 8px 10px;
         display: none;
         gap: 4px;
+        z-index: 11;
       }
 
       #hud .title {
@@ -2402,8 +2404,11 @@
       }
 
       body.mobile-ui #quest-tracker {
-        top: calc(100% + 8px);
-        bottom: auto;
+        left: max(8px, env(safe-area-inset-left));
+        right: auto;
+        bottom: 132px;
+        width: min(46vw, 196px);
+        top: auto;
       }
 
       body.mobile-ui #hud .title {
