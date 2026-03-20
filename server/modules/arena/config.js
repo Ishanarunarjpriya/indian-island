@@ -8,7 +8,7 @@ export const ARENA_WORLD = {
   spawnRingRadius: 7.5,
   enemySpawnRadius: 10.5,
   spectatorHeight: 10,
-  queueHubTeleportOffset: { x: 0, y: 0, z: 0 },
+  queueHubTeleportOffset: { x: 0, y: 0, z: -11.5 },
 };
 
 export const MATCHMAKING = {
