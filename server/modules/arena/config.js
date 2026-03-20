@@ -1,7 +1,7 @@
 export const ARENA_ROOM_PREFIX = 'arena:';
 
 export const ARENA_WORLD = {
-  hubCenter: { x: -172, y: 1.25, z: 164 },
+  hubCenter: { x: -48, y: 1.25, z: 86 },
   islandRadius: 18,
   innerCombatRadius: 13.5,
   spawnRingRadius: 7.5,
