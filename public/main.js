@@ -115,7 +115,6 @@ import {
   addFishingIsland,
   addMarketIsland,
   addFurnitureIsland,
-  addArenaIsland,
   addLeaderboardIsland,
   addBoat,
   addDecorBoat
@@ -2294,7 +2293,6 @@ function addLandmarks() {
   addDock(MARKET_DOCK_POS, MARKET_DOCK_YAW, { segments: 11, plankLength: 2.8, plankWidth: 2.2, spacing: 1.05 });
   addFurnitureIsland();
   addDock(FURNITURE_DOCK_POS, FURNITURE_DOCK_YAW, { segments: 11, plankLength: 2.8, plankWidth: 2.2, spacing: 1.05 });
-  addArenaIsland();
   addLeaderboardIsland();
   addDock(LEADERBOARD_DOCK_POS, LEADERBOARD_DOCK_YAW, { segments: 11, plankLength: 2.8, plankWidth: 2.2, spacing: 1.05 });
    addLighthouseInterior();
