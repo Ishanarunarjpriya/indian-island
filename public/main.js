@@ -3792,6 +3792,24 @@ function setOreStatus(text, color = '#cbd5e1') {
   oreStatusEl.style.color = color;
 }
 
+function currentMineQuestStatus() {
+  const quest = questState.quest;
+  if (!quest || quest.type !== 'mine') return null;
+  if (quest.status !== 'active' && quest.status !== 'ready') return null;
+  const progress = Math.max(0, Math.floor(Number(quest.progress) || 0));
+  const targetCount = Math.max(1, Math.floor(Number(quest.targetCount) || 1));
+  if (quest.status === 'ready') {
+    return {
+      text: `${quest.title}: ${progress}/${targetCount}. Return to the quest giver.`,
+      color: '#86efac'
+    };
+  }
+  return {
+    text: `${quest.title}: ${progress}/${targetCount}`,
+    color: '#93c5fd'
+  };
+}
+
 function setFurnitureTraderStatus(text, color = '#cbd5e1') {
   if (!furnitureTraderStatusEl) return;
   furnitureTraderStatusEl.textContent = text || '';
@@ -4409,6 +4427,10 @@ function attemptMiningAccuracyHit(local) {
     }
     const questMsg = resp.questProgressed ? ' Quest progress updated.' : '';
     updateQuestPanel(`Mined ${amount} ${node.resource}.${questMsg}`);
+    const mineQuestStatus = currentMineQuestStatus();
+    if (mineQuestStatus) {
+      setOreStatus(mineQuestStatus.text, mineQuestStatus.color);
+    }
   });
   return true;
 }
@@ -4576,6 +4598,10 @@ function applyProgressState(progress) {
   }
   if (oreModalOpen) {
     renderOreModal();
+    const mineQuestStatus = currentMineQuestStatus();
+    if (mineQuestStatus) {
+      setOreStatus(mineQuestStatus.text, mineQuestStatus.color);
+    }
   }
   if (furnitureTraderModalOpen) {
     renderFurnitureTraderModal();
@@ -5830,7 +5856,12 @@ function oreTraderInteract(local) {
   if (distance2D(local, MINE_ORE_TRADER_POS) > 3.2) return false;
   setOreModalOpen(true);
   renderOreModal();
-  setOreStatus('Sell mined ores for coins.', '#cbd5e1');
+  const mineQuestStatus = currentMineQuestStatus();
+  if (mineQuestStatus) {
+    setOreStatus(mineQuestStatus.text, mineQuestStatus.color);
+  } else {
+    setOreStatus('Sell mined ores for coins.', '#cbd5e1');
+  }
   return true;
 }
 
