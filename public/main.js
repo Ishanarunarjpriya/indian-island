@@ -2288,41 +2288,6 @@ socket.on('home:roomUpdate', (payload) => {
   }
 });
 
-function addMineEntryIsland() {
-  const base = new THREE.Mesh(
-    new THREE.CylinderGeometry(MINE_ENTRY_ISLAND_RADIUS + 1.8, MINE_ENTRY_ISLAND_RADIUS + 3.4, 3.2, 34),
-    new THREE.MeshStandardMaterial({ color: 0x8b6a4c, roughness: 0.95 })
-  );
-  base.position.set(MINE_ENTRY_ISLAND_POS.x, -0.35, MINE_ENTRY_ISLAND_POS.z);
-  base.receiveShadow = true;
-  scene.add(base);
-
-  const top = new THREE.Mesh(
-    new THREE.CylinderGeometry(MINE_ENTRY_ISLAND_RADIUS, MINE_ENTRY_ISLAND_RADIUS + 1.2, 1.2, 34),
-    new THREE.MeshStandardMaterial({ color: 0x7ea35f, roughness: 0.9 })
-  );
-  top.position.set(MINE_ENTRY_ISLAND_POS.x, 1.35, MINE_ENTRY_ISLAND_POS.z);
-  top.receiveShadow = true;
-  scene.add(top);
-
-  const rockMat = new THREE.MeshStandardMaterial({ color: 0x5f6470, roughness: 0.9 });
-  const edgeRocks = 14;
-  for (let i = 0; i < edgeRocks; i += 1) {
-    const angle = (i / edgeRocks) * Math.PI * 2;
-    const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(1.1 + Math.random() * 0.5, 0), rockMat);
-    const radius = MINE_ENTRY_ISLAND_RADIUS - 0.9 + Math.random() * 1.7;
-    rock.position.set(
-      MINE_ENTRY_ISLAND_POS.x + Math.cos(angle) * radius,
-      1.8 + Math.random() * 1.0,
-      MINE_ENTRY_ISLAND_POS.z + Math.sin(angle) * radius
-    );
-    rock.scale.set(1 + Math.random() * 0.45, 1 + Math.random() * 0.5, 1 + Math.random() * 0.45);
-    rock.castShadow = true;
-    rock.receiveShadow = true;
-    scene.add(rock);
-  }
-}
-
 function addFishingIsland() {
   const base = new THREE.Mesh(
     new THREE.CylinderGeometry(FISHING_ISLAND_RADIUS + 1.8, FISHING_ISLAND_RADIUS + 3.4, 3.2, 34),
