@@ -7993,7 +7993,7 @@ let stamina = STAMINA_BASE_MAX;
 let slideUntil = 0;
 let slideDirX = 0;
 let slideDirZ = 0;
-const DROWN_MAX_TIME = 45;
+const DROWN_MAX_TIME = 10;
 let drownTimer = 0;
 
 const CAMERA_PITCH_MIN = 0.2;
