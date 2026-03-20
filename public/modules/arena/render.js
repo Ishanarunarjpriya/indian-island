@@ -70,35 +70,181 @@ export function createArenaRenderer({ scene, world = buildWorldConfig() }) {
   lobbyRoot.name = 'arena-lobby';
   root.add(lobbyRoot);
 
-  const island = new THREE.Mesh(
-    new THREE.CylinderGeometry(world.islandRadius, world.islandRadius + 2.8, 2.8, 48),
-    new THREE.MeshLambertMaterial({ color: 0x7eaa5d }),
+  const islandRock = new THREE.Mesh(
+    new THREE.CylinderGeometry(world.islandRadius + 2.8, world.islandRadius + 4.5, 3.6, 48),
+    new THREE.MeshLambertMaterial({ color: 0x5a4632 }),
   );
-  island.position.set(lobbyCenter.x, lobbyCenter.y - 1.4, lobbyCenter.z);
+  islandRock.position.set(lobbyCenter.x, lobbyCenter.y - 2.2, lobbyCenter.z);
+  lobbyRoot.add(islandRock);
+
+  const island = new THREE.Mesh(
+    new THREE.CylinderGeometry(world.islandRadius, world.islandRadius + 2.8, 2.4, 48),
+    new THREE.MeshLambertMaterial({ color: 0x6d9a61 }),
+  );
+  island.position.set(lobbyCenter.x, lobbyCenter.y - 1.2, lobbyCenter.z);
   lobbyRoot.add(island);
 
+  const islandTop = new THREE.Mesh(
+    new THREE.CylinderGeometry(world.islandRadius - 0.3, world.islandRadius, 0.5, 48),
+    new THREE.MeshLambertMaterial({ color: 0x7eaa5d }),
+  );
+  islandTop.position.set(lobbyCenter.x, lobbyCenter.y + 0.05, lobbyCenter.z);
+  lobbyRoot.add(islandTop);
+
   const shore = new THREE.Mesh(
-    new THREE.TorusGeometry(world.islandRadius + 0.8, 1.2, 8, 48),
+    new THREE.TorusGeometry(world.islandRadius + 1.2, 1.4, 8, 48),
     new THREE.MeshLambertMaterial({ color: 0x6f5438 }),
   );
   shore.rotation.x = Math.PI / 2;
-  shore.position.set(lobbyCenter.x, lobbyCenter.y - 0.2, lobbyCenter.z);
+  shore.position.set(lobbyCenter.x, lobbyCenter.y - 0.3, lobbyCenter.z);
   lobbyRoot.add(shore);
+
+  const shoreFoam = new THREE.Mesh(
+    new THREE.TorusGeometry(world.islandRadius + 2.4, 0.6, 6, 48),
+    new THREE.MeshBasicMaterial({ color: 0xc8e8f0, transparent: true, opacity: 0.3 }),
+  );
+  shoreFoam.rotation.x = Math.PI / 2;
+  shoreFoam.position.set(lobbyCenter.x, lobbyCenter.y + 0.1, lobbyCenter.z);
+  lobbyRoot.add(shoreFoam);
 
   const lobbyRing = new THREE.Mesh(
     new THREE.RingGeometry(world.islandRadius - 6.5, world.islandRadius - 1.3, 48),
     new THREE.MeshBasicMaterial({ color: 0xff8a5b, transparent: true, opacity: 0.16, side: THREE.DoubleSide }),
   );
   lobbyRing.rotation.x = -Math.PI / 2;
-  lobbyRing.position.set(lobbyCenter.x, lobbyCenter.y + 0.04, lobbyCenter.z);
+  lobbyRing.position.set(lobbyCenter.x, lobbyCenter.y + 0.12, lobbyCenter.z);
   lobbyRoot.add(lobbyRing);
 
+  const innerRing = new THREE.Mesh(
+    new THREE.RingGeometry(3, 7, 48),
+    new THREE.MeshBasicMaterial({ color: 0xff6b3a, transparent: true, opacity: 0.08, side: THREE.DoubleSide }),
+  );
+  innerRing.rotation.x = -Math.PI / 2;
+  innerRing.position.set(lobbyCenter.x, lobbyCenter.y + 0.13, lobbyCenter.z);
+  lobbyRoot.add(innerRing);
+
+  for (let i = 0; i < 8; i++) {
+    const angle = (i / 8) * Math.PI * 2;
+    const rune = new THREE.Mesh(
+      new THREE.RingGeometry(0.3, 0.55, 6),
+      new THREE.MeshBasicMaterial({ color: 0xffaa55, transparent: true, opacity: 0.2, side: THREE.DoubleSide }),
+    );
+    rune.rotation.x = -Math.PI / 2;
+    rune.rotation.z = angle;
+    rune.position.set(
+      lobbyCenter.x + Math.cos(angle) * (world.islandRadius - 3.8),
+      lobbyCenter.y + 0.14,
+      lobbyCenter.z + Math.sin(angle) * (world.islandRadius - 3.8)
+    );
+    lobbyRoot.add(rune);
+  }
+
+  for (let i = 0; i < 12; i++) {
+    const angle = (i / 12) * Math.PI * 2 + 0.13;
+    const dist = world.islandRadius - 1.2 + Math.random() * 1.8;
+    const grass = new THREE.Mesh(
+      new THREE.ConeGeometry(0.18 + Math.random() * 0.12, 0.5 + Math.random() * 0.3, 4),
+      new THREE.MeshLambertMaterial({ color: 0x4a8a35 + Math.floor(Math.random() * 0x152015) }),
+    );
+    grass.position.set(
+      lobbyCenter.x + Math.cos(angle) * dist,
+      lobbyCenter.y + 0.3,
+      lobbyCenter.z + Math.sin(angle) * dist
+    );
+    lobbyRoot.add(grass);
+  }
+
+  for (let i = 0; i < 6; i++) {
+    const angle = (i / 6) * Math.PI * 2 + 0.5;
+    const dist = world.islandRadius - 2;
+    const bush = new THREE.Mesh(
+      new THREE.SphereGeometry(0.4 + Math.random() * 0.25, 8, 6),
+      new THREE.MeshLambertMaterial({ color: 0x3a7530 }),
+    );
+    bush.position.set(
+      lobbyCenter.x + Math.cos(angle) * dist,
+      lobbyCenter.y + 0.3,
+      lobbyCenter.z + Math.sin(angle) * dist
+    );
+    bush.scale.y = 0.65;
+    lobbyRoot.add(bush);
+  }
+
+  for (let i = 0; i < 8; i++) {
+    const angle = (i / 8) * Math.PI * 2 + 0.25;
+    const dist = world.islandRadius + 0.6;
+    const rock = new THREE.Mesh(
+      new THREE.DodecahedronGeometry(0.3 + Math.random() * 0.4),
+      new THREE.MeshLambertMaterial({ color: 0x6e6255 }),
+    );
+    rock.position.set(
+      lobbyCenter.x + Math.cos(angle) * dist,
+      lobbyCenter.y - 0.1,
+      lobbyCenter.z + Math.sin(angle) * dist
+    );
+    lobbyRoot.add(rock);
+  }
+
+  const stoneMat = new THREE.MeshLambertMaterial({ color: 0x8a7e6e });
+  for (let i = 0; i < 16; i++) {
+    const angle = (i / 16) * Math.PI * 2;
+    const gap = (i % 4 === 1);
+    if (gap) continue;
+    const wallBlock = new THREE.Mesh(
+      new THREE.BoxGeometry(1.4, 0.7, 0.55),
+      stoneMat,
+    );
+    wallBlock.position.set(
+      lobbyCenter.x + Math.cos(angle) * (world.islandRadius - 0.6),
+      lobbyCenter.y + 0.4,
+      lobbyCenter.z + Math.sin(angle) * (world.islandRadius - 0.6)
+    );
+    wallBlock.lookAt(lobbyCenter.x, lobbyCenter.y + 0.4, lobbyCenter.z);
+    lobbyRoot.add(wallBlock);
+  }
+
+  for (let i = 0; i < 6; i++) {
+    const angle = (i / 6) * Math.PI * 2 + 0.3;
+    const dist = world.islandRadius - 0.6;
+    const torchPost = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.06, 0.08, 1.2, 6),
+      new THREE.MeshLambertMaterial({ color: 0x4a3520 }),
+    );
+    torchPost.position.set(
+      lobbyCenter.x + Math.cos(angle) * dist,
+      lobbyCenter.y + 0.65,
+      lobbyCenter.z + Math.sin(angle) * dist
+    );
+    lobbyRoot.add(torchPost);
+    const flame = new THREE.Mesh(
+      new THREE.SphereGeometry(0.14, 8, 6),
+      new THREE.MeshBasicMaterial({ color: 0xff8833 }),
+    );
+    flame.position.set(
+      lobbyCenter.x + Math.cos(angle) * dist,
+      lobbyCenter.y + 1.35,
+      lobbyCenter.z + Math.sin(angle) * dist
+    );
+    lobbyRoot.add(flame);
+    const torchLight = new THREE.PointLight(0xff9944, 0.5, 8, 2);
+    torchLight.position.copy(flame.position);
+    lobbyRoot.add(torchLight);
+  }
+
   const teleporterPlaza = new THREE.Mesh(
-    new THREE.CylinderGeometry(6.8, 7.4, 0.36, 36),
+    new THREE.CylinderGeometry(7.8, 8.4, 0.5, 36),
     new THREE.MeshLambertMaterial({ color: 0x2b3240 }),
   );
   teleporterPlaza.position.set(lobbyCenter.x, lobbyCenter.y + 0.12, lobbyCenter.z + 5.2);
   lobbyRoot.add(teleporterPlaza);
+
+  const plazaRing = new THREE.Mesh(
+    new THREE.RingGeometry(7.0, 7.8, 36),
+    new THREE.MeshBasicMaterial({ color: 0xff6633, transparent: true, opacity: 0.25, side: THREE.DoubleSide }),
+  );
+  plazaRing.rotation.x = -Math.PI / 2;
+  plazaRing.position.set(lobbyCenter.x, lobbyCenter.y + 0.38, lobbyCenter.z + 5.2);
+  lobbyRoot.add(plazaRing);
 
   const teleporterTrim = new THREE.Mesh(
     new THREE.RingGeometry(4.2, 5.8, 48),
@@ -133,12 +279,46 @@ export function createArenaRenderer({ scene, world = buildWorldConfig() }) {
 
   [-2.2, 2.2].forEach((offsetX) => {
     const pillar = new THREE.Mesh(
-      new THREE.BoxGeometry(0.5, 3.4, 0.5),
-      new THREE.MeshLambertMaterial({ color: 0x4e3528 }),
+      new THREE.BoxGeometry(0.6, 3.8, 0.6),
+      new THREE.MeshLambertMaterial({ color: 0x3a2518 }),
     );
-    pillar.position.set(lobbyCenter.x + offsetX, lobbyCenter.y + 1.7, lobbyCenter.z + 5.2);
+    pillar.position.set(lobbyCenter.x + offsetX, lobbyCenter.y + 1.9, lobbyCenter.z + 5.2);
     lobbyRoot.add(pillar);
+    const cap = new THREE.Mesh(
+      new THREE.BoxGeometry(0.8, 0.2, 0.8),
+      new THREE.MeshLambertMaterial({ color: 0x5a4030 }),
+    );
+    cap.position.set(lobbyCenter.x + offsetX, lobbyCenter.y + 3.85, lobbyCenter.z + 5.2);
+    lobbyRoot.add(cap);
+    const orb = new THREE.Mesh(
+      new THREE.SphereGeometry(0.16, 10, 8),
+      new THREE.MeshBasicMaterial({ color: 0x6a7cff }),
+    );
+    orb.position.set(lobbyCenter.x + offsetX, lobbyCenter.y + 4.1, lobbyCenter.z + 5.2);
+    lobbyRoot.add(orb);
   });
+
+  const archTop = new THREE.Mesh(
+    new THREE.TorusGeometry(2.4, 0.18, 10, 24, Math.PI),
+    new THREE.MeshLambertMaterial({ color: 0x4e3528 }),
+  );
+  archTop.rotation.x = Math.PI / 2;
+  archTop.position.set(lobbyCenter.x, lobbyCenter.y + 3.9, lobbyCenter.z + 5.2);
+  lobbyRoot.add(archTop);
+
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2;
+    const rune = new THREE.Mesh(
+      new THREE.RingGeometry(0.25, 0.4, 5),
+      new THREE.MeshBasicMaterial({ color: 0x7788ff, transparent: true, opacity: 0.4, side: THREE.DoubleSide }),
+    );
+    rune.position.set(
+      lobbyCenter.x + Math.cos(a) * 2.8,
+      lobbyCenter.y + 2.5 + Math.sin(a * 2) * 0.8,
+      lobbyCenter.z + 5.2
+    );
+    lobbyRoot.add(rune);
+  }
 
   const teleporterSign = makeTextSprite(THREE, 'PVP TELEPORTER', {
     scaleX: 7.2,
@@ -161,20 +341,62 @@ export function createArenaRenderer({ scene, world = buildWorldConfig() }) {
     const offsetX = Number(slot?.offset?.x) || 0;
     const offsetZ = Number(slot?.offset?.z) || 0;
     const padLabel = `${slot.label || 'Queue'} (${Number(slot.capacity) || 1})`;
-    const queuePad = new THREE.Mesh(
-      new THREE.BoxGeometry(3.2, 0.08, 2.2),
-      new THREE.MeshBasicMaterial({ color: 0xf0bb58, transparent: true, opacity: 0.35 }),
+    const padBase = new THREE.Mesh(
+      new THREE.CylinderGeometry(2.2, 2.5, 0.35, 24),
+      new THREE.MeshLambertMaterial({ color: 0x3a3a42 }),
     );
-    queuePad.position.set(lobbyCenter.x + offsetX, lobbyCenter.y + 0.26, lobbyCenter.z + offsetZ);
+    padBase.position.set(lobbyCenter.x + offsetX, lobbyCenter.y + 0.1, lobbyCenter.z + offsetZ);
+    lobbyRoot.add(padBase);
+    const queuePad = new THREE.Mesh(
+      new THREE.CylinderGeometry(1.8, 1.8, 0.1, 24),
+      new THREE.MeshBasicMaterial({ color: 0xf0bb58, transparent: true, opacity: 0.3 }),
+    );
+    queuePad.position.set(lobbyCenter.x + offsetX, lobbyCenter.y + 0.3, lobbyCenter.z + offsetZ);
     lobbyRoot.add(queuePad);
+    const padGlow = new THREE.Mesh(
+      new THREE.RingGeometry(1.9, 2.2, 24),
+      new THREE.MeshBasicMaterial({ color: 0xff8844, transparent: true, opacity: 0.2, side: THREE.DoubleSide }),
+    );
+    padGlow.rotation.x = -Math.PI / 2;
+    padGlow.position.set(lobbyCenter.x + offsetX, lobbyCenter.y + 0.31, lobbyCenter.z + offsetZ);
+    lobbyRoot.add(padGlow);
     const queueLabel = makeTextSprite(THREE, padLabel, {
       scaleX: 2.8,
       scaleY: 0.9,
       background: 'rgba(15, 20, 32, 0.9)',
       color: '#ffe5b2',
     });
-    queueLabel.position.set(lobbyCenter.x + offsetX, lobbyCenter.y + 1.2, lobbyCenter.z + offsetZ);
+    queueLabel.position.set(lobbyCenter.x + offsetX, lobbyCenter.y + 1.8, lobbyCenter.z + offsetZ);
     lobbyRoot.add(queueLabel);
+    const padLight = new THREE.PointLight(0xffaa55, 0.3, 6, 2);
+    padLight.position.set(lobbyCenter.x + offsetX, lobbyCenter.y + 0.6, lobbyCenter.z + offsetZ);
+    lobbyRoot.add(padLight);
+  });
+
+  const pathMat = new THREE.MeshLambertMaterial({ color: 0x6b6358 });
+  for (let px = -8; px <= 8; px += 1.6) {
+    const step = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.06, 1.2), pathMat);
+    step.position.set(lobbyCenter.x + px * 0.55, lobbyCenter.y + 0.11, lobbyCenter.z + 2.5 + Math.abs(px) * 0.22);
+    lobbyRoot.add(step);
+  }
+  for (let pz = 3; pz <= 9; pz += 1.2) {
+    const step = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.06, 0.9), pathMat);
+    step.position.set(lobbyCenter.x, lobbyCenter.y + 0.11, lobbyCenter.z + pz);
+    lobbyRoot.add(step);
+  }
+
+  const bannerMat = new THREE.MeshLambertMaterial({ color: 0xcc3322 });
+  const poleMat = new THREE.MeshLambertMaterial({ color: 0x4a3520 });
+  [-12, -4, 4, 12].forEach((bx) => {
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 4.5, 6), poleMat);
+    pole.position.set(lobbyCenter.x + bx, lobbyCenter.y + 2.2, lobbyCenter.z - 2);
+    lobbyRoot.add(pole);
+    const banner = new THREE.Mesh(new THREE.BoxGeometry(1.4, 2.2, 0.06), bannerMat);
+    banner.position.set(lobbyCenter.x + bx, lobbyCenter.y + 3.0, lobbyCenter.z - 2);
+    lobbyRoot.add(banner);
+    const bannerStripe = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.15, 0.08), new THREE.MeshLambertMaterial({ color: 0xffaa33 }));
+    bannerStripe.position.set(lobbyCenter.x + bx, lobbyCenter.y + 3.2, lobbyCenter.z - 2);
+    lobbyRoot.add(bannerStripe);
   });
 
   const gateFrame = new THREE.Mesh(
@@ -204,12 +426,20 @@ export function createArenaRenderer({ scene, world = buildWorldConfig() }) {
 
   const stall = new THREE.Group();
   const stallBase = world.stallOffset;
-  const roof = new THREE.Mesh(
-    new THREE.BoxGeometry(8.4, 0.36, 5.2),
+  const roofLeft = new THREE.Mesh(
+    new THREE.BoxGeometry(4.4, 0.3, 5.6),
     new THREE.MeshLambertMaterial({ color: 0x2e241f }),
   );
-  roof.position.set(lobbyCenter.x + stallBase.x, lobbyCenter.y + 3.5 + stallBase.y, lobbyCenter.z + stallBase.z);
-  stall.add(roof);
+  roofLeft.position.set(lobbyCenter.x + stallBase.x - 2.0, lobbyCenter.y + 4.0 + stallBase.y, lobbyCenter.z + stallBase.z);
+  roofLeft.rotation.z = 0.22;
+  stall.add(roofLeft);
+  const roofRight = new THREE.Mesh(
+    new THREE.BoxGeometry(4.4, 0.3, 5.6),
+    new THREE.MeshLambertMaterial({ color: 0x352a22 }),
+  );
+  roofRight.position.set(lobbyCenter.x + stallBase.x + 2.0, lobbyCenter.y + 4.0 + stallBase.y, lobbyCenter.z + stallBase.z);
+  roofRight.rotation.z = -0.22;
+  stall.add(roofRight);
   const beamMaterial = new THREE.MeshLambertMaterial({ color: 0x503426 });
   [-3.6, 3.6].forEach((x) => {
     [-2.1, 2.1].forEach((z) => {
@@ -219,11 +449,17 @@ export function createArenaRenderer({ scene, world = buildWorldConfig() }) {
     });
   });
   const awning = new THREE.Mesh(
-    new THREE.BoxGeometry(8.6, 0.18, 0.6),
+    new THREE.BoxGeometry(9.0, 0.15, 0.8),
     new THREE.MeshLambertMaterial({ color: 0xf2efe8 }),
   );
-  awning.position.set(lobbyCenter.x + stallBase.x, lobbyCenter.y + 3.2 + stallBase.y, lobbyCenter.z + stallBase.z + 2.3);
+  awning.position.set(lobbyCenter.x + stallBase.x, lobbyCenter.y + 3.2 + stallBase.y, lobbyCenter.z + stallBase.z + 2.5);
   stall.add(awning);
+  const stallFloor = new THREE.Mesh(
+    new THREE.BoxGeometry(9.5, 0.08, 6.5),
+    new THREE.MeshLambertMaterial({ color: 0x5a4e40 }),
+  );
+  stallFloor.position.set(lobbyCenter.x + stallBase.x, lobbyCenter.y + 0.01 + stallBase.y, lobbyCenter.z + stallBase.z);
+  stall.add(stallFloor);
   const counter = new THREE.Mesh(
     new THREE.BoxGeometry(8.2, 0.34, 1),
     new THREE.MeshLambertMaterial({ color: 0x6a4830 }),
@@ -281,6 +517,17 @@ export function createArenaRenderer({ scene, world = buildWorldConfig() }) {
   });
   priceBoard.position.set(lobbyCenter.x + stallBase.x, lobbyCenter.y + 0.95 + stallBase.y, lobbyCenter.z + stallBase.z + 3.15);
   stall.add(priceBoard);
+  [-3.2, 3.2].forEach((lx) => {
+    const lantern = new THREE.Mesh(
+      new THREE.BoxGeometry(0.35, 0.45, 0.35),
+      new THREE.MeshLambertMaterial({ color: 0x8b6914 }),
+    );
+    lantern.position.set(lobbyCenter.x + stallBase.x + lx, lobbyCenter.y + 3.0 + stallBase.y, lobbyCenter.z + stallBase.z + 2.0);
+    stall.add(lantern);
+    const lanternGlow = new THREE.PointLight(0xffaa44, 0.4, 6, 2);
+    lanternGlow.position.copy(lantern.position);
+    stall.add(lanternGlow);
+  });
   lobbyRoot.add(stall);
 
   const vendor = new THREE.Group();
@@ -306,22 +553,22 @@ export function createArenaRenderer({ scene, world = buildWorldConfig() }) {
   root.add(combatRoot);
 
   const combatCliff = new THREE.Mesh(
-    new THREE.CylinderGeometry(24.6, 27.2, 3.8, 56, 1, true),
-    new THREE.MeshLambertMaterial({ color: 0x594637 }),
+    new THREE.CylinderGeometry(26.5, 29.5, 4.2, 56),
+    new THREE.MeshLambertMaterial({ color: 0x4a3828 }),
   );
-  combatCliff.position.set(combatCenter.x, combatCenter.y - 1.2, combatCenter.z);
+  combatCliff.position.set(combatCenter.x, combatCenter.y - 1.6, combatCenter.z);
   combatRoot.add(combatCliff);
 
   const combatShelf = new THREE.Mesh(
-    new THREE.CylinderGeometry(23.1, 24.4, 0.9, 56, 1, true),
-    new THREE.MeshLambertMaterial({ color: 0x726251 }),
+    new THREE.CylinderGeometry(24.0, 25.5, 1.2, 56),
+    new THREE.MeshLambertMaterial({ color: 0x5e4d3d }),
   );
-  combatShelf.position.set(combatCenter.x, combatCenter.y - 0.15, combatCenter.z);
+  combatShelf.position.set(combatCenter.x, combatCenter.y - 0.2, combatCenter.z);
   combatRoot.add(combatShelf);
 
   const combatDeck = new THREE.Mesh(
-    new THREE.CircleGeometry(22.2, 56),
-    new THREE.MeshLambertMaterial({ color: 0x7a816f }),
+    new THREE.CircleGeometry(23.0, 56),
+    new THREE.MeshLambertMaterial({ color: 0x6e7562 }),
   );
   combatDeck.rotation.x = -Math.PI / 2;
   combatDeck.position.set(combatCenter.x, combatCenter.y + 0.02, combatCenter.z);
@@ -351,55 +598,225 @@ export function createArenaRenderer({ scene, world = buildWorldConfig() }) {
   arenaRing.position.set(combatCenter.x, combatCenter.y + 0.05, combatCenter.z);
   combatRoot.add(arenaRing);
 
-  const outerWall = new THREE.Mesh(
-    new THREE.CylinderGeometry(22.7, 23.1, 2.4, 56, 1, true),
-    new THREE.MeshLambertMaterial({ color: 0x48505c }),
+  const innerGlow = new THREE.Mesh(
+    new THREE.RingGeometry(3.5, 5.5, 48),
+    new THREE.MeshBasicMaterial({ color: 0x4488ff, transparent: true, opacity: 0.12, side: THREE.DoubleSide }),
   );
-  outerWall.position.set(combatCenter.x, combatCenter.y + 1.15, combatCenter.z);
+  innerGlow.rotation.x = -Math.PI / 2;
+  innerGlow.position.set(combatCenter.x, combatCenter.y + 0.06, combatCenter.z);
+  combatRoot.add(innerGlow);
+
+  const outerRing = new THREE.Mesh(
+    new THREE.RingGeometry(20.5, 22.5, 56),
+    new THREE.MeshBasicMaterial({ color: 0xff5533, transparent: true, opacity: 0.1, side: THREE.DoubleSide }),
+  );
+  outerRing.rotation.x = -Math.PI / 2;
+  outerRing.position.set(combatCenter.x, combatCenter.y + 0.055, combatCenter.z);
+  combatRoot.add(outerRing);
+
+  for (let i = 0; i < 12; i++) {
+    const angle = (i / 12) * Math.PI * 2;
+    const rune = new THREE.Mesh(
+      new THREE.RingGeometry(0.5, 0.8, 5 + (i % 3)),
+      new THREE.MeshBasicMaterial({ color: 0xff6644, transparent: true, opacity: 0.15, side: THREE.DoubleSide }),
+    );
+    rune.rotation.x = -Math.PI / 2;
+    rune.rotation.z = angle;
+    rune.position.set(
+      combatCenter.x + Math.cos(angle) * 15.5,
+      combatCenter.y + 0.06,
+      combatCenter.z + Math.sin(angle) * 15.5
+    );
+    combatRoot.add(rune);
+  }
+
+  for (let i = 0; i < 8; i++) {
+    const angle = (i / 8) * Math.PI * 2 + 0.4;
+    const line = new THREE.Mesh(
+      new THREE.BoxGeometry(12, 0.02, 0.12),
+      new THREE.MeshBasicMaterial({ color: 0xff8855, transparent: true, opacity: 0.06 }),
+    );
+    line.rotation.y = angle;
+    line.position.set(combatCenter.x, combatCenter.y + 0.055, combatCenter.z);
+    combatRoot.add(line);
+  }
+
+  const outerWall = new THREE.Mesh(
+    new THREE.CylinderGeometry(23.2, 23.6, 3.0, 56),
+    new THREE.MeshLambertMaterial({ color: 0x3d4552 }),
+  );
+  outerWall.position.set(combatCenter.x, combatCenter.y + 1.4, combatCenter.z);
   combatRoot.add(outerWall);
 
-  for (let i = 0; i < 10; i += 1) {
-    const angle = (i / 10) * Math.PI * 2 + 0.17;
+  for (let i = 0; i < 28; i++) {
+    const angle = (i / 28) * Math.PI * 2;
+    if (i % 7 === 0) continue;
+    const brick = new THREE.Mesh(
+      new THREE.BoxGeometry(0.4, 0.25, 0.2),
+      new THREE.MeshLambertMaterial({ color: i % 2 === 0 ? 0x4a5562 : 0x3f4a55 }),
+    );
+    brick.position.set(
+      combatCenter.x + Math.cos(angle) * 23.4,
+      combatCenter.y + 0.5 + (i % 3) * 0.5,
+      combatCenter.z + Math.sin(angle) * 23.4
+    );
+    brick.lookAt(combatCenter.x, brick.position.y, combatCenter.z);
+    combatRoot.add(brick);
+  }
+
+  for (let i = 0; i < 8; i++) {
+    const angle = (i / 8) * Math.PI * 2;
+    const railPost = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.08, 0.1, 1.8, 6),
+      new THREE.MeshLambertMaterial({ color: 0x5a4a38 }),
+    );
+    railPost.position.set(
+      combatCenter.x + Math.cos(angle) * 21.5,
+      combatCenter.y + 0.9,
+      combatCenter.z + Math.sin(angle) * 21.5
+    );
+    combatRoot.add(railPost);
+    const railCap = new THREE.Mesh(
+      new THREE.SphereGeometry(0.14, 8, 6),
+      new THREE.MeshLambertMaterial({ color: 0x7a6a50 }),
+    );
+    railCap.position.set(
+      combatCenter.x + Math.cos(angle) * 21.5,
+      combatCenter.y + 1.85,
+      combatCenter.z + Math.sin(angle) * 21.5
+    );
+    combatRoot.add(railCap);
+  }
+
+  for (let i = 0; i < 14; i += 1) {
+    const angle = (i / 14) * Math.PI * 2 + 0.17;
+    const size = 0.6 + (i % 4) * 0.35;
     const rock = new THREE.Mesh(
-      new THREE.DodecahedronGeometry(0.85 + (i % 3) * 0.2),
-      new THREE.MeshLambertMaterial({ color: 0x4e5561 }),
+      i % 3 === 0
+        ? new THREE.DodecahedronGeometry(size)
+        : i % 3 === 1
+          ? new THREE.OctahedronGeometry(size * 0.9)
+          : new THREE.BoxGeometry(size, size * 1.2, size),
+      new THREE.MeshLambertMaterial({ color: 0x3e4650 + (i % 3) * 0x0a0a0a }),
     );
     rock.position.set(
-      combatCenter.x + Math.cos(angle) * 20.3,
-      combatCenter.y + 0.75,
-      combatCenter.z + Math.sin(angle) * 20.3
+      combatCenter.x + Math.cos(angle) * 21.0,
+      combatCenter.y + 0.5,
+      combatCenter.z + Math.sin(angle) * 21.0
     );
+    rock.rotation.y = angle + 0.5;
     combatRoot.add(rock);
+    if (i % 2 === 0) {
+      const smallRock = new THREE.Mesh(
+        new THREE.DodecahedronGeometry(size * 0.4),
+        new THREE.MeshLambertMaterial({ color: 0x4a525c }),
+      );
+      smallRock.position.set(
+        combatCenter.x + Math.cos(angle + 0.15) * 21.8,
+        combatCenter.y + 0.3,
+        combatCenter.z + Math.sin(angle + 0.15) * 21.8
+      );
+      combatRoot.add(smallRock);
+    }
   }
 
   const centerPad = new THREE.Mesh(
-    new THREE.CylinderGeometry(4.8, 5.2, 0.3, 28),
-    new THREE.MeshLambertMaterial({ color: 0x39404d }),
+    new THREE.CylinderGeometry(5.2, 5.8, 0.4, 28),
+    new THREE.MeshLambertMaterial({ color: 0x2e343d }),
   );
   centerPad.position.set(combatCenter.x, combatCenter.y + 0.08, combatCenter.z);
   combatRoot.add(centerPad);
 
-  const centerCore = new THREE.Mesh(
-    new THREE.OctahedronGeometry(1.3),
-    new THREE.MeshLambertMaterial({ color: 0x73d3ff, emissive: 0x2b7fff, emissiveIntensity: 0.55 }),
+  const centerPadTrim = new THREE.Mesh(
+    new THREE.RingGeometry(4.8, 5.5, 28),
+    new THREE.MeshBasicMaterial({ color: 0x4488ff, transparent: true, opacity: 0.2, side: THREE.DoubleSide }),
   );
-  centerCore.position.set(combatCenter.x, combatCenter.y + 2.4, combatCenter.z);
+  centerPadTrim.rotation.x = -Math.PI / 2;
+  centerPadTrim.position.set(combatCenter.x, combatCenter.y + 0.3, combatCenter.z);
+  combatRoot.add(centerPadTrim);
+
+  const centerCore = new THREE.Mesh(
+    new THREE.OctahedronGeometry(1.5),
+    new THREE.MeshLambertMaterial({ color: 0x73d3ff, emissive: 0x2b7fff, emissiveIntensity: 0.7 }),
+  );
+  centerCore.position.set(combatCenter.x, combatCenter.y + 2.6, combatCenter.z);
   combatRoot.add(centerCore);
+
+  const coreRing1 = new THREE.Mesh(
+    new THREE.TorusGeometry(2.2, 0.08, 8, 32),
+    new THREE.MeshBasicMaterial({ color: 0x55aaff, transparent: true, opacity: 0.5 }),
+  );
+  coreRing1.position.set(combatCenter.x, combatCenter.y + 2.6, combatCenter.z);
+  combatRoot.add(coreRing1);
+  const coreRing2 = new THREE.Mesh(
+    new THREE.TorusGeometry(1.8, 0.06, 8, 32),
+    new THREE.MeshBasicMaterial({ color: 0x77ccff, transparent: true, opacity: 0.35 }),
+  );
+  coreRing2.position.set(combatCenter.x, combatCenter.y + 2.6, combatCenter.z);
+  coreRing2.rotation.x = Math.PI * 0.35;
+  combatRoot.add(coreRing2);
+
+  const coreGlow = new THREE.PointLight(0x4499ff, 1.2, 12, 2);
+  coreGlow.position.set(combatCenter.x, combatCenter.y + 3.5, combatCenter.z);
+  combatRoot.add(coreGlow);
 
   for (let i = 0; i < 4; i += 1) {
     const angle = (i / 4) * Math.PI * 2 + Math.PI * 0.25;
+    const px = combatCenter.x + Math.cos(angle) * 17.4;
+    const pz = combatCenter.z + Math.sin(angle) * 17.4;
     const pillar = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.5, 0.8, 6.4, 10),
-      new THREE.MeshLambertMaterial({ color: 0x474f5c }),
+      new THREE.CylinderGeometry(0.45, 0.75, 7.0, 10),
+      new THREE.MeshLambertMaterial({ color: 0x3a4250 }),
     );
-    pillar.position.set(
-      combatCenter.x + Math.cos(angle) * 17.4,
-      combatCenter.y + 2.8,
-      combatCenter.z + Math.sin(angle) * 17.4
-    );
+    pillar.position.set(px, combatCenter.y + 3.0, pz);
     combatRoot.add(pillar);
-    const flame = new THREE.PointLight(0xffb15a, 0.9, 13, 2);
-    flame.position.set(pillar.position.x, combatCenter.y + 5.9, pillar.position.z);
+    const pillarCap = new THREE.Mesh(
+      new THREE.BoxGeometry(1.1, 0.25, 1.1),
+      new THREE.MeshLambertMaterial({ color: 0x4e5766 }),
+    );
+    pillarCap.position.set(px, combatCenter.y + 6.55, pz);
+    combatRoot.add(pillarCap);
+    const pillarBase = new THREE.Mesh(
+      new THREE.BoxGeometry(1.2, 0.3, 1.2),
+      new THREE.MeshLambertMaterial({ color: 0x4e5766 }),
+    );
+    pillarBase.position.set(px, combatCenter.y - 0.3, pz);
+    combatRoot.add(pillarBase);
+
+    const banner = new THREE.Mesh(
+      new THREE.BoxGeometry(0.8, 2.0, 0.05),
+      new THREE.MeshLambertMaterial({ color: i % 2 === 0 ? 0xcc2211 : 0x2244aa }),
+    );
+    banner.position.set(
+      px + Math.cos(angle + Math.PI / 2) * 0.55,
+      combatCenter.y + 5.0,
+      pz + Math.sin(angle + Math.PI / 2) * 0.55
+    );
+    banner.rotation.y = angle;
+    combatRoot.add(banner);
+    const bannerTrim = new THREE.Mesh(
+      new THREE.BoxGeometry(0.8, 0.12, 0.07),
+      new THREE.MeshLambertMaterial({ color: 0xffaa33 }),
+    );
+    bannerTrim.position.copy(banner.position);
+    bannerTrim.position.y += 0.8;
+    bannerTrim.rotation.y = angle;
+    combatRoot.add(bannerTrim);
+
+    const flameBowl = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.35, 0.25, 0.3, 8),
+      new THREE.MeshLambertMaterial({ color: 0x3a3a3a }),
+    );
+    flameBowl.position.set(px, combatCenter.y + 6.8, pz);
+    combatRoot.add(flameBowl);
+    const flameBall = new THREE.Mesh(
+      new THREE.SphereGeometry(0.25, 8, 6),
+      new THREE.MeshBasicMaterial({ color: 0xff7722 }),
+    );
+    flameBall.position.set(px, combatCenter.y + 7.1, pz);
+    combatRoot.add(flameBall);
+    const flame = new THREE.PointLight(0xff9944, 1.1, 14, 2);
+    flame.position.set(px, combatCenter.y + 7.2, pz);
     combatRoot.add(flame);
   }
 
