@@ -573,7 +573,7 @@ questTrackerEl.innerHTML = `
   <div id="quest-progress" style="font-size:11px;color:#f8fafc;">Progress: 0/0</div>
   <div id="quest-status-msg" style="min-height:14px;font-size:11px;color:#cbd5e1;"></div>
 `;
-document.getElementById('hud')?.appendChild(questTrackerEl);
+document.body.appendChild(questTrackerEl);
 const questTitleEl = document.getElementById('quest-title');
 const questProgressEl = document.getElementById('quest-progress');
 const questStatusMsgEl = document.getElementById('quest-status-msg');
@@ -4615,7 +4615,7 @@ function applyProgressState(progress) {
 
 function updateQuestPanel(message = '') {
   const quest = questState.quest;
-  const showTracker = Boolean(quest && (quest.status === 'active' || quest.status === 'ready'));
+  const showTracker = Boolean(quest);
   if (questTrackerEl) {
     questTrackerEl.style.display = showTracker ? 'grid' : 'none';
   }
