@@ -44,9 +44,6 @@ function ensureStyles() {
     .arena-item-meta { font-size: 12px; opacity: 0.8; }
     .arena-item-actions { display: flex; gap: 8px; }
     .arena-pill { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 5px 10px; font-size: 12px; font-weight: 800; background: rgba(255,255,255,0.08); }
-    .arena-field { display: grid; gap: 6px; margin-top: 14px; }
-    .arena-field label { font-size: 12px; font-weight: 800; letter-spacing: 0.06em; opacity: 0.8; text-transform: uppercase; }
-    .arena-select { width: 100%; border: 1px solid rgba(255,255,255,0.12); border-radius: 12px; padding: 12px 14px; background: rgba(11, 18, 31, 0.85); color: #eff6ff; font-weight: 700; }
     #arena-hud { position: fixed; top: 92px; left: 50%; transform: translateX(-50%); width: min(760px, calc(100vw - 40px)); display: grid; gap: 12px; }
     #arena-match-hud { display: none; padding: 16px 18px; }
     .arena-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
@@ -85,34 +82,26 @@ export function createArenaUI() {
   modal.innerHTML = `
     <div id="arena-modal-header">
       <div>
-        <div style="font-size:30px;font-weight:900;">PvP Teleporter</div>
-        <div id="arena-modal-subtitle" style="opacity:.72;margin-top:4px;">First player picks the party size. When the timer ends, everyone in the portal queue gets sent into the PvP round arena.</div>
+        <div style="font-size:30px;font-weight:900;">Arena Lobby</div>
+        <div id="arena-modal-subtitle" style="opacity:.72;margin-top:4px;">Stage your loadout here, then teleport into the combat ring.</div>
       </div>
       <button id="arena-close" class="arena-button ghost" style="width:auto;padding:12px 14px;">Close</button>
     </div>
     <div id="arena-modal-body">
       <div class="arena-card" id="arena-actions">
-        <div style="font-size:22px;font-weight:900;margin-bottom:8px;">Teleporter Queue</div>
-        <div class="arena-field">
-          <label for="arena-target-size">Party Size</label>
-          <select id="arena-target-size" class="arena-select">
-            <option value="2">2 players</option>
-            <option value="3">3 players</option>
-            <option value="4" selected>4 players</option>
-          </select>
-        </div>
+        <div style="font-size:22px;font-weight:900;margin-bottom:8px;">Play</div>
         <div class="arena-actions-grid">
-          <button id="arena-join-queue" class="arena-button secondary">Enter Teleporter</button>
-          <button id="arena-open-shop" class="arena-button ghost">PVP Shop</button>
+          <button id="arena-play-solo" class="arena-button">Play Solo</button>
+          <button id="arena-play-coop" class="arena-button secondary">Play Co-op</button>
+          <button id="arena-open-shop" class="arena-button ghost">Shop</button>
           <button id="arena-open-loadout" class="arena-button ghost">Loadout</button>
-          <button id="arena-close-secondary" class="arena-button ghost">Close</button>
         </div>
-        <div id="arena-queue-info" style="margin-top:16px;line-height:1.5;opacity:.82;">Teleporter idle.</div>
+        <div id="arena-queue-info" style="margin-top:16px;line-height:1.5;opacity:.82;">No players in queue.</div>
       </div>
       <div class="arena-card" id="arena-right-column">
         <div id="arena-balance" style="font-size:18px;font-weight:900;margin-bottom:12px;">PvP Tokens: 0</div>
         <div id="arena-shop" class="arena-hidden">
-          <div style="font-size:20px;font-weight:900;margin-bottom:10px;">PVP Shop</div>
+          <div style="font-size:20px;font-weight:900;margin-bottom:10px;">Shop</div>
           <div id="arena-shop-grid" class="arena-item-grid"></div>
         </div>
         <div id="arena-loadout" class="arena-hidden">
@@ -120,8 +109,8 @@ export function createArenaUI() {
           <div id="arena-loadout-grid" class="arena-item-grid"></div>
         </div>
         <div id="arena-overview">
-          <div style="font-size:20px;font-weight:900;margin-bottom:10px;">How It Works</div>
-          <div style="line-height:1.7;opacity:.82;">Step into the teleporter queue, let the first entrant set how many players can join, then fight through PvP rounds. Spend PvP Tokens at the stall on melee weapons, guns, and special powers.</div>
+          <div style="font-size:20px;font-weight:900;margin-bottom:10px;">Run Rules</div>
+          <div style="line-height:1.7;opacity:.82;">Use the island hub as your lobby, gear up at the stall, then start a run to teleport into the separate combat ring. Bank PvP Tokens between waves and boss fights.</div>
         </div>
       </div>
     </div>
@@ -134,10 +123,10 @@ export function createArenaUI() {
   matchHud.id = 'arena-match-hud';
   matchHud.innerHTML = `
     <div class="arena-stats">
-      <div class="arena-stat"><div class="arena-stat-label">Round</div><div id="arena-wave" class="arena-stat-value">1</div></div>
-      <div class="arena-stat"><div class="arena-stat-label">Players Left</div><div id="arena-enemies" class="arena-stat-value">0</div></div>
+      <div class="arena-stat"><div class="arena-stat-label">Wave</div><div id="arena-wave" class="arena-stat-value">1</div></div>
+      <div class="arena-stat"><div class="arena-stat-label">Enemies</div><div id="arena-enemies" class="arena-stat-value">0</div></div>
       <div class="arena-stat"><div class="arena-stat-label">Health</div><div id="arena-health" class="arena-stat-value">120</div></div>
-      <div class="arena-stat"><div class="arena-stat-label">PvP Tokens</div><div id="arena-pending" class="arena-stat-value">0</div></div>
+      <div class="arena-stat"><div class="arena-stat-label">Pending Tokens</div><div id="arena-pending" class="arena-stat-value">0</div></div>
     </div>
     <div id="arena-match-message" style="margin-top:12px;font-weight:700;opacity:.85;">Use number keys to swap gear.</div>
     <div id="arena-intermission" style="display:none;grid-template-columns:repeat(2,minmax(0,1fr));">
@@ -162,9 +151,8 @@ export function createArenaUI() {
     queueInfo: modal.querySelector('#arena-queue-info'),
     balance: modal.querySelector('#arena-balance'),
     close: modal.querySelector('#arena-close'),
-    closeSecondary: modal.querySelector('#arena-close-secondary'),
-    joinQueue: modal.querySelector('#arena-join-queue'),
-    targetSize: modal.querySelector('#arena-target-size'),
+    playSolo: modal.querySelector('#arena-play-solo'),
+    playCoop: modal.querySelector('#arena-play-coop'),
     openShop: modal.querySelector('#arena-open-shop'),
     openLoadout: modal.querySelector('#arena-open-loadout'),
     shop: modal.querySelector('#arena-shop'),
@@ -273,17 +261,11 @@ export function createArenaUI() {
 
   function renderQueue(queue) {
     if (!queue || !Array.isArray(queue.entries) || !queue.entries.length) {
-      refs.targetSize.disabled = false;
-      refs.queueInfo.textContent = 'Teleporter idle. Step in and set the party size.';
+      refs.queueInfo.textContent = 'No players in queue.';
       return;
     }
-    refs.targetSize.disabled = true;
     const remaining = queue.timerEndsAt ? Math.max(0, queue.timerEndsAt - Date.now()) : 0;
-    const names = queue.entries.map((entry) => entry.displayName).join(', ');
-    refs.queueInfo.textContent = `${queue.entries.length}/${queue.targetSize || queue.maxPlayers} in teleporter • Launch in ${formatDuration(remaining)} • ${names}`;
-    if (refs.targetSize && Number(queue.targetSize) > 0) {
-      refs.targetSize.value = String(queue.targetSize);
-    }
+    refs.queueInfo.textContent = `${queue.entries.length} queued • Starts in ${formatDuration(remaining)} • ${queue.entries.map((entry) => entry.displayName).join(', ')}`;
   }
 
   function renderProfile(profile) {
@@ -297,26 +279,17 @@ export function createArenaUI() {
       refs.intermission.style.display = 'none';
       return;
     }
-    const alivePlayers = Array.isArray(matchState.members)
-      ? matchState.members.filter((entry) => entry.alive).length
-      : (matchState.enemiesRemaining || 0);
     refs.wave.textContent = String(matchState.wave || 0);
-    refs.enemies.textContent = String(alivePlayers);
+    refs.enemies.textContent = String(matchState.enemiesRemaining || 0);
     refs.health.textContent = `${matchState.self?.hp || 0} / ${matchState.self?.maxHp || 0}`;
     refs.pending.textContent = String(matchState.self?.pendingTokens || 0);
     const intermissionActive = matchState.status === 'intermission';
-    refs.intermission.style.display = intermissionActive && matchState.mode !== 'pvp' ? 'grid' : 'none';
-    refs.message.textContent = matchState.mode === 'pvp'
-      ? intermissionActive
-        ? 'Round break. Next PvP round is starting.'
-        : matchState.self?.spectating
-          ? 'You were knocked out. Spectate until the round ends.'
-          : 'Use 1-9 to swap gear and left click to attack.'
-      : intermissionActive
-        ? 'Intermission: vote to cash out or keep the run alive.'
-        : matchState.self?.spectating
-          ? 'You are spectating. Stay with the team until the round ends.'
-          : 'Use 1-9 to swap gear and left click to attack.';
+    refs.intermission.style.display = intermissionActive ? 'grid' : 'none';
+    refs.message.textContent = intermissionActive
+      ? 'Intermission: vote to cash out or keep the run alive.'
+      : matchState.self?.spectating
+        ? 'You are spectating. Stay with the team until the round ends.'
+        : 'Use 1-9 to swap gear and left click to attack.';
   }
 
   return {

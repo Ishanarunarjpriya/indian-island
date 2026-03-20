@@ -120,8 +120,6 @@ function buildQueueSnapshot(queue) {
     }),
     startsAt: queue.startsAt,
     timerEndsAt: queue.timerEndsAt,
-    targetSize: queue.targetSize,
-    ownerSocketId: queue.ownerSocketId,
     minPlayers: MATCHMAKING.minPlayers,
     maxPlayers: MATCHMAKING.maxPlayers,
   };
@@ -147,7 +145,6 @@ function serializeArenaPlayer(member) {
     selectedSlot: member.selectedSlot,
     activeItemId: member.hotbar[member.selectedSlot] || null,
     pendingTokens: member.pendingTokens,
-    roundWins: member.roundWins || 0,
     pendingLoot: { ...member.pendingLoot },
     bankedTokens: member.tokens,
     buffs: member.buffs.map(function mapBuff(buff) {
@@ -196,8 +193,6 @@ export function createArenaRuntime(args) {
     entries: [],
     startsAt: 0,
     timerEndsAt: 0,
-    targetSize: 0,
-    ownerSocketId: null,
   };
   const matches = new Map();
   const socketToMatchId = new Map();
@@ -251,10 +246,6 @@ export function createArenaRuntime(args) {
       if (!queue.entries.length) {
         queue.startsAt = 0;
         queue.timerEndsAt = 0;
-        queue.targetSize = 0;
-        queue.ownerSocketId = null;
-      } else if (queue.ownerSocketId === socketId) {
-        queue.ownerSocketId = queue.entries[0].socketId;
       }
       broadcastQueueState();
     }
@@ -343,7 +334,6 @@ export function createArenaRuntime(args) {
       damageDone: 0,
       decision: null,
       matchWave: 0,
-      roundWins: 0,
     };
   }
 
@@ -511,29 +501,6 @@ export function createArenaRuntime(args) {
       return;
     }
     const facing = normalize2D(direction.x || 0, direction.z || 1);
-    if (match.mode === 'pvp') {
-      match.members.forEach(function eachTarget(target) {
-        if (!target.alive || target.socketId === member.socketId) {
-          return;
-        }
-        const targetPlayer = getPlayer(target.socketId);
-        if (!targetPlayer) {
-          return;
-        }
-        const dx = Number(targetPlayer.x) - Number(player.x);
-        const dz = Number(targetPlayer.z) - Number(player.z);
-        const dist = Math.hypot(dx, dz);
-        if (dist > item.range) {
-          return;
-        }
-        const toTarget = normalize2D(dx, dz);
-        if (facing.x * toTarget.x + facing.z * toTarget.z < -0.1) {
-          return;
-        }
-        damageMember(match, target, calculateDamage(item, member), member);
-      });
-      return;
-    }
     Array.from(match.enemies.values()).forEach(function eachEnemy(enemy) {
       const dx = enemy.x - Number(player.x);
       const dz = enemy.z - Number(player.z);
@@ -603,34 +570,6 @@ export function createArenaRuntime(args) {
     const player = getPlayer(member.socketId);
     if (!player) {
       return;
-    }
-    if (match.mode === 'pvp') {
-      const otherMembers = match.members
-        .filter(function filterMember(entry) { return entry.alive && entry.socketId !== member.socketId; })
-        .map(function mapMember(entry) {
-          return { member: entry, player: getPlayer(entry.socketId) };
-        })
-        .filter(function filterMissing(entry) { return !!entry.player; });
-      if (item.id === 'frost_nova' || item.id === 'venom_pulse') {
-        otherMembers.forEach(function eachTarget(entry) {
-          if (distance2D(Number(player.x), Number(player.z), Number(entry.player.x), Number(entry.player.z)) <= item.radius) {
-            damageMember(match, entry.member, item.damage, member);
-          }
-        });
-        return;
-      }
-      if (item.id === 'arc_surge') {
-        otherMembers
-          .sort(function sortEntry(a, b) {
-            return distance2D(Number(player.x), Number(player.z), Number(a.player.x), Number(a.player.z))
-              - distance2D(Number(player.x), Number(player.z), Number(b.player.x), Number(b.player.z));
-          })
-          .slice(0, item.chainTargets || 3)
-          .forEach(function eachTarget(entry) {
-            damageMember(match, entry.member, item.damage, member);
-          });
-        return;
-      }
     }
     if (item.id === 'frost_nova' || item.id === 'venom_pulse') {
       Array.from(match.enemies.values()).forEach(function eachEnemy(enemy) {
@@ -706,44 +645,19 @@ export function createArenaRuntime(args) {
     broadcastMatchState(match);
   }
 
-  function damageMember(match, member, amount, attacker) {
+  function damageMember(match, member, amount) {
     if (!member.alive) {
       return;
     }
     member.hp = clamp(member.hp - amount, 0, member.maxHp);
     if (member.hp <= 0) {
       member.alive = false;
-      member.spectating = match.mode === 'coop' || match.mode === 'pvp';
+      member.spectating = match.mode === 'coop';
       const player = getPlayer(member.socketId);
       if (player) {
         player.y = ARENA_WORLD.hubCenter.y + ARENA_WORLD.spectatorHeight;
       }
       sendSystemMessage(match, member.displayName + ' was knocked out.');
-      if (attacker && attacker.socketId !== member.socketId) {
-        attacker.kills += 1;
-        attacker.pendingTokens += 12;
-      }
-      if (match.mode === 'pvp') {
-        const aliveMembers = match.members.filter(function findAlive(entry) { return entry.alive; });
-        if (!aliveMembers.length) {
-          sendSystemMessage(match, 'Round ' + match.wave + ' ended in a draw.');
-          beginIntermission(match);
-          return;
-        }
-        if (aliveMembers.length === 1) {
-          const winner = aliveMembers[0];
-          winner.roundWins = (winner.roundWins || 0) + 1;
-          winner.pendingTokens += 35;
-          sendSystemMessage(match, winner.displayName + ' won round ' + match.wave + '.');
-          if (winner.roundWins >= (match.roundsToWin || 3)) {
-            winner.pendingTokens += 60;
-            endMatch(match, 'victory');
-            return;
-          }
-          beginIntermission(match);
-          return;
-        }
-      }
       if (!match.members.some(function findAlive(entry) { return entry.alive; })) {
         endMatch(match, 'defeat');
       }
@@ -894,28 +808,6 @@ export function createArenaRuntime(args) {
           match.projectiles.delete(projectile.id);
           return;
         }
-        if (match.mode === 'pvp') {
-          match.members.some(function hitTarget(target) {
-            if (!target.alive || target.socketId === projectile.sourceMemberId) {
-              return false;
-            }
-            const player = getPlayer(target.socketId);
-            if (!player) {
-              return false;
-            }
-            if (distance2D(projectile.x, projectile.z, Number(player.x), Number(player.z)) <= projectile.radius + 0.9) {
-              damageMember(match, target, projectile.damage, member);
-              if (projectile.pierce > 0) {
-                projectile.pierce -= 1;
-              } else {
-                match.projectiles.delete(projectile.id);
-              }
-              return true;
-            }
-            return false;
-          });
-          return;
-        }
         Array.from(match.enemies.values()).some(function hitEnemy(enemy) {
           if (distance2D(projectile.x, projectile.z, enemy.x, enemy.z) <= projectile.radius + 0.8) {
             damageEnemy(match, member, enemy, projectile.damage, projectile.status, currentTime);
@@ -950,15 +842,8 @@ export function createArenaRuntime(args) {
 
   function beginIntermission(match) {
     match.status = 'intermission';
-    match.intermissionEndsAt = nowMs() + (match.mode === 'pvp' ? 5000 : MATCHMAKING.intermissionMs);
+    match.intermissionEndsAt = nowMs() + MATCHMAKING.intermissionMs;
     match.projectiles.clear();
-    if (match.mode === 'pvp') {
-      match.members.forEach(function eachMember(member) {
-        member.decision = null;
-      });
-      broadcastMatchState(match);
-      return;
-    }
     const waveReward = REWARD_CONFIG.waveTokenBase + (match.wave - 1) * REWARD_CONFIG.waveTokenGrowth + (match.wave % 5 === 0 ? REWARD_CONFIG.bossWaveBonus : 0);
     match.members.forEach(function eachMember(member) {
       member.pendingTokens += waveReward;
@@ -1000,12 +885,6 @@ export function createArenaRuntime(args) {
   }
 
   function resolveIntermission(match, forcedDecision) {
-    if (match.mode === 'pvp') {
-      if (forcedDecision === 'continue' || nowMs() >= match.intermissionEndsAt) {
-        startNextWave(match);
-      }
-      return;
-    }
     const continueVotes = match.members.filter(function filterDecision(member) { return member.decision === 'continue'; }).length;
     const cashoutVotes = match.members.filter(function filterCashout(member) { return member.decision === 'cashout'; }).length;
     const eligibleCount = Math.max(1, Math.ceil(match.members.length / 2));
@@ -1037,17 +916,6 @@ export function createArenaRuntime(args) {
         player.z = member.spawnPoint.z;
       }
     });
-    if (match.mode === 'pvp') {
-      if (match.members.length === 1) {
-        match.members[0].roundWins = match.roundsToWin || 3;
-        match.members[0].pendingTokens += 60;
-        endMatch(match, 'victory');
-        return;
-      }
-      sendSystemMessage(match, 'Round ' + match.wave + ' started.');
-      broadcastMatchState(match);
-      return;
-    }
     buildWaveComposition(match.wave).forEach(function eachWaveEntry(entry) {
       for (let i = 0; i < entry.count; i += 1) {
         const enemy = buildEnemy(entry.type, match.wave);
@@ -1070,7 +938,6 @@ export function createArenaRuntime(args) {
       intermissionEndsAt: 0,
       enemies: new Map(),
       projectiles: new Map(),
-      roundsToWin: mode === 'pvp' ? 3 : 0,
       members: socketIds.map(function mapSocket(socketId, index) {
         return createMember(socketId, index, socketIds.length);
       }).filter(Boolean),
@@ -1093,15 +960,12 @@ export function createArenaRuntime(args) {
       queue.startsAt = nowMs();
       queue.timerEndsAt = queue.startsAt + MATCHMAKING.queueTimerMs;
     }
-    const targetSize = Math.max(2, Math.min(queue.targetSize || MATCHMAKING.maxPlayers, MATCHMAKING.maxPlayers));
-    if (queue.entries.length >= targetSize || nowMs() >= queue.timerEndsAt) {
-      const startCount = Math.max(1, Math.min(queue.entries.length, targetSize));
+    if (queue.entries.length >= MATCHMAKING.maxPlayers || nowMs() >= queue.timerEndsAt) {
+      const startCount = queue.entries.length >= MATCHMAKING.minPlayers ? Math.min(queue.entries.length, MATCHMAKING.maxPlayers) : 1;
       const socketIds = queue.entries.splice(0, startCount).map(function mapEntry(entry) { return entry.socketId; });
-      queue.startsAt = 0;
-      queue.timerEndsAt = 0;
-      queue.targetSize = 0;
-      queue.ownerSocketId = null;
-      createMatch('pvp', socketIds);
+      queue.startsAt = queue.entries.length ? nowMs() : 0;
+      queue.timerEndsAt = queue.entries.length ? queue.startsAt + MATCHMAKING.queueTimerMs : 0;
+      createMatch('coop', socketIds);
       broadcastQueueState();
     }
   }
@@ -1114,7 +978,7 @@ export function createArenaRuntime(args) {
     createMatch('solo', [socketId]);
   }
 
-  function joinCoopQueue(socketId, options) {
+  function joinCoopQueue(socketId) {
     if (socketToMatchId.has(socketId)) {
       return;
     }
@@ -1123,18 +987,16 @@ export function createArenaRuntime(args) {
       broadcastQueueState();
       return;
     }
-    if (!queue.entries.length) {
-      queue.targetSize = clamp(Math.floor(Number(options && options.targetSize) || MATCHMAKING.maxPlayers), 2, MATCHMAKING.maxPlayers);
-      queue.ownerSocketId = socketId;
-      queue.startsAt = nowMs();
-      queue.timerEndsAt = queue.startsAt + MATCHMAKING.queueTimerMs;
-    }
     queue.entries.push({
       socketId,
       username: player.username || player.accountUsername || ('guest_' + socketId.slice(0, 5)),
       displayName: player.displayName || player.username || 'Guest',
       joinedAt: nowMs(),
     });
+    if (!queue.startsAt) {
+      queue.startsAt = nowMs();
+      queue.timerEndsAt = queue.startsAt + MATCHMAKING.queueTimerMs;
+    }
     broadcastQueueState();
     maybeStartQueue();
   }
@@ -1207,9 +1069,6 @@ export function createArenaRuntime(args) {
     if (!match || match.status !== 'intermission') {
       return;
     }
-    if (match.mode === 'pvp') {
-      return;
-    }
     const member = match.members.find(function findMember(entry) { return entry.socketId === socketId; });
     if (!member) {
       return;
@@ -1244,16 +1103,14 @@ export function createArenaRuntime(args) {
 
   function tickMatch(match, currentTime) {
     if (match.status === 'combat') {
-      if (match.mode !== 'pvp') {
-        Array.from(match.enemies.values()).forEach(function eachEnemy(enemy) {
-          tickEnemy(match, enemy, currentTime);
-        });
-      }
+      Array.from(match.enemies.values()).forEach(function eachEnemy(enemy) {
+        tickEnemy(match, enemy, currentTime);
+      });
       tickProjectiles(match, currentTime);
       match.members.forEach(function eachMember(member) {
         member.buffs = member.buffs.filter(function filterBuff(buff) { return buff.endsAt > currentTime; });
       });
-      if (match.mode !== 'pvp' && !match.enemies.size && match.status === 'combat') {
+      if (!match.enemies.size && match.status === 'combat') {
         beginIntermission(match);
       }
     } else if (match.status === 'intermission' && currentTime >= match.intermissionEndsAt) {
@@ -1273,7 +1130,7 @@ export function createArenaRuntime(args) {
       }
     });
     socket.on('arena:startSolo', function onStartSolo() { startSolo(socket.id); });
-    socket.on('arena:joinCoop', function onJoinCoop(options) { joinCoopQueue(socket.id, options || {}); });
+    socket.on('arena:joinCoop', function onJoinCoop() { joinCoopQueue(socket.id); });
     socket.on('arena:leaveQueue', function onLeaveQueue() { leaveQueue(socket.id); });
     socket.on('arena:buyItem', function onBuyItem(itemId) { buyShopItem(socket.id, itemId).catch(function swallow() {}); });
     socket.on('arena:setHotbar', function onSetHotbar(hotbar) { setHotbar(socket.id, hotbar).catch(function swallow() {}); });
