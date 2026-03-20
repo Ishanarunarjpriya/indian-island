@@ -1395,6 +1395,8 @@ const worldColliders = [];
 let cliffWaterfallRoot = null;
 let cliffWaterfallFoam = null;
 let cliffWaterfallState = null;
+let mainIslandHouseGroup = null;
+let mainIslandHouseTransform = null;
 const waterfallWorldPos = new THREE.Vector3();
 const waterfallToCamera = new THREE.Vector3();
 const waterfallForward = new THREE.Vector3();
@@ -1504,6 +1506,15 @@ function createWaterfallMistTexture() {
 
 function addWorldCollider(x, z, radius, tag = 'solid') {
   worldColliders.push({ x, z, radius, tag });
+}
+
+function removeWorldCollidersByTag(tag) {
+  if (!tag) return;
+  for (let i = worldColliders.length - 1; i >= 0; i -= 1) {
+    if (worldColliders[i]?.tag === tag) {
+      worldColliders.splice(i, 1);
+    }
+  }
 }
 
 function addWallCollisionFromMesh(mesh, tag = 'house') {
@@ -2806,6 +2817,20 @@ function addDecorBoat(x, z, yaw = 0, scale = 1.9, y = 1.06) {
 
 function addWoodHouse(x, z, yaw = 0, options = {}) {
   const collisions = options?.collisions !== false;
+  mainIslandHouseTransform = { x, z, yaw };
+  if (mainIslandHouseGroup) {
+    scene.remove(mainIslandHouseGroup);
+    mainIslandHouseGroup.traverse((node) => {
+      if (!node?.isMesh) return;
+      node.geometry?.dispose?.();
+      if (Array.isArray(node.material)) {
+        node.material.forEach((mat) => mat?.dispose?.());
+      } else {
+        node.material?.dispose?.();
+      }
+    });
+  }
+  removeWorldCollidersByTag('house');
   const house = new THREE.Group();
   house.position.set(x, 1.35, z);
   house.rotation.y = yaw;
@@ -2813,13 +2838,15 @@ function addWoodHouse(x, z, yaw = 0, options = {}) {
   const trimMat = new THREE.MeshStandardMaterial({ color: 0x5b3a24, roughness: 0.9 });
   const roofMat = new THREE.MeshStandardMaterial({ color: 0x4e3423, roughness: 0.9 });
 
-  const houseScale = 1.18;
-  const houseW = 9.4 * houseScale;
-  const houseD = 8.0 * houseScale;
-  const wallH = 3.2 * houseScale;
+  const onlinePlayers = Math.max(1, players.size || 1);
+  const expansionTier = Math.min(8, Math.max(0, onlinePlayers - 1));
+  const baseScale = 1.18;
+  const houseW = (9.4 + expansionTier * 0.58) * baseScale;
+  const houseD = (8.0 + expansionTier * 0.44) * baseScale;
+  const wallH = (3.2 + expansionTier * 0.16) * baseScale;
   const wallT = 0.22;
-  const doorW = 1.9 * houseScale;
-  const doorH = 2.45 * houseScale;
+  const doorW = Math.min(2.45 * baseScale, (1.9 + expansionTier * 0.05) * baseScale);
+  const doorH = Math.min(3.0 * baseScale, (2.45 + expansionTier * 0.04) * baseScale);
   const floor = new THREE.Mesh(new THREE.BoxGeometry(houseW, 0.2, houseD), wallMat);
   floor.position.y = 0.08;
   floor.receiveShadow = true;
@@ -2859,19 +2886,19 @@ function addWoodHouse(x, z, yaw = 0, options = {}) {
   eave.receiveShadow = true;
 
   const roof = new THREE.Mesh(
-    new THREE.ConeGeometry(Math.max(houseW, houseD) * 0.68, 2.45 * houseScale, 4),
+    new THREE.ConeGeometry(Math.max(houseW, houseD) * 0.68, (2.45 + expansionTier * 0.12) * baseScale, 4),
     roofMat
   );
-  roof.position.set(0, wallH + 1.34 * houseScale, 0);
+  roof.position.set(0, wallH + (1.34 + expansionTier * 0.06) * baseScale, 0);
   roof.rotation.y = Math.PI * 0.25;
   roof.castShadow = true;
   roof.receiveShadow = true;
 
   const roofPeak = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.1 * houseScale, 0.14 * houseScale, 0.46 * houseScale, 8),
+    new THREE.CylinderGeometry(0.1 * baseScale, 0.14 * baseScale, 0.46 * baseScale, 8),
     trimMat
   );
-  roofPeak.position.set(0, wallH + 2.74 * houseScale, 0);
+  roofPeak.position.set(0, wallH + (2.74 + expansionTier * 0.12) * baseScale, 0);
   roofPeak.castShadow = true;
   roofPeak.receiveShadow = true;
 
@@ -2883,7 +2910,6 @@ function addWoodHouse(x, z, yaw = 0, options = {}) {
   });
   scene.add(house);
   if (collisions) {
-    // Use the actual wall meshes for collision so blocking matches visible walls.
     addWallCollisionFromMesh(back, 'house');
     addWallCollisionFromMesh(left, 'house');
     addWallCollisionFromMesh(right, 'house');
@@ -2891,6 +2917,12 @@ function addWoodHouse(x, z, yaw = 0, options = {}) {
     addWallCollisionFromMesh(frontRight, 'house');
     addWallCollisionFromMesh(frontTop, 'house');
   }
+  mainIslandHouseGroup = house;
+}
+
+function refreshMainIslandHouse() {
+  if (!mainIslandHouseTransform) return;
+  addWoodHouse(mainIslandHouseTransform.x, mainIslandHouseTransform.z, mainIslandHouseTransform.yaw);
 }
 
 function addCliffAndWaterfall(x, z) {
@@ -8861,6 +8893,7 @@ socket.on('init', (payload) => {
 
   players.forEach((_, id) => removePlayer(id));
   payload.players.forEach(addPlayer);
+  refreshMainIslandHouse();
 
   interactables.clear();
   (payload.interactables || []).forEach(updateBeaconState);
@@ -8900,6 +8933,7 @@ socket.on('progress:update', (payload) => {
 socket.on('playerJoined', (payload) => {
   if (!isAuthenticated) return;
   addPlayer(payload);
+  refreshMainIslandHouse();
   appendChatLine({
     text: `${displayNameWithTag(payload.name || 'A player', payload?.accountTag)} joined the island.`,
     isSystem: true
@@ -8910,6 +8944,7 @@ socket.on('playerLeft', (id) => {
   if (!isAuthenticated) return;
   const player = players.get(id);
   removePlayer(id);
+  refreshMainIslandHouse();
   appendChatLine({
     text: `${displayNameWithTag(player?.name || `Player-${id.slice(0, 4)}`, player?.accountTag)} left the island.`,
     isSystem: true
