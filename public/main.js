@@ -8940,24 +8940,3 @@ function animate(nowMs) {
 
 updateHud();
 requestAnimationFrame(animate);
-
-// Arena client context bridge
-
-window.__indianIslandArenaContext = {
-  getScene: () => scene,
-  getCamera: () => camera,
-  getRenderer: () => renderer,
-  getSocket: () => socket,
-  getLocalPlayer: () => localPlayer,
-  getLocalPlayerState: () => localPlayerState,
-};
-if (typeof localEffectiveRoomId === 'function') {
-  const __arenaOriginalLocalEffectiveRoomId = localEffectiveRoomId;
-  localEffectiveRoomId = function wrappedLocalEffectiveRoomId() {
-    const arenaRoomId = localPlayerState && localPlayerState.arenaState ? localPlayerState.arenaState.roomId : null;
-    if (typeof arenaRoomId === 'string' && arenaRoomId.startsWith('arena:')) {
-      return arenaRoomId;
-    }
-    return __arenaOriginalLocalEffectiveRoomId();
-  };
-}
