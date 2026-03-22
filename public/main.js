@@ -6614,11 +6614,27 @@ function getManualInteractTarget(local) {
   }
 
   const beacon = interactables.get('beacon');
-  if (!beacon || Math.hypot(local.x - beacon.x, local.z - beacon.z) > 4.2) {
-    return null;
+  if (beacon && Math.hypot(local.x - beacon.x, local.z - beacon.z) <= 4.2) {
+    beaconCore.getWorldPosition(_mobileUseWorldPos);
+    return { mode: 'world', label: 'Toggle', caption: 'Tap', worldPos: _mobileUseWorldPos, offsetY: 0.4 };
   }
-  beaconCore.getWorldPosition(_mobileUseWorldPos);
-  return { mode: 'world', label: 'Toggle', caption: 'Tap', worldPos: _mobileUseWorldPos, offsetY: 0.4 };
+
+  for (const [id, other] of players) {
+    if (id === localPlayerId) continue;
+    if (distance2D(local, other) <= 4) {
+      return {
+        mode: 'world',
+        label: 'Trade',
+        caption: 'Tap',
+        worldPos: new THREE.Vector3(other.x, (other.y || 0) + 0.6, other.z),
+        offsetY: 0.6,
+        tradeTargetId: id,
+        tradeTargetName: other.name || 'Player'
+      };
+    }
+  }
+
+  return null;
 }
 
 function updateMobileUseButtonPlacement(target) {
@@ -8244,7 +8260,7 @@ const SEND_EVERY_MS = 45;
 const TURN_SPEED = 14;
 const REMOTE_TURN_SPEED = 10;
 const STAMINA_DRAIN = 25;
-const STAMINA_REGEN = 18;
+const STAMINA_REGEN = 6;
 const SLIDE_DURATION = 0.42;
 const SLIDE_SPEED = 20;
 let stamina = STAMINA_BASE_MAX;
