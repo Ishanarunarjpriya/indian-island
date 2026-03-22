@@ -17,13 +17,19 @@ export const MINE_TIMING_PROFILES = {
   stone: { speed: 0.9, zoneWidth: 0.3, timeoutMs: 5600 },
   iron: { speed: 1.16, zoneWidth: 0.23, timeoutMs: 5000 },
   gold: { speed: 1.42, zoneWidth: 0.17, timeoutMs: 4400 },
-  diamond: { speed: 1.78, zoneWidth: 0.12, timeoutMs: 3800 }
+  emerald: { speed: 1.55, zoneWidth: 0.15, timeoutMs: 4100 },
+  diamond: { speed: 1.78, zoneWidth: 0.12, timeoutMs: 3800 },
+  amethyst: { speed: 1.35, zoneWidth: 0.14, timeoutMs: 4600 },
+  obsidian: { speed: 2.05, zoneWidth: 0.09, timeoutMs: 3400 }
 };
 export const MINE_REQUIRED_HITS = {
   stone: 1,
   iron: 2,
   gold: 3,
-  diamond: 4
+  emerald: 4,
+  diamond: 5,
+  amethyst: 3,
+  obsidian: 6
 };
 export const PICKAXE_ACCURACY_ZONE_MULTIPLIER = {
   wood: 1.0,
@@ -31,6 +37,22 @@ export const PICKAXE_ACCURACY_ZONE_MULTIPLIER = {
   iron: 1.3,
   diamond: 1.5
 };
+export const ENCHANTMENT_TYPES = {
+  speed: { label: 'Haste', description: 'Mining swings are faster', price: 1200, levelReq: 5 },
+  xp: { label: 'Wisdom', description: 'XP gain multiplier', price: 1800, levelReq: 8 },
+  luck: { label: 'Fortune', description: 'Chance of bonus ore drops', price: 2400, levelReq: 12 }
+};
+export const ENCHANTMENT_MAX_SLOTS = 3;
+export const ENCHANTMENT_EFFECTS = {
+  speed: { swingCooldownScale: 0.82 },
+  xp: { xpMultiplier: 1.35 },
+  luck: { bonusOreChance: 0.25 }
+};
+export const STAMINA_MINE_COST = 4;
+export const STAMINA_LOW_THRESHOLD = 25;
+export const STAMINA_LOW_MISS_ZONE_WIDEN = 0.06;
+export const STAMINA_STEW_PRICE = 45;
+export const STAMINA_STEW_RESTORE = 40;
 export const MINE_FOCUS_CAMERA_BACK = 3.15;
 export const MINE_FOCUS_CAMERA_SIDE = 1.15;
 export const MINE_FOCUS_CAMERA_HEIGHT = 2.4;
@@ -196,7 +218,7 @@ export function createDefaultQuestState() {
     xpIntoLevel: 0,
     xpToNextLevel: BASE_XP_TO_LEVEL,
     pickaxe: 'wood',
-    inventory: { stone: 0, iron: 0, gold: 0, diamond: 0, torch: 1, fish: 0 },
+    inventory: { stone: 0, iron: 0, gold: 0, emerald: 0, diamond: 0, amethyst: 0, obsidian: 0, torch: 1, fish: 0 },
     fishBag: {},
     fishIndex: {},
     hasFishingRod: false,
@@ -235,10 +257,13 @@ export const ORE_RESOURCE_COLORS = {
   stone: 0x9ca3af,
   iron: 0xb45309,
   gold: 0xf59e0b,
-  diamond: 0x22d3ee
+  emerald: 0x34d399,
+  diamond: 0x22d3ee,
+  amethyst: 0xa78bfa,
+  obsidian: 0x6b21a8
 };
 export const FISHING_ROD_PRICE = 780;
-export const ORE_SELL_PRICE = { stone: 2, iron: 8, gold: 22, diamond: 120 };
+export const ORE_SELL_PRICE = { stone: 2, iron: 8, gold: 22, emerald: 65, diamond: 120, amethyst: 48, obsidian: 210 };
 export const FISH_SELL_BY_RARITY = {
   common: 18,
   uncommon: 32,
@@ -277,7 +302,10 @@ export const FISH_CATALOG = [
   { id: 'prism-swordfish', name: 'Prism Swordfish', rarity: 'epic', chanceLabel: '1 in 350', color: '#8b5cf6', accent: '#ddd6fe' },
   { id: 'deepfin-marlin', name: 'Deepfin Marlin', rarity: 'epic', chanceLabel: '1 in 560', color: '#0ea5e9', accent: '#bae6fd' },
   { id: 'void-whalelet', name: 'Void Whalelet', rarity: 'legendary', chanceLabel: '1 in 1650', color: '#6366f1', accent: '#c7d2fe' },
-  { id: 'crown-leviathan', name: 'Crown Leviathan', rarity: 'mythic', chanceLabel: '1 in 6500', color: '#f43f5e', accent: '#fecdd3' }
+  { id: 'crown-leviathan', name: 'Crown Leviathan', rarity: 'mythic', chanceLabel: '1 in 6500', color: '#f43f5e', accent: '#fecdd3' },
+  { id: 'shadow-eel', name: 'Shadow Eel', rarity: 'rare', chanceLabel: '1 in 48', color: '#1e1b4b', accent: '#4338ca', nightOnly: true },
+  { id: 'lunar-sturgeon', name: 'Lunar Sturgeon', rarity: 'epic', chanceLabel: '1 in 280', color: '#e2e8f0', accent: '#f8fafc', nightOnly: true },
+  { id: 'abyssal-angler', name: 'Abyssal Angler', rarity: 'legendary', chanceLabel: '1 in 1200', color: '#0f172a', accent: '#334155', nightOnly: true }
 ];
 export const FISH_BY_ID = new Map(FISH_CATALOG.map((fish) => [fish.id, fish]));
 export const FISH_CATALOG_SORTED = [...FISH_CATALOG].sort((a, b) => {
@@ -300,4 +328,4 @@ export const FISHING_ROD_TIER_LABEL = {
   master: 'Master Rod',
   mythic: 'Mythic Rod'
 };
-export const SELLABLE_ORE_ORDER = ['stone', 'iron', 'gold', 'diamond'];
+export const SELLABLE_ORE_ORDER = ['stone', 'iron', 'gold', 'amethyst', 'emerald', 'diamond', 'obsidian'];

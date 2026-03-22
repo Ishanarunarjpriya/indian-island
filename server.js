@@ -143,7 +143,7 @@ const CHAT_FILTER_WORDS = [
 const HAIR_STYLES = new Set(['none', 'short', 'sidepart', 'spiky', 'long', 'ponytail', 'bob', 'wavy']);
 const FACE_STYLES = new Set(['smile', 'serious', 'grin', 'wink', 'lashessmile', 'soft']);
 const ACCESSORY_TYPES = new Set(['hat', 'glasses', 'backpack']);
-const ORE_TYPES = new Set(['stone', 'iron', 'gold', 'diamond']);
+const ORE_TYPES = new Set(['stone', 'iron', 'gold', 'emerald', 'diamond', 'amethyst', 'obsidian']);
 const PICKAXE_ORDER = ['wood', 'stone', 'iron', 'diamond'];
 const PICKAXE_PRICE = {
   stone: 360,
@@ -168,6 +168,24 @@ const BASE_XP_TO_LEVEL = 110;
 const XP_PER_LEVEL_STEP = 35;
 const FISHING_ROD_PRICE = 780;
 const MAX_STAMINA_BONUS_PCT = 50;
+const STAMINA_MINE_COST = 4;
+const STAMINA_LOW_THRESHOLD = 25;
+const STAMINA_STEW_PRICE = 45;
+const STAMINA_STEW_RESTORE = 40;
+const ENCHANTMENT_TYPES = {
+  speed: { label: 'Haste', description: 'Mining swings are faster', price: 1200, levelReq: 5 },
+  xp: { label: 'Wisdom', description: 'XP gain multiplier', price: 1800, levelReq: 8 },
+  luck: { label: 'Fortune', description: 'Chance of bonus ore drops', price: 2400, levelReq: 12 }
+};
+const ENCHANTMENT_MAX_SLOTS = 3;
+const ENCHANTMENT_EFFECTS = {
+  speed: { swingCooldownScale: 0.82 },
+  xp: { xpMultiplier: 1.35 },
+  luck: { bonusOreChance: 0.25 }
+};
+const TRADE_RANGE = 8;
+const TRADE_EXPIRE_MS = 30000;
+const NIGHT_ONLY_FISH_IDS = new Set(['shadow-eel', 'lunar-sturgeon', 'abyssal-angler']);
 const FISH_STAMINA_GAIN_PER_FISH = 5;
 const FISH_CATCH_COOLDOWN_MS = 1800;
 const FISH_CHALLENGE_EXPIRE_MS = 20_000;
@@ -186,7 +204,10 @@ const ORE_SELL_PRICE = {
   stone: 2,
   iron: 8,
   gold: 22,
-  diamond: 120
+  emerald: 65,
+  diamond: 120,
+  amethyst: 48,
+  obsidian: 210
 };
 const HOME_ROOM_PAINT_PRICE = 90;
 const HOME_ROOM_FURNITURE_SHOP = {
@@ -288,7 +309,10 @@ const FISH_SPECIES = [
   { id: 'prism-swordfish', name: 'Prism Swordfish', rarity: 'epic', chanceLabel: '1 in 350', color: '#8b5cf6', accent: '#ddd6fe', weight: 38 },
   { id: 'deepfin-marlin', name: 'Deepfin Marlin', rarity: 'epic', chanceLabel: '1 in 560', color: '#0ea5e9', accent: '#bae6fd', weight: 24 },
   { id: 'void-whalelet', name: 'Void Whalelet', rarity: 'legendary', chanceLabel: '1 in 1650', color: '#6366f1', accent: '#c7d2fe', weight: 8 },
-  { id: 'crown-leviathan', name: 'Crown Leviathan', rarity: 'mythic', chanceLabel: '1 in 6500', color: '#f43f5e', accent: '#fecdd3', weight: 2 }
+  { id: 'crown-leviathan', name: 'Crown Leviathan', rarity: 'mythic', chanceLabel: '1 in 6500', color: '#f43f5e', accent: '#fecdd3', weight: 2 },
+  { id: 'shadow-eel', name: 'Shadow Eel', rarity: 'rare', chanceLabel: '1 in 48', color: '#1e1b4b', accent: '#4338ca', weight: 280, nightOnly: true },
+  { id: 'lunar-sturgeon', name: 'Lunar Sturgeon', rarity: 'epic', chanceLabel: '1 in 280', color: '#e2e8f0', accent: '#f8fafc', weight: 45, nightOnly: true },
+  { id: 'abyssal-angler', name: 'Abyssal Angler', rarity: 'legendary', chanceLabel: '1 in 1200', color: '#0f172a', accent: '#334155', weight: 10, nightOnly: true }
 ];
 const FISH_SPECIES_BY_ID = new Map(FISH_SPECIES.map((fish) => [fish.id, fish]));
 const FISH_SPECIES_IDS = new Set(FISH_SPECIES.map((fish) => fish.id));
@@ -676,7 +700,10 @@ function defaultInventory() {
     stone: 0,
     iron: 0,
     gold: 0,
+    emerald: 0,
     diamond: 0,
+    amethyst: 0,
+    obsidian: 0,
     torch: 1,
     fish: 0
   };
@@ -688,13 +715,14 @@ function defaultFishBag() {
 
 function fishForQuestPool(completions = 0) {
   const done = Math.max(0, Math.floor(Number(completions) || 0));
-  if (done < 2) return { rarity: 'common', min: 3, max: 5, allowSpecific: false };
-  if (done < 4) return { rarity: Math.random() < 0.65 ? 'common' : 'uncommon', min: 4, max: 6, allowSpecific: false };
-  if (done < 7) return { rarity: 'uncommon', min: 5, max: 8, allowSpecific: true };
-  if (done < 10) return { rarity: Math.random() < 0.75 ? 'rare' : 'uncommon', min: 5, max: 9, allowSpecific: true };
-  if (done < 14) return { rarity: Math.random() < 0.7 ? 'rare' : 'epic', min: 6, max: 10, allowSpecific: true };
-  if (done < 18) return { rarity: Math.random() < 0.7 ? 'epic' : 'legendary', min: 7, max: 11, allowSpecific: true };
-  return { rarity: Math.random() < 0.75 ? 'legendary' : 'mythic', min: 8, max: 12, allowSpecific: true };
+  if (done < 2) return { rarity: 'common', min: 3, max: 5, allowSpecific: false, stage: 'Apprentice' };
+  if (done < 4) return { rarity: Math.random() < 0.65 ? 'common' : 'uncommon', min: 4, max: 6, allowSpecific: false, stage: 'Apprentice' };
+  if (done < 7) return { rarity: 'uncommon', min: 5, max: 8, allowSpecific: true, stage: 'Journeyman' };
+  if (done < 10) return { rarity: Math.random() < 0.75 ? 'rare' : 'uncommon', min: 5, max: 9, allowSpecific: true, stage: 'Journeyman' };
+  if (done < 14) return { rarity: Math.random() < 0.7 ? 'rare' : 'epic', min: 6, max: 10, allowSpecific: true, stage: 'Expert' };
+  if (done < 18) return { rarity: Math.random() < 0.7 ? 'epic' : 'legendary', min: 7, max: 11, allowSpecific: true, stage: 'Expert' };
+  if (done < 24) return { rarity: Math.random() < 0.75 ? 'legendary' : 'mythic', min: 8, max: 12, allowSpecific: true, stage: 'Master' };
+  return { rarity: Math.random() < 0.6 ? 'legendary' : 'mythic', min: 10, max: 15, allowSpecific: true, stage: 'Grandmaster' };
 }
 
 function pickFishByRarity(rarity) {
@@ -740,7 +768,10 @@ function defaultQuest(seed = 1) {
     { resource: 'stone', min: 14, max: 28, xpPerItem: 5, diamondBonusChance: 0.08 },
     { resource: 'iron', min: 8, max: 18, xpPerItem: 10, diamondBonusChance: 0.12 },
     { resource: 'gold', min: 6, max: 14, xpPerItem: 16, diamondBonusChance: 0.16 },
-    { resource: 'diamond', min: 2, max: 7, xpPerItem: 30, diamondBonusChance: 0.2 }
+    { resource: 'emerald', min: 3, max: 9, xpPerItem: 22, diamondBonusChance: 0.18 },
+    { resource: 'diamond', min: 2, max: 7, xpPerItem: 30, diamondBonusChance: 0.2 },
+    { resource: 'amethyst', min: 4, max: 10, xpPerItem: 18, diamondBonusChance: 0.15 },
+    { resource: 'obsidian', min: 1, max: 4, xpPerItem: 45, diamondBonusChance: 0.25 }
   ];
   const entry = pool[seed % pool.length];
   const span = entry.max - entry.min + 1;
@@ -864,6 +895,7 @@ function defaultProgress() {
     hasFishingRod: false,
     fishingRodTier: 'basic',
     maxStaminaBonusPct: 0,
+    enchantments: [],
     questSeed: 1,
     quest: defaultQuest(1),
     fishingQuestSeed: 1,
@@ -926,6 +958,19 @@ function sanitizeFishBag(value) {
 function sanitizeFishingRodTier(value, fallback = 'basic') {
   if (typeof value === 'string' && FISH_ROD_TIERS.includes(value)) return value;
   return fallback;
+}
+
+function sanitizeEnchantments(value) {
+  if (!Array.isArray(value)) return [];
+  const valid = [];
+  for (const entry of value) {
+    if (typeof entry !== 'string') continue;
+    if (ENCHANTMENT_TYPES[entry] && !valid.includes(entry)) {
+      valid.push(entry);
+      if (valid.length >= ENCHANTMENT_MAX_SLOTS) break;
+    }
+  }
+  return valid;
 }
 
 function sanitizeFishingQuest(value, completions = 0, seed = 1) {
@@ -1010,6 +1055,7 @@ function sanitizeProgress(value) {
   const fishingQuestSeed = clamp(Math.floor(Number(value.fishingQuestSeed) || 1), 1, 1_000_000);
   const fishingQuest = sanitizeFishingQuest(value.fishingQuest, fishingQuestCompletions, fishingQuestSeed);
   const maxStaminaBonusPct = clamp(Math.floor(Number(value.maxStaminaBonusPct) || 0), 0, MAX_STAMINA_BONUS_PCT);
+  const enchantments = sanitizeEnchantments(value.enchantments);
   const homeRoom = sanitizeHomeRoom(value.homeRoom);
   const furnitureTrader = sanitizeFurnitureTraderState(value.furnitureTrader);
   const xp = clamp(Math.floor(Number(value.xp) || 0), 0, 2_000_000_000);
@@ -1030,6 +1076,7 @@ function sanitizeProgress(value) {
     fishingQuestSeed,
     fishingQuestCompletions,
     fishingQuest,
+    enchantments,
     homeRoom,
     furnitureTrader
   };
@@ -1123,6 +1170,7 @@ function progressSnapshot(progress) {
     fishingQuestSeed: clamp(Math.floor(Number(progress.fishingQuestSeed) || 1), 1, 1_000_000),
     fishingQuestCompletions: clamp(Math.floor(Number(progress.fishingQuestCompletions) || 0), 0, 1_000_000),
     fishingQuest: progress.fishingQuest ? { ...progress.fishingQuest } : defaultFishingQuest(0, 1),
+    enchantments: sanitizeEnchantments(progress.enchantments),
     homeRoom: sanitizeHomeRoom(progress.homeRoom),
     homeRooms: [...profiles.entries()].map(([profileId, profile]) => {
       const room = sanitizeHomeRoom(profile?.progress?.homeRoom);
@@ -1149,27 +1197,57 @@ function buildLeaderboardRows(limitRaw = 8) {
     const xp = clamp(Math.floor(Number(progress.xp) || 0), 0, 2_000_000_000);
     const level = levelProgressFromXp(xp).level;
     const coins = clamp(Math.floor(Number(progress.coins) || 0), 0, 100_000_000);
+    const fishIndex = progress.fishIndex || {};
+    let rarestFish = null;
+    let rarestFishRarity = -1;
+    for (const [fishId, count] of Object.entries(fishIndex)) {
+      if (count <= 0) continue;
+      const fish = FISH_SPECIES_BY_ID.get(fishId);
+      if (!fish) continue;
+      const rarityIdx = FISH_RARITY_ORDER.indexOf(fish.rarity);
+      if (rarityIdx > rarestFishRarity || (rarityIdx === rarestFishRarity && fishId < (rarestFish || ''))) {
+        rarestFishRarity = rarityIdx;
+        rarestFish = fishId;
+      }
+    }
+    const inventory = progress.inventory || {};
+    const totalOres = (inventory.stone || 0) + (inventory.iron || 0) + (inventory.gold || 0) +
+      (inventory.emerald || 0) + (inventory.diamond || 0) + (inventory.amethyst || 0) + (inventory.obsidian || 0);
     rows.push({
       profileId,
       name: sanitizeName(profile?.name, `Player-${String(profileId).slice(0, 4)}`),
       level,
       xp,
-      coins
+      coins,
+      rarestFish,
+      rarestFishRarity,
+      totalOres
     });
   }
-  rows.sort((a, b) => {
-    if (b.coins !== a.coins) return b.coins - a.coins;
+  const byLevel = [...rows].sort((a, b) => {
     if (b.level !== a.level) return b.level - a.level;
     if (b.xp !== a.xp) return b.xp - a.xp;
     return a.name.localeCompare(b.name);
-  });
-  return rows.slice(0, limit).map((row, index) => ({
-    rank: index + 1,
-    name: row.name,
-    level: row.level,
-    xp: row.xp,
-    coins: row.coins
-  }));
+  }).slice(0, limit);
+  const byRarestFish = [...rows].filter(r => r.rarestFish).sort((a, b) => {
+    if (b.rarestFishRarity !== a.rarestFishRarity) return b.rarestFishRarity - a.rarestFishRarity;
+    return a.name.localeCompare(b.name);
+  }).slice(0, limit);
+  const byOresMined = [...rows].sort((a, b) => {
+    if (b.totalOres !== a.totalOres) return b.totalOres - a.totalOres;
+    return a.name.localeCompare(b.name);
+  }).slice(0, limit);
+  return {
+    level: byLevel.map((row, i) => ({ rank: i + 1, name: row.name, level: row.level, xp: row.xp })),
+    rarestFish: byRarestFish.map((row, i) => ({
+      rank: i + 1,
+      name: row.name,
+      fishId: row.rarestFish,
+      fishName: FISH_SPECIES_BY_ID.get(row.rarestFish)?.name || 'Unknown',
+      rarity: FISH_SPECIES_BY_ID.get(row.rarestFish)?.rarity || 'unknown'
+    })),
+    oresMined: byOresMined.map((row, i) => ({ rank: i + 1, name: row.name, totalOres: row.totalOres }))
+  };
 }
 
 app.get('/leaderboard', (req, res) => {
@@ -1229,9 +1307,15 @@ function rollRandomFishSpecies(options = {}) {
   const rarity = FISH_RARITY_ORDER.includes(requiredRarity)
     ? requiredRarity
     : pickRarityForRodTier(options.rodTier || 'basic');
-  const pool = FISH_SPECIES.filter((fish) => fish.rarity === rarity);
+  const isNight = options.isNight === true;
+  const pool = FISH_SPECIES.filter((fish) => {
+    if (fish.rarity !== rarity) return false;
+    if (fish.nightOnly && !isNight) return false;
+    return true;
+  });
   if (!pool.length) {
-    return weightedPick(FISH_SPECIES, (fish) => Math.max(0, Number(fish.weight) || 0)) || null;
+    const fallback = FISH_SPECIES.filter((fish) => !fish.nightOnly || isNight);
+    return weightedPick(fallback, (fish) => Math.max(0, Number(fish.weight) || 0)) || null;
   }
   return weightedPick(pool, (fish) => Math.max(0, Number(fish.weight) || 0)) || null;
 }
@@ -2225,12 +2309,25 @@ io.on('connection', (socket) => {
       return;
     }
     const resource = ORE_TYPES.has(payload?.resource) ? payload.resource : null;
-    const amount = clamp(Math.floor(Number(payload?.amount) || 0), 1, 20);
+    let amount = clamp(Math.floor(Number(payload?.amount) || 0), 1, 20);
     if (!resource) {
       if (typeof ack === 'function') ack({ ok: false, error: 'Invalid ore type.' });
       return;
     }
+    actor.stamina = clamp((actor.stamina || 100) - STAMINA_MINE_COST, 0, 100 + (progress.maxStaminaBonusPct || 0));
+    const enchantments = sanitizeEnchantments(progress.enchantments);
+    if (enchantments.includes('luck') && Math.random() < ENCHANTMENT_EFFECTS.luck.bonusOreChance) {
+      amount = Math.min(amount + 1, 20);
+    }
+    const xpBase = amount * (resource === 'obsidian' ? 18 : resource === 'diamond' ? 14 : resource === 'emerald' ? 10 : resource === 'amethyst' ? 8 : resource === 'gold' ? 6 : resource === 'iron' ? 4 : 2);
+    let xpGain = xpBase;
+    if (enchantments.includes('xp')) {
+      xpGain = Math.floor(xpGain * ENCHANTMENT_EFFECTS.xp.xpMultiplier);
+    }
     progress.inventory[resource] = clamp((progress.inventory[resource] || 0) + amount, 0, 1_000_000);
+    if (xpGain > 0) {
+      grantExperience(progress, xpGain);
+    }
     const quest = progress.quest;
     let questProgressed = false;
     if (quest?.status === 'active' && quest.type === 'mine') {
@@ -2243,7 +2340,7 @@ io.on('connection', (socket) => {
     persistPlayerProgress(actor);
     emitProgress(socket, actor);
     io.to(effectiveRoomName(actor)).emit('player:mined', { id: socket.id, sentAt: Date.now() });
-    if (typeof ack === 'function') ack({ ok: true, progress: progressSnapshot(progress), questProgressed });
+    if (typeof ack === 'function') ack({ ok: true, progress: progressSnapshot(progress), questProgressed, stamina: actor.stamina });
   });
 
   socket.on('shop:buyPickaxe', (payload, ack) => {
@@ -2512,6 +2609,66 @@ io.on('connection', (socket) => {
         progress: progressSnapshot(progress)
       });
     }
+  });
+
+  socket.on('shop:buyEnchantment', (payload, ack) => {
+    const actor = players.get(socket.id);
+    const progress = actor?.progress;
+    if (!actor || !progress) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Not authenticated.' });
+      return;
+    }
+    const enchantId = typeof payload?.enchantment === 'string' ? payload.enchantment.trim().toLowerCase() : '';
+    const enchantDef = ENCHANTMENT_TYPES[enchantId];
+    if (!enchantDef) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Unknown enchantment.' });
+      return;
+    }
+    const currentEnchantments = sanitizeEnchantments(progress.enchantments);
+    if (currentEnchantments.includes(enchantId)) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Enchantment already applied.' });
+      return;
+    }
+    if (currentEnchantments.length >= ENCHANTMENT_MAX_SLOTS) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'All enchantment slots are full.' });
+      return;
+    }
+    const currentLevel = normalizeProgressLevel(progress).level;
+    if (currentLevel < enchantDef.levelReq) {
+      if (typeof ack === 'function') ack({ ok: false, error: `Need level ${enchantDef.levelReq} for ${enchantDef.label}.` });
+      return;
+    }
+    if (progress.coins < enchantDef.price) {
+      if (typeof ack === 'function') ack({ ok: false, error: `Need ${enchantDef.price} coins.` });
+      return;
+    }
+    progress.coins -= enchantDef.price;
+    progress.enchantments = [...currentEnchantments, enchantId];
+    persistPlayerProgress(actor, { immediate: true });
+    emitProgress(socket, actor);
+    if (typeof ack === 'function') ack({ ok: true, enchantment: enchantId, progress: progressSnapshot(progress) });
+  });
+
+  socket.on('shop:buyStaminaStew', (payload, ack) => {
+    const actor = players.get(socket.id);
+    const progress = actor?.progress;
+    if (!actor || !progress) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Not authenticated.' });
+      return;
+    }
+    if (!isNearMarketIsland(actor)) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Buy stew at the Market island.' });
+      return;
+    }
+    if (progress.coins < STAMINA_STEW_PRICE) {
+      if (typeof ack === 'function') ack({ ok: false, error: `Need ${STAMINA_STEW_PRICE} coins.` });
+      return;
+    }
+    progress.coins -= STAMINA_STEW_PRICE;
+    actor.stamina = clamp((actor.stamina || 100) + STAMINA_STEW_RESTORE, 0, 100 + (progress.maxStaminaBonusPct || 0));
+    persistPlayerProgress(actor, { immediate: true });
+    emitProgress(socket, actor);
+    if (typeof ack === 'function') ack({ ok: true, stamina: actor.stamina, progress: progressSnapshot(progress) });
   });
 
   socket.on('home:requestRoomConfig', () => {
@@ -2794,7 +2951,8 @@ io.on('connection', (socket) => {
     }
     socket.data.lastFishCastAt = now;
     const rodTier = sanitizeFishingRodTier(progress.fishingRodTier, 'basic');
-    const caughtFish = rollRandomFishSpecies({ rodTier });
+    const isNight = worldState.timeOfDay === 'night';
+    const caughtFish = rollRandomFishSpecies({ rodTier, isNight });
     if (!caughtFish || !FISH_SPECIES_BY_ID.has(caughtFish.id)) {
       if (typeof ack === 'function') ack({ ok: false, error: 'No fish available right now. Try again.' });
       return;
@@ -3074,19 +3232,26 @@ io.on('connection', (socket) => {
     const rewardXp = clamp(Math.floor(Number(quest.rewardXp) || 0), 0, 1_000_000);
     const xpResult = grantExperience(progress, rewardXp);
     progress.fishingQuestCompletions = clamp((progress.fishingQuestCompletions || 0) + 1, 0, 1_000_000);
+    const completions = progress.fishingQuestCompletions;
+    let bonusCoins = 0;
+    const MILESTONES = { 5: 200, 10: 500, 15: 800, 20: 1200, 25: 2000 };
+    if (MILESTONES[completions]) {
+      bonusCoins = MILESTONES[completions];
+      progress.coins = clamp((progress.coins || 0) + bonusCoins, 0, 100_000_000);
+    }
     const questTitle = quest.title;
     nextFishingQuest(progress);
     persistPlayerProgress(actor, { immediate: true });
     emitProgress(socket, actor);
-    io.emit('chat', {
-      fromName: 'System',
-      text: `${actor.name} completed fishing quest "${questTitle}" for ${xpResult.gained} XP.`,
-      sentAt: Date.now()
-    });
+    const systemMsg = bonusCoins > 0
+      ? `${actor.name} completed fishing quest "${questTitle}" for ${xpResult.gained} XP and a ${bonusCoins} coin milestone bonus!`
+      : `${actor.name} completed fishing quest "${questTitle}" for ${xpResult.gained} XP.`;
+    io.emit('chat', { fromName: 'System', text: systemMsg, sentAt: Date.now() });
     if (typeof ack === 'function') {
       ack({
         ok: true,
         rewardXp: xpResult.gained,
+        bonusCoins,
         level: xpResult.level,
         leveledUp: xpResult.leveledUp,
         quest: fishingQuestSnapshot(progress),
@@ -3670,6 +3835,159 @@ io.on('connection', (socket) => {
     const candidate = payload?.candidate;
     if (!to || !candidate || !voiceParticipants.has(to)) return;
     io.to(to).emit('voice:ice', { from: socket.id, candidate });
+  });
+
+  socket.on('trade:request', (payload, ack) => {
+    const actor = players.get(socket.id);
+    if (!actor) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Not authenticated.' });
+      return;
+    }
+    const targetId = typeof payload?.targetId === 'string' ? payload.targetId : '';
+    const target = players.get(targetId);
+    if (!target) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Player not found.' });
+      return;
+    }
+    if (targetId === socket.id) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Cannot trade with yourself.' });
+      return;
+    }
+    const dist = distance2DPoint(actor, target);
+    if (dist > TRADE_RANGE) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Player is too far away.' });
+      return;
+    }
+    socket.data.pendingTrade = {
+      targetId,
+      createdAt: Date.now(),
+      offered: null
+    };
+    io.to(targetId).emit('trade:incoming', {
+      fromId: socket.id,
+      fromName: sanitizeName(actor.name, 'Player')
+    });
+    if (typeof ack === 'function') ack({ ok: true });
+  });
+
+  socket.on('trade:offer', (payload, ack) => {
+    const actor = players.get(socket.id);
+    const progress = actor?.progress;
+    if (!actor || !progress) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Not authenticated.' });
+      return;
+    }
+    const targetId = typeof payload?.targetId === 'string' ? payload.targetId : '';
+    const target = players.get(targetId);
+    if (!target) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Player not found.' });
+      return;
+    }
+    const dist = distance2DPoint(actor, target);
+    if (dist > TRADE_RANGE) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Player is too far away.' });
+      return;
+    }
+    const category = payload?.category === 'fish' ? 'fish' : 'ore';
+    const itemId = typeof payload?.itemId === 'string' ? payload.itemId.trim().toLowerCase() : '';
+    const amount = clamp(Math.floor(Number(payload?.amount) || 1), 1, 1000);
+    if (category === 'ore') {
+      if (!ORE_TYPES.has(itemId)) {
+        if (typeof ack === 'function') ack({ ok: false, error: 'Invalid ore type.' });
+        return;
+      }
+      const owned = progress.inventory[itemId] || 0;
+      if (owned < amount) {
+        if (typeof ack === 'function') ack({ ok: false, error: 'Not enough ore.' });
+        return;
+      }
+    } else {
+      if (!FISH_SPECIES_IDS.has(itemId)) {
+        if (typeof ack === 'function') ack({ ok: false, error: 'Invalid fish type.' });
+        return;
+      }
+      const owned = progress.fishBag[itemId] || 0;
+      if (owned < amount) {
+        if (typeof ack === 'function') ack({ ok: false, error: 'Not enough fish.' });
+        return;
+      }
+    }
+    socket.data.pendingTrade = socket.data.pendingTrade || {};
+    socket.data.pendingTrade.offered = { category, itemId, amount };
+    socket.data.pendingTrade.targetId = targetId;
+    io.to(targetId).emit('trade:offerUpdate', {
+      fromId: socket.id,
+      fromName: sanitizeName(actor.name, 'Player'),
+      offer: { category, itemId, amount }
+    });
+    if (typeof ack === 'function') ack({ ok: true, offer: { category, itemId, amount } });
+  });
+
+  socket.on('trade:accept', (payload, ack) => {
+    const actor = players.get(socket.id);
+    const progress = actor?.progress;
+    if (!actor || !progress) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Not authenticated.' });
+      return;
+    }
+    const fromId = typeof payload?.fromId === 'string' ? payload.fromId : '';
+    const sender = players.get(fromId);
+    const senderProgress = sender?.progress;
+    if (!sender || !senderProgress) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Trader not found.' });
+      return;
+    }
+    const dist = distance2DPoint(actor, sender);
+    if (dist > TRADE_RANGE) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Player is too far away.' });
+      return;
+    }
+    const offer = sender.data?.pendingTrade?.offered;
+    if (!offer || sender.data?.pendingTrade?.targetId !== socket.id) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'No active trade offer.' });
+      return;
+    }
+    const { category, itemId, amount } = offer;
+    if (category === 'ore') {
+      const owned = senderProgress.inventory[itemId] || 0;
+      if (owned < amount) {
+        if (typeof ack === 'function') ack({ ok: false, error: 'Sender no longer has enough ore.' });
+        return;
+      }
+      senderProgress.inventory[itemId] = owned - amount;
+      progress.inventory[itemId] = (progress.inventory[itemId] || 0) + amount;
+    } else {
+      const owned = senderProgress.fishBag[itemId] || 0;
+      if (owned < amount) {
+        if (typeof ack === 'function') ack({ ok: false, error: 'Sender no longer has enough fish.' });
+        return;
+      }
+      const left = owned - amount;
+      if (left > 0) {
+        senderProgress.fishBag[itemId] = left;
+      } else {
+        delete senderProgress.fishBag[itemId];
+      }
+      senderProgress.inventory.fish = clamp(computeTotalFishInBag(senderProgress.fishBag), 0, 1_000_000);
+      progress.fishBag[itemId] = (progress.fishBag[itemId] || 0) + amount;
+      progress.inventory.fish = clamp(computeTotalFishInBag(progress.fishBag), 0, 1_000_000);
+    }
+    sender.data.pendingTrade = null;
+    persistPlayerProgress(sender, { immediate: true });
+    persistPlayerProgress(actor, { immediate: true });
+    emitProgress(socket, actor);
+    emitProgress(io.to(fromId), sender);
+    io.to(fromId).emit('trade:completed', { withId: socket.id, withName: sanitizeName(actor.name, 'Player') });
+    if (typeof ack === 'function') ack({ ok: true, received: { category, itemId, amount } });
+  });
+
+  socket.on('trade:decline', (payload) => {
+    const fromId = typeof payload?.fromId === 'string' ? payload.fromId : '';
+    const sender = players.get(fromId);
+    if (sender) {
+      sender.data.pendingTrade = null;
+      io.to(fromId).emit('trade:declined', { byId: socket.id, byName: sanitizeName(sender.name, 'Player') });
+    }
   });
 
   socket.on('disconnect', () => {
