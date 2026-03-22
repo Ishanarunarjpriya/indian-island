@@ -2264,6 +2264,7 @@ const SWIM_SINK_Y = -6.4;
 let lighthouseInteriorGroup = null;
 let lighthouseInteriorPortal = null;
 let lighthouseTopPortal = null;
+let lighthouseLight = null;
 initInteriorBuilders({
   sceneRef: scene,
   addWorldColliderRef: addWorldCollider,
@@ -2445,6 +2446,9 @@ initLandmarkBuilders({
   setLighthouseTopPortalRef: (value) => {
     lighthouseTopPortal = value;
   },
+  setLighthouseLightRef: (value) => {
+    lighthouseLight = value;
+  },
   leaderboardStateRef: leaderboardBoardStateRef,
   layoutRef: landmarkLayout
 });
@@ -2512,7 +2516,7 @@ socket.on('home:roomUpdate', (payload) => {
 function addLandmarks() {
   addDock(ISLAND_DOCK_POS, ISLAND_DOCK_YAW, { segments: 17, plankLength: 3.2, plankWidth: 3.2, spacing: 1.2 });
   addLighthouseIsland();
-  addDock(LIGHTHOUSE_DOCK_POS, LIGHTHOUSE_DOCK_YAW, { segments: 12, plankLength: 2.8, plankWidth: 2.2, spacing: 1.1 });
+  addDock(LIGHTHOUSE_DOCK_POS, LIGHTHOUSE_DOCK_YAW, { segments: 12, plankLength: 2.8, plankWidth: 3.6, spacing: 1.1 });
   addMineEntryIsland();
   addDock(MINE_ENTRY_DOCK_POS, MINE_ENTRY_DOCK_YAW, { segments: 11, plankLength: 2.7, plankWidth: 2.1, spacing: 1.1 });
   addFishingIsland();
@@ -3652,10 +3656,25 @@ function setBeaconVisual(active) {
   }
 }
 
+function setLighthouseLightVisual(active) {
+  if (!lighthouseLight) return;
+  if (active) {
+    lighthouseLight.beam.material.opacity = 0.12;
+    lighthouseLight.light.intensity = 2.5;
+  } else {
+    lighthouseLight.beam.material.opacity = 0.0;
+    lighthouseLight.light.intensity = 0;
+  }
+}
+
 function updateBeaconState(payload) {
-  if (!payload || payload.id !== 'beacon') return;
+  if (!payload) return;
   interactables.set(payload.id, payload);
-  setBeaconVisual(Boolean(payload.active));
+  if (payload.id === 'beacon') {
+    setBeaconVisual(Boolean(payload.active));
+  } else if (payload.id === 'lighthouse-light') {
+    setLighthouseLightVisual(Boolean(payload.active));
+  }
 }
 
 function applyPlayerCustomization(id, name, color, appearancePayload) {
@@ -6597,6 +6616,11 @@ function getManualInteractTarget(local) {
   if (!inLighthouseInterior && !local.onBoat && distance2D(local, LIGHTHOUSE_TOP_POS) < 1.25 && local.y > 11.6) {
     return { mode: 'world', label: 'Enter', caption: 'Tap', worldPos: LIGHTHOUSE_TOP_POS, offsetY: 0.8 };
   }
+  if (inLighthouseInterior && distance2D(local, LIGHTHOUSE_TOP_POS) < 3 && local.y > 11.6) {
+    const lightState = interactables.get('lighthouse-light');
+    const label = lightState?.active ? 'Dim Light' : 'Light';
+    return { mode: 'world', label, caption: 'Tap', worldPos: LIGHTHOUSE_TOP_POS, offsetY: 0.8 };
+  }
 
   if (boatState.onboard) {
     return { mode: 'docked', label: 'Leave', caption: 'Tap' };
@@ -6839,6 +6863,12 @@ function tryInteract() {
       if (lighthouseInteriorGroup) lighthouseInteriorGroup.visible = true;
       teleportLocal(local, { x: INTERIOR_TOP_POS.x, y: INTERIOR_TOP_POS.y, z: INTERIOR_TOP_POS.z }, Math.PI);
     });
+    lastInteractAt = now;
+    return;
+  }
+
+  if (inLighthouseInterior && distance2D(local, LIGHTHOUSE_TOP_POS) < 3 && local.y > 11.6) {
+    socket.emit('interact', { id: 'lighthouse-light' });
     lastInteractAt = now;
     return;
   }
@@ -8908,6 +8938,11 @@ function updateInteractionHint() {
   if (inLighthouseInterior) {
     if (distance2D(local, INTERIOR_EXIT_PORTAL_POS) < 3.1) {
       interactHintEl.textContent = 'Press E at the glowing marker to go to lighthouse top';
+      return;
+    }
+    if (distance2D(local, LIGHTHOUSE_TOP_POS) < 3 && local.y > 11.6) {
+      const lightState = interactables.get('lighthouse-light');
+      interactHintEl.textContent = lightState?.active ? 'Press E to dim the lighthouse light' : 'Press E to light the lighthouse';
       return;
     }
     interactHintEl.textContent = 'Climb the stairs to the glowing marker at the top';

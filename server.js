@@ -360,6 +360,16 @@ const interactables = new Map([
       active: false,
       lastBy: null
     }
+  ],
+  [
+    'lighthouse-light',
+    {
+      id: 'lighthouse-light',
+      x: LIGHTHOUSE_POS.x,
+      z: LIGHTHOUSE_POS.z,
+      active: false,
+      lastBy: null
+    }
   ]
 ]);
 let saveTimer = null;
@@ -3371,24 +3381,33 @@ io.on('connection', (socket) => {
 
   socket.on('interact', (payload) => {
     const actor = players.get(socket.id);
-    if (!actor || !payload || payload.id !== 'beacon') return;
+    if (!actor || !payload) return;
+    const interactableId = typeof payload.id === 'string' ? payload.id : '';
 
-    const beacon = interactables.get('beacon');
-    if (!beacon) return;
+    const interactable = interactables.get(interactableId);
+    if (!interactable) return;
 
-    const distance = Math.hypot(actor.x - beacon.x, actor.z - beacon.z);
+    const distance = Math.hypot(actor.x - interactable.x, actor.z - interactable.z);
     if (distance > INTERACT_RANGE) return;
 
-    beacon.active = !beacon.active;
-    beacon.lastBy = actor.name;
-    interactables.set(beacon.id, beacon);
+    interactable.active = !interactable.active;
+    interactable.lastBy = actor.name;
+    interactables.set(interactable.id, interactable);
 
-    io.emit('interactableUpdated', beacon);
-    io.emit('chat', {
-      fromName: 'System',
-      text: beacon.active ? `${actor.name} activated the island beacon.` : `${actor.name} cooled the island beacon.`,
-      sentAt: Date.now()
-    });
+    io.emit('interactableUpdated', interactable);
+    if (interactableId === 'beacon') {
+      io.emit('chat', {
+        fromName: 'System',
+        text: interactable.active ? `${actor.name} activated the island beacon.` : `${actor.name} cooled the island beacon.`,
+        sentAt: Date.now()
+      });
+    } else if (interactableId === 'lighthouse-light') {
+      io.emit('chat', {
+        fromName: 'System',
+        text: interactable.active ? `${actor.name} lit the lighthouse.` : `${actor.name} dimmed the lighthouse.`,
+        sentAt: Date.now()
+      });
+    }
   });
 
   socket.on('chat', (payload) => {
