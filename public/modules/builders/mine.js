@@ -231,22 +231,47 @@ export function addMineArea() {
       positions: [[-28, 15], [-12, 26], [3, 28], [14, -22], [24, 6], [20, 23], [-4, -26]]
     },
     {
+      resource: 'emerald',
+      color: ORE_RESOURCE_COLORS.emerald,
+      reward: 4,
+      cooldownMs: 12800,
+      positions: [[-20, 20], [5, -25], [18, -15], [-10, -28], [26, 18]]
+    },
+    {
       resource: 'diamond',
       color: ORE_RESOURCE_COLORS.diamond,
       reward: 1,
       cooldownMs: 15600,
       positions: [[-30, -5], [-8, 4], [0, 0], [18, 14], [30, 10]]
+    },
+    {
+      resource: 'amethyst',
+      color: ORE_RESOURCE_COLORS.amethyst,
+      reward: 3,
+      cooldownMs: 9800,
+      positions: [[-15, 30], [22, -8], [-5, -30], [28, -18], [-25, -15]]
+    },
+    {
+      resource: 'obsidian',
+      color: ORE_RESOURCE_COLORS.obsidian,
+      reward: 5,
+      cooldownMs: 18000,
+      positions: [[0, 32], [-28, 0], [30, -5], [-5, -32], [15, 28]]
     }
   ];
 
   oreDefs.forEach((def) => {
+    const emissiveResources = { diamond: 0x0891b2, emerald: 0x059669, amethyst: 0x7c3aed, obsidian: 0x4c1d95 };
+    const emissiveColor = emissiveResources[def.resource] || 0x000000;
+    const hasEmissive = def.resource === 'diamond' || def.resource === 'emerald' || def.resource === 'amethyst' || def.resource === 'obsidian';
+    const scale = def.resource === 'obsidian' ? 1.1 : def.resource === 'diamond' || def.resource === 'emerald' ? 0.95 : 0.85;
     def.positions.forEach(([x, z], idx) => {
       const mesh = new THREE.Mesh(
-        new THREE.DodecahedronGeometry(def.resource === 'diamond' ? 0.95 : 0.85, 0),
+        new THREE.DodecahedronGeometry(scale, 0),
         new THREE.MeshStandardMaterial({
           color: def.color,
-          emissive: def.resource === 'diamond' ? 0x0891b2 : 0x000000,
-          emissiveIntensity: def.resource === 'diamond' ? 0.8 : 0
+          emissive: emissiveColor,
+          emissiveIntensity: hasEmissive ? 0.8 : 0
         })
       );
       mesh.position.set(x, 1.86, z);
