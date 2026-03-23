@@ -154,6 +154,14 @@ import {
   loadOutfit
 } from './modules/ui/customizePreview.js';
 import {
+  initTradingUI,
+  openTradingModal,
+  closeTradingModal,
+  updateTradesList,
+  updateTradeHistory,
+  setupTradeEventListeners
+} from './modules/ui/trading.js';
+import {
   initUiRenderers,
   renderFishIndex,
   renderFurnitureTraderModal,
@@ -1720,6 +1728,7 @@ initCustomizePreview({
   refsRef: customizePreviewRefs,
   stateRef: previewState
 });
+initTradingUI();
 initPlayerMeshes({
   sceneRef: scene,
   fishingMiniGameRef: fishingMiniGame,
@@ -7042,6 +7051,20 @@ socket.on('private:message', ({ fromId, fromTag, fromName, text, sentAt }) => {
     showChatBubble(fromId, `(private) ${text}`);
   }
 });
+
+socket.on('trade:completed', ({ tradeId, initiatorId }) => {
+  console.log(`[trading] Trade ${tradeId} completed`);
+});
+
+socket.on('trade:rejected', ({ tradeId }) => {
+  console.log(`[trading] Trade ${tradeId} rejected`);
+});
+
+socket.on('trade:cancelled', ({ tradeId }) => {
+  console.log(`[trading] Trade ${tradeId} cancelled`);
+});
+
+setupTradeEventListeners(socket, profileId);
 
 function keyToEmote(key) {
   if (key === '1') return 'wave';

@@ -6,6 +6,14 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { createClient } from '@libsql/client';
 import { Server } from 'socket.io';
+import {
+  initTradingDb,
+  getPlayerTrades,
+  getTradeHistory,
+  acceptTrade,
+  rejectTrade,
+  cancelTrade
+} from './trading.js';
 
 const app = express();
 const server = http.createServer(app);
@@ -1921,6 +1929,11 @@ async function bootstrapPersistence() {
 
 await bootstrapPersistence();
 
+const dbForTrading = getDbClient();
+if (dbForTrading) {
+  initTradingDb(dbForTrading);
+}
+
 function ensureProfileExists(profileId, username, options = {}) {
   if (!profileId) return false;
   if (profiles.has(profileId)) return false;
@@ -3662,6 +3675,76 @@ io.on('connection', (socket) => {
     const candidate = payload?.candidate;
     if (!to || !candidate || !voiceParticipants.has(to)) return;
     io.to(to).emit('voice:ice', { from: socket.id, candidate });
+  });
+
+  socket.on('trade:getList', async (payload, ack) => {
+    const current = players.get(socket.id);
+    if (!current) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Not authenticated' });
+      return;
+    }
+
+    try {
+      const trades = await getPlayerTrades(current.profileId);
+      const history = await getTradeHistory(current.profileId);
+      if (typeof ack === 'function') {
+        ack({ ok: true, trades, history });
+      }
+    } catch (err) {
+      console.error('[trade:getList] Error:', err);
+      if (typeof ack === 'function') ack({ ok: false, error: String(err?.message || err) });
+    }
+  });
+
+  socket.on('trade:accept', async (payload, ack) => {
+    const current = players.get(socket.id);
+    if (!current || !payload?.tradeId) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Invalid request' });
+      return;
+    }
+
+    try {
+      const trade = await acceptTrade(payload.tradeId, current.profileId);
+      io.emit('trade:completed', { tradeId: payload.tradeId, initiatorId: trade.initiator_id });
+      if (typeof ack === 'function') ack({ ok: true });
+    } catch (err) {
+      console.error('[trade:accept] Error:', err);
+      if (typeof ack === 'function') ack({ ok: false, error: String(err?.message || err) });
+    }
+  });
+
+  socket.on('trade:reject', async (payload, ack) => {
+    const current = players.get(socket.id);
+    if (!current || !payload?.tradeId) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Invalid request' });
+      return;
+    }
+
+    try {
+      await rejectTrade(payload.tradeId, current.profileId);
+      io.emit('trade:rejected', { tradeId: payload.tradeId });
+      if (typeof ack === 'function') ack({ ok: true });
+    } catch (err) {
+      console.error('[trade:reject] Error:', err);
+      if (typeof ack === 'function') ack({ ok: false, error: String(err?.message || err) });
+    }
+  });
+
+  socket.on('trade:cancel', async (payload, ack) => {
+    const current = players.get(socket.id);
+    if (!current || !payload?.tradeId) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Invalid request' });
+      return;
+    }
+
+    try {
+      await cancelTrade(payload.tradeId, current.profileId);
+      io.emit('trade:cancelled', { tradeId: payload.tradeId });
+      if (typeof ack === 'function') ack({ ok: true });
+    } catch (err) {
+      console.error('[trade:cancel] Error:', err);
+      if (typeof ack === 'function') ack({ ok: false, error: String(err?.message || err) });
+    }
   });
 
   socket.on('disconnect', () => {
