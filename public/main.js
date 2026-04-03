@@ -160,6 +160,14 @@ import {
   loadOutfit
 } from './modules/ui/customizePreview.js';
 import {
+  initTradingUI,
+  openTradingModal,
+  closeTradingModal,
+  updateTradesList,
+  updateTradeHistory,
+  setupTradeEventListeners
+} from './modules/ui/trading.js';
+import {
   initUiRenderers,
   renderFishIndex,
   renderFurnitureTraderModal,
@@ -1902,6 +1910,7 @@ initCustomizePreview({
   refsRef: customizePreviewRefs,
   stateRef: previewState
 });
+initTradingUI();
 initPlayerMeshes({
   sceneRef: scene,
   fishingMiniGameRef: fishingMiniGame,
@@ -7289,29 +7298,19 @@ socket.on('private:message', ({ fromId, fromTag, fromName, text, sentAt }) => {
   }
 });
 
-socket.on('trade:incoming', ({ fromId, fromName }) => {
-  openTradeIncoming(fromId, fromName);
+socket.on('trade:completed', ({ tradeId, initiatorId }) => {
+  console.log(`[trading] Trade ${tradeId} completed`);
 });
 
-socket.on('trade:offerUpdate', ({ fromId, fromName, offer }) => {
-  if (tradeIncomingOfferEl) {
-    const itemName = offer.category === 'fish'
-      ? (FISH_BY_ID.get(offer.itemId)?.name || offer.itemId)
-      : offer.itemId;
-    tradeIncomingOfferEl.textContent = `${offer.amount}x ${itemName}`;
-  }
-  if (tradeStatusEl) tradeStatusEl.textContent = `${fromName} offered a trade.`;
+socket.on('trade:rejected', ({ tradeId }) => {
+  console.log(`[trading] Trade ${tradeId} rejected`);
 });
 
-socket.on('trade:completed', ({ withId, withName }) => {
-  if (tradeStatusEl) tradeStatusEl.textContent = `Trade with ${withName} complete!`;
-  setTimeout(() => tradeOverlayEl?.classList.add('hidden'), 1500);
+socket.on('trade:cancelled', ({ tradeId }) => {
+  console.log(`[trading] Trade ${tradeId} cancelled`);
 });
 
-socket.on('trade:declined', ({ byId, byName }) => {
-  if (tradeStatusEl) tradeStatusEl.textContent = `${byName} declined the trade.`;
-  setTimeout(() => tradeOverlayEl?.classList.add('hidden'), 1500);
-});
+setupTradeEventListeners(socket, profileId);
 
 function keyToEmote(key) {
   if (key === '1') return 'wave';

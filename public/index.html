@@ -2542,11 +2542,11 @@
       body.mobile-ui #quest-tracker {
         left: 50%;
         right: auto;
-        top: calc(58px + env(safe-area-inset-top));
+        top: calc(54px + env(safe-area-inset-top));
         bottom: auto;
         transform: translateX(-50%);
-        width: min(40vw, 164px);
-        padding: 5px 7px;
+        width: min(52vw, 220px);
+        padding: 6px 8px;
         gap: 2px;
         border-radius: 12px;
         z-index: 13;
@@ -2757,6 +2757,196 @@
 
       body.mobile-ui #ore-panel input[type="number"] {
         max-width: 100%;
+      }
+
+      .trading-tabs {
+        display: flex;
+        gap: 8px;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.24);
+        margin-bottom: 12px;
+      }
+
+      .trading-tab-btn {
+        padding: 8px 12px;
+        background: none;
+        border: none;
+        color: rgba(148, 163, 184, 0.8);
+        cursor: pointer;
+        font-size: 13px;
+        border-bottom: 2px solid transparent;
+        transition: all 0.2s;
+      }
+
+      .trading-tab-btn.active {
+        color: #fff;
+        border-bottom-color: #4f46e5;
+      }
+
+      .trading-tab-content {
+        display: grid;
+        gap: 12px;
+      }
+
+      .trading-tab-content.hidden {
+        display: none;
+      }
+
+      .trades-list,
+      .trade-history-list {
+        display: grid;
+        gap: 12px;
+      }
+
+      .trade-item,
+      .trade-history-item {
+        border: 1px solid rgba(148, 163, 184, 0.24);
+        border-radius: 8px;
+        padding: 12px;
+        background: rgba(8, 13, 24, 0.5);
+      }
+
+      .trade-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+        gap: 8px;
+      }
+
+      .trade-header strong {
+        font-size: 14px;
+      }
+
+      .trade-status {
+        font-size: 12px;
+        padding: 4px 8px;
+        border-radius: 4px;
+        text-transform: capitalize;
+      }
+
+      .trade-status.pending {
+        background: rgba(251, 146, 60, 0.2);
+        color: #fb923c;
+      }
+
+      .trade-status.completed {
+        background: rgba(34, 197, 94, 0.2);
+        color: #22c55e;
+      }
+
+      .trade-status.rejected {
+        background: rgba(239, 68, 68, 0.2);
+        color: #ef4444;
+      }
+
+      .trade-content {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        gap: 12px;
+        align-items: center;
+        margin-bottom: 12px;
+        font-size: 13px;
+      }
+
+      .trade-side h4 {
+        margin: 0 0 8px 0;
+        font-size: 12px;
+        color: rgba(148, 163, 184, 0.8);
+        text-transform: uppercase;
+      }
+
+      .trade-items {
+        display: grid;
+        gap: 6px;
+      }
+
+      .trade-item-entry {
+        display: flex;
+        justify-content: space-between;
+        padding: 4px 0;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+      }
+
+      .trade-item-entry:last-child {
+        border-bottom: none;
+      }
+
+      .item-name {
+        color: rgba(148, 163, 184, 0.9);
+      }
+
+      .item-qty {
+        color: #4f46e5;
+        font-weight: 600;
+      }
+
+      .no-items {
+        color: rgba(148, 163, 184, 0.6);
+        font-size: 12px;
+        padding: 8px;
+      }
+
+      .trade-arrow {
+        text-align: center;
+        color: rgba(148, 163, 184, 0.6);
+        font-size: 18px;
+      }
+
+      .trade-date {
+        font-size: 12px;
+        color: rgba(148, 163, 184, 0.6);
+      }
+
+      .trade-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .trade-actions button {
+        flex: 1;
+        min-width: 100px;
+        padding: 6px 12px;
+        border: 1px solid rgba(148, 163, 184, 0.24);
+        border-radius: 6px;
+        background: rgba(8, 13, 24, 0.5);
+        color: #fff;
+        cursor: pointer;
+        font-size: 12px;
+        transition: all 0.2s;
+      }
+
+      .trade-actions button:hover {
+        background: rgba(148, 163, 184, 0.1);
+      }
+
+      .btn-accept {
+        background: rgba(34, 197, 94, 0.15) !important;
+        border-color: rgba(34, 197, 94, 0.3) !important;
+        color: #22c55e !important;
+      }
+
+      .btn-accept:hover {
+        background: rgba(34, 197, 94, 0.25) !important;
+      }
+
+      .btn-reject,
+      .btn-cancel {
+        background: rgba(239, 68, 68, 0.15) !important;
+        border-color: rgba(239, 68, 68, 0.3) !important;
+        color: #ef4444 !important;
+      }
+
+      .btn-reject:hover,
+      .btn-cancel:hover {
+        background: rgba(239, 68, 68, 0.25) !important;
+      }
+
+      .empty-state {
+        text-align: center;
+        color: rgba(148, 163, 184, 0.6);
+        padding: 24px;
+        font-size: 14px;
       }
     </style>
   </head>
@@ -3328,6 +3518,26 @@
       </section>
     </div>
 
+    <div id="trading-modal" class="hidden modal-backdrop">
+      <section id="trading-panel" class="panel modal-panel">
+        <div class="modal-head">
+          <h2>Trading</h2>
+          <button id="trading-close" class="modal-close" type="button">✕</button>
+        </div>
+        <div class="trading-tabs">
+          <button class="trading-tab-btn active" data-tab="active">Active Trades</button>
+          <button class="trading-tab-btn" data-tab="history">Trade History</button>
+        </div>
+        <div id="active-tab" class="trading-tab-content" data-tab="active">
+          <div id="trades-list" class="trades-list"></div>
+        </div>
+        <div id="history-tab" class="trading-tab-content hidden" data-tab="history">
+          <div id="trade-history-list" class="trade-history-list"></div>
+        </div>
+        <p id="trading-status"></p>
+      </section>
+    </div>
+
     <div id="customize-modal" class="hidden">
       <section id="customize-panel" class="panel">
         <div id="customize-header">
@@ -3444,6 +3654,6 @@
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
-    <script type="module" src="/main.js?v=20260320a"></script>
+    <script type="module" src="/main.js"></script>
   </body>
 </html>

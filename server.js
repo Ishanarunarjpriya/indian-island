@@ -6,6 +6,14 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { createClient } from '@libsql/client';
 import { Server } from 'socket.io';
+import {
+  initTradingDb,
+  getPlayerTrades,
+  getTradeHistory,
+  acceptTrade,
+  rejectTrade,
+  cancelTrade
+} from './trading.js';
 
 const app = express();
 const server = http.createServer(app);
@@ -2023,6 +2031,11 @@ async function bootstrapPersistence() {
 
 await bootstrapPersistence();
 
+const dbForTrading = getDbClient();
+if (dbForTrading) {
+  initTradingDb(dbForTrading);
+}
+
 function ensureProfileExists(profileId, username, options = {}) {
   if (!profileId) return false;
   if (profiles.has(profileId)) return false;
@@ -3856,156 +3869,73 @@ io.on('connection', (socket) => {
     io.to(to).emit('voice:ice', { from: socket.id, candidate });
   });
 
-  socket.on('trade:request', (payload, ack) => {
-    const actor = players.get(socket.id);
-    if (!actor) {
-      if (typeof ack === 'function') ack({ ok: false, error: 'Not authenticated.' });
+  socket.on('trade:getList', async (payload, ack) => {
+    const current = players.get(socket.id);
+    if (!current) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Not authenticated' });
       return;
     }
-    const targetId = typeof payload?.targetId === 'string' ? payload.targetId : '';
-    const target = players.get(targetId);
-    if (!target) {
-      if (typeof ack === 'function') ack({ ok: false, error: 'Player not found.' });
-      return;
+
+    try {
+      const trades = await getPlayerTrades(current.profileId);
+      const history = await getTradeHistory(current.profileId);
+      if (typeof ack === 'function') {
+        ack({ ok: true, trades, history });
+      }
+    } catch (err) {
+      console.error('[trade:getList] Error:', err);
+      if (typeof ack === 'function') ack({ ok: false, error: String(err?.message || err) });
     }
-    if (targetId === socket.id) {
-      if (typeof ack === 'function') ack({ ok: false, error: 'Cannot trade with yourself.' });
-      return;
-    }
-    const dist = distance2DPoint(actor, target);
-    if (dist > TRADE_RANGE) {
-      if (typeof ack === 'function') ack({ ok: false, error: 'Player is too far away.' });
-      return;
-    }
-    socket.data.pendingTrade = {
-      targetId,
-      createdAt: Date.now(),
-      offered: null
-    };
-    io.to(targetId).emit('trade:incoming', {
-      fromId: socket.id,
-      fromName: sanitizeName(actor.name, 'Player')
-    });
-    if (typeof ack === 'function') ack({ ok: true });
   });
 
-  socket.on('trade:offer', (payload, ack) => {
-    const actor = players.get(socket.id);
-    const progress = actor?.progress;
-    if (!actor || !progress) {
-      if (typeof ack === 'function') ack({ ok: false, error: 'Not authenticated.' });
+  socket.on('trade:accept', async (payload, ack) => {
+    const current = players.get(socket.id);
+    if (!current || !payload?.tradeId) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Invalid request' });
       return;
     }
-    const targetId = typeof payload?.targetId === 'string' ? payload.targetId : '';
-    const target = players.get(targetId);
-    if (!target) {
-      if (typeof ack === 'function') ack({ ok: false, error: 'Player not found.' });
-      return;
+
+    try {
+      const trade = await acceptTrade(payload.tradeId, current.profileId);
+      io.emit('trade:completed', { tradeId: payload.tradeId, initiatorId: trade.initiator_id });
+      if (typeof ack === 'function') ack({ ok: true });
+    } catch (err) {
+      console.error('[trade:accept] Error:', err);
+      if (typeof ack === 'function') ack({ ok: false, error: String(err?.message || err) });
     }
-    const dist = distance2DPoint(actor, target);
-    if (dist > TRADE_RANGE) {
-      if (typeof ack === 'function') ack({ ok: false, error: 'Player is too far away.' });
-      return;
-    }
-    const category = payload?.category === 'fish' ? 'fish' : 'ore';
-    const itemId = typeof payload?.itemId === 'string' ? payload.itemId.trim().toLowerCase() : '';
-    const amount = clamp(Math.floor(Number(payload?.amount) || 1), 1, 1000);
-    if (category === 'ore') {
-      if (!ORE_TYPES.has(itemId)) {
-        if (typeof ack === 'function') ack({ ok: false, error: 'Invalid ore type.' });
-        return;
-      }
-      const owned = progress.inventory[itemId] || 0;
-      if (owned < amount) {
-        if (typeof ack === 'function') ack({ ok: false, error: 'Not enough ore.' });
-        return;
-      }
-    } else {
-      if (!FISH_SPECIES_IDS.has(itemId)) {
-        if (typeof ack === 'function') ack({ ok: false, error: 'Invalid fish type.' });
-        return;
-      }
-      const owned = progress.fishBag[itemId] || 0;
-      if (owned < amount) {
-        if (typeof ack === 'function') ack({ ok: false, error: 'Not enough fish.' });
-        return;
-      }
-    }
-    socket.data.pendingTrade = socket.data.pendingTrade || {};
-    socket.data.pendingTrade.offered = { category, itemId, amount };
-    socket.data.pendingTrade.targetId = targetId;
-    io.to(targetId).emit('trade:offerUpdate', {
-      fromId: socket.id,
-      fromName: sanitizeName(actor.name, 'Player'),
-      offer: { category, itemId, amount }
-    });
-    if (typeof ack === 'function') ack({ ok: true, offer: { category, itemId, amount } });
   });
 
-  socket.on('trade:accept', (payload, ack) => {
-    const actor = players.get(socket.id);
-    const progress = actor?.progress;
-    if (!actor || !progress) {
-      if (typeof ack === 'function') ack({ ok: false, error: 'Not authenticated.' });
+  socket.on('trade:reject', async (payload, ack) => {
+    const current = players.get(socket.id);
+    if (!current || !payload?.tradeId) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Invalid request' });
       return;
     }
-    const fromId = typeof payload?.fromId === 'string' ? payload.fromId : '';
-    const sender = players.get(fromId);
-    const senderProgress = sender?.progress;
-    if (!sender || !senderProgress) {
-      if (typeof ack === 'function') ack({ ok: false, error: 'Trader not found.' });
-      return;
+
+    try {
+      await rejectTrade(payload.tradeId, current.profileId);
+      io.emit('trade:rejected', { tradeId: payload.tradeId });
+      if (typeof ack === 'function') ack({ ok: true });
+    } catch (err) {
+      console.error('[trade:reject] Error:', err);
+      if (typeof ack === 'function') ack({ ok: false, error: String(err?.message || err) });
     }
-    const dist = distance2DPoint(actor, sender);
-    if (dist > TRADE_RANGE) {
-      if (typeof ack === 'function') ack({ ok: false, error: 'Player is too far away.' });
-      return;
-    }
-    const offer = sender.data?.pendingTrade?.offered;
-    if (!offer || sender.data?.pendingTrade?.targetId !== socket.id) {
-      if (typeof ack === 'function') ack({ ok: false, error: 'No active trade offer.' });
-      return;
-    }
-    const { category, itemId, amount } = offer;
-    if (category === 'ore') {
-      const owned = senderProgress.inventory[itemId] || 0;
-      if (owned < amount) {
-        if (typeof ack === 'function') ack({ ok: false, error: 'Sender no longer has enough ore.' });
-        return;
-      }
-      senderProgress.inventory[itemId] = owned - amount;
-      progress.inventory[itemId] = (progress.inventory[itemId] || 0) + amount;
-    } else {
-      const owned = senderProgress.fishBag[itemId] || 0;
-      if (owned < amount) {
-        if (typeof ack === 'function') ack({ ok: false, error: 'Sender no longer has enough fish.' });
-        return;
-      }
-      const left = owned - amount;
-      if (left > 0) {
-        senderProgress.fishBag[itemId] = left;
-      } else {
-        delete senderProgress.fishBag[itemId];
-      }
-      senderProgress.inventory.fish = clamp(computeTotalFishInBag(senderProgress.fishBag), 0, 1_000_000);
-      progress.fishBag[itemId] = (progress.fishBag[itemId] || 0) + amount;
-      progress.inventory.fish = clamp(computeTotalFishInBag(progress.fishBag), 0, 1_000_000);
-    }
-    sender.data.pendingTrade = null;
-    persistPlayerProgress(sender, { immediate: true });
-    persistPlayerProgress(actor, { immediate: true });
-    emitProgress(socket, actor);
-    emitProgress(io.to(fromId), sender);
-    io.to(fromId).emit('trade:completed', { withId: socket.id, withName: sanitizeName(actor.name, 'Player') });
-    if (typeof ack === 'function') ack({ ok: true, received: { category, itemId, amount } });
   });
 
-  socket.on('trade:decline', (payload) => {
-    const fromId = typeof payload?.fromId === 'string' ? payload.fromId : '';
-    const sender = players.get(fromId);
-    if (sender) {
-      sender.data.pendingTrade = null;
-      io.to(fromId).emit('trade:declined', { byId: socket.id, byName: sanitizeName(sender.name, 'Player') });
+  socket.on('trade:cancel', async (payload, ack) => {
+    const current = players.get(socket.id);
+    if (!current || !payload?.tradeId) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Invalid request' });
+      return;
+    }
+
+    try {
+      await cancelTrade(payload.tradeId, current.profileId);
+      io.emit('trade:cancelled', { tradeId: payload.tradeId });
+      if (typeof ack === 'function') ack({ ok: true });
+    } catch (err) {
+      console.error('[trade:cancel] Error:', err);
+      if (typeof ack === 'function') ack({ ok: false, error: String(err?.message || err) });
     }
   });
 
