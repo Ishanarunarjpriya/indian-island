@@ -24,7 +24,10 @@
         "stone": 0,
         "iron": 0,
         "gold": 0,
+        "emerald": 0,
         "diamond": 0,
+        "amethyst": 0,
+        "obsidian": 0,
         "torch": 1,
         "fish": 0
       },
@@ -60,6 +63,7 @@
         "title": "Turn in 5 common fish",
         "description": "Bring 5 common fish to the Market Trader."
       },
+      "enchantments": [],
       "homeRoom": {
         "roomId": null,
         "doorOpen": true,
@@ -125,7 +129,10 @@
         "stone": 0,
         "iron": 0,
         "gold": 0,
+        "emerald": 0,
         "diamond": 0,
+        "amethyst": 0,
+        "obsidian": 0,
         "torch": 1,
         "fish": 0
       },
@@ -161,6 +168,7 @@
         "title": "Turn in 5 common fish",
         "description": "Bring 5 common fish to the Market Trader."
       },
+      "enchantments": [],
       "homeRoom": {
         "roomId": null,
         "doorOpen": true,
@@ -226,7 +234,10 @@
         "stone": 0,
         "iron": 0,
         "gold": 0,
+        "emerald": 0,
         "diamond": 0,
+        "amethyst": 0,
+        "obsidian": 0,
         "torch": 1,
         "fish": 0
       },
@@ -262,6 +273,7 @@
         "title": "Turn in 5 common fish",
         "description": "Bring 5 common fish to the Market Trader."
       },
+      "enchantments": [],
       "homeRoom": {
         "roomId": null,
         "doorOpen": true,
@@ -327,7 +339,10 @@
         "stone": 0,
         "iron": 0,
         "gold": 0,
+        "emerald": 0,
         "diamond": 0,
+        "amethyst": 0,
+        "obsidian": 0,
         "torch": 1,
         "fish": 0
       },
@@ -363,6 +378,7 @@
         "title": "Turn in 5 common fish",
         "description": "Bring 5 common fish to the Market Trader."
       },
+      "enchantments": [],
       "homeRoom": {
         "roomId": null,
         "doorOpen": true,
@@ -416,9 +432,9 @@
       "faceStyle": "smile",
       "accessories": []
     },
-    "x": -209.2630397107911,
+    "x": -0.15081281303854127,
     "y": 1.35,
-    "z": -211.16519687089837,
+    "z": -10.153007143247088,
     "progress": {
       "coins": 0,
       "xp": 0,
@@ -428,7 +444,10 @@
         "stone": 0,
         "iron": 0,
         "gold": 0,
+        "emerald": 0,
         "diamond": 0,
+        "amethyst": 0,
+        "obsidian": 0,
         "torch": 1,
         "fish": 0
       },
@@ -464,6 +483,7 @@
         "title": "Turn in 5 common fish",
         "description": "Bring 5 common fish to the Market Trader."
       },
+      "enchantments": [],
       "homeRoom": {
         "roomId": null,
         "doorOpen": true,
@@ -499,108 +519,7 @@
         }
       },
       "furnitureTrader": {
-        "cycleId": 985445,
-        "purchasedThisCycle": {}
-      }
-    }
-  },
-  "acct-guest_l483w1m3": {
-    "name": "guest_l483w1m3",
-    "color": "#2f2ec7",
-    "appearance": {
-      "skin": "#f3cfb3",
-      "shirt": "#2f2ec7",
-      "pants": "#334155",
-      "shoes": "#111827",
-      "hairStyle": "short",
-      "hairColor": "#2b211c",
-      "faceStyle": "smile",
-      "accessories": []
-    },
-    "x": 88.78653391148288,
-    "y": 1.35,
-    "z": 75.27724876437108,
-    "progress": {
-      "coins": 0,
-      "xp": 0,
-      "level": 1,
-      "pickaxe": "wood",
-      "inventory": {
-        "stone": 0,
-        "iron": 0,
-        "gold": 0,
-        "diamond": 0,
-        "torch": 1,
-        "fish": 0
-      },
-      "fishBag": {},
-      "fishIndex": {},
-      "hasFishingRod": false,
-      "fishingRodTier": "basic",
-      "maxStaminaBonusPct": 0,
-      "questSeed": 1,
-      "quest": {
-        "id": "q-1773867899440-1",
-        "type": "mine",
-        "resource": "iron",
-        "targetCount": 15,
-        "progress": 0,
-        "rewardXp": 177,
-        "rewardDiamonds": 0,
-        "title": "Mine 15 ore",
-        "description": "Collect 15 ore chunks in the mine.",
-        "status": "available"
-      },
-      "fishingQuestSeed": 1,
-      "fishingQuestCompletions": 0,
-      "fishingQuest": {
-        "id": "fq-1773867899440-1",
-        "type": "fishing",
-        "status": "available",
-        "targetRarity": "common",
-        "targetFishId": null,
-        "targetCount": 5,
-        "progress": 0,
-        "rewardXp": 107,
-        "title": "Turn in 5 common fish",
-        "description": "Bring 5 common fish to the Market Trader."
-      },
-      "homeRoom": {
-        "roomId": null,
-        "doorOpen": true,
-        "wallPaint": "sand",
-        "floorPaint": "oak",
-        "ownedFurniture": {
-          "bed": true,
-          "table": true,
-          "lamp": true,
-          "plant": true,
-          "sofa": false,
-          "coffee-table": false,
-          "bookshelf": false,
-          "dresser": false,
-          "wardrobe": false,
-          "mirror": false,
-          "rug": true,
-          "wallart": false
-        },
-        "placedFurniture": {
-          "bed": true,
-          "table": true,
-          "lamp": true,
-          "plant": true,
-          "sofa": false,
-          "coffee-table": false,
-          "bookshelf": false,
-          "dresser": false,
-          "wardrobe": false,
-          "mirror": false,
-          "rug": true,
-          "wallart": false
-        }
-      },
-      "furnitureTrader": {
-        "cycleId": 985483,
+        "cycleId": 986296,
         "purchasedThisCycle": {}
       }
     }

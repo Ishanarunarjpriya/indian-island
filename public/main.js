@@ -656,12 +656,10 @@ const mineWarningCancelEl = document.getElementById('mine-warning-cancel');
 const mineWarningNoAskEl = document.getElementById('mine-warning-no-ask');
 
 const cachedAuthUsername = localStorage.getItem('island_auth_username') || '';
-const cachedAuthPassword = localStorage.getItem('island_auth_password') || '';
 const ACCOUNT_GATE_PASSWORD = 'WeAreIndian';
 let accountGateUnlocked = false;
 let skipMineEntryWarning = localStorage.getItem(MINE_ENTRY_WARNING_PREF_KEY) === '1';
 if (authUsernameEl) authUsernameEl.value = cachedAuthUsername;
-if (authPasswordEl) authPasswordEl.value = cachedAuthPassword;
 
 function ensureAccountGateUnlocked() {
   if (accountGateUnlocked) return true;
@@ -676,7 +674,7 @@ function ensureAccountGateUnlocked() {
 
 function persistAuth(username, password) {
   localStorage.setItem('island_auth_username', username);
-  localStorage.setItem('island_auth_password', password);
+  // Do not store password in localStorage for security
   if (authUsernameEl) authUsernameEl.value = username;
   if (authPasswordEl) authPasswordEl.value = password;
 }
@@ -6694,29 +6692,8 @@ socket.on('auth:required', () => {
     setAuthModalOpen(true, 'Enter the access password to continue.');
     return;
   }
-  const savedUser = localStorage.getItem('island_auth_username') || '';
-  const savedPass = localStorage.getItem('island_auth_password') || '';
-  if (savedUser && savedPass) {
-    statusEl.textContent = 'Logging in...';
-    if (authStatusEl) authStatusEl.textContent = 'Logging in...';
-    let responded = false;
-    const fallbackTimer = setTimeout(() => {
-      if (!responded) {
-        responded = true;
-        setAuthModalOpen(true, 'Login timed out. Please try again.');
-      }
-    }, 6000);
-    socket.emit('auth:login', { username: savedUser, password: savedPass }, (response) => {
-      if (responded) return;
-      responded = true;
-      clearTimeout(fallbackTimer);
-      if (!response?.ok) {
-        setAuthModalOpen(true, response?.error || 'Auto-login failed. Please login again.');
-      }
-    });
-  } else {
-    setAuthModalOpen(true, 'Please login or create an account.');
-  }
+  // Require manual re-authentication for security
+  setAuthModalOpen(true, 'Please login or create an account.');
 });
 
 socket.on('init', (payload) => {
@@ -7064,7 +7041,7 @@ socket.on('trade:cancelled', ({ tradeId }) => {
   console.log(`[trading] Trade ${tradeId} cancelled`);
 });
 
-setupTradeEventListeners(socket, profileId);
+setupTradeEventListeners(socket);
 
 function keyToEmote(key) {
   if (key === '1') return 'wave';
