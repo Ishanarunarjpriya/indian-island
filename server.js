@@ -6,6 +6,9 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { createClient } from '@libsql/client';
 import { Server } from 'socket.io';
+import helmet from 'helmet';
+import cors from 'cors';
+import rateLimit from 'express-rate-limit';
 import {
   initTradingDb,
   getPlayerTrades,
@@ -387,6 +390,24 @@ let dbClient = null;
 let dbReady = false;
 let accountsBanColumn = false;
 
+app.use(helmet({
+  crossOriginEmbedderPolicy: false,
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://unpkg.com"],
+      workerSrc: ["'self'", "blob:"],
+      connectSrc: ["'self'", "wss:", "https:"],
+      imgSrc: ["'self'", "data:", "blob:"],
+    }
+  }
+}));
+app.use(cors());
+app.use(rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100 // limit each IP to 100 requests per windowMs
+}));
+app.use(express.json()); // Add JSON parsing middleware
 app.use(express.static('public', {
   setHeaders(res, filePath) {
     if (typeof filePath === 'string' && (filePath.endsWith('.html') || filePath.endsWith('.js'))) {
@@ -396,6 +417,10 @@ app.use(express.static('public', {
     }
   }
 }));
+
+app.get('/favicon.ico', (_req, res) => {
+  res.status(204).end();
+});
 
 app.get('/voice-config', (req, res) => {
   res.json({ ok: true, iceServers: VOICE_ICE_SERVERS });
@@ -3897,6 +3922,67 @@ io.on('connection', (socket) => {
 
     try {
       const trade = await acceptTrade(payload.tradeId, current.profileId);
+
+      // Transfer items between players
+      const initiatorPlayer = [...players.values()].find(p => p.profileId === trade.initiator_id);
+      const receiverPlayer = current; // already have current as receiver
+
+      if (initiatorPlayer && receiverPlayer) {
+        // Transfer initiator's items to receiver
+        for (const item of trade.initiator_items) {
+          if (item.category === 'ore') {
+            const initiatorInv = initiatorPlayer.progress.inventory[item.itemId] || 0;
+            if (initiatorInv >= item.amount) {
+              initiatorPlayer.progress.inventory[item.itemId] = initiatorInv - item.amount;
+              receiverPlayer.progress.inventory[item.itemId] = (receiverPlayer.progress.inventory[item.itemId] || 0) + item.amount;
+            }
+          } else if (item.category === 'fish') {
+            const initiatorBag = initiatorPlayer.progress.fishBag[item.itemId] || 0;
+            if (initiatorBag >= item.amount) {
+              if (initiatorBag - item.amount > 0) {
+                initiatorPlayer.progress.fishBag[item.itemId] = initiatorBag - item.amount;
+              } else {
+                delete initiatorPlayer.progress.fishBag[item.itemId];
+              }
+              initiatorPlayer.progress.inventory.fish = clamp(computeTotalFishInBag(initiatorPlayer.progress.fishBag), 0, 1_000_000);
+              receiverPlayer.progress.fishBag[item.itemId] = (receiverPlayer.progress.fishBag[item.itemId] || 0) + item.amount;
+              receiverPlayer.progress.inventory.fish = clamp(computeTotalFishInBag(receiverPlayer.progress.fishBag), 0, 1_000_000);
+            }
+          }
+        }
+
+        // Transfer receiver's items to initiator
+        for (const item of trade.receiver_items) {
+          if (item.category === 'ore') {
+            const receiverInv = receiverPlayer.progress.inventory[item.itemId] || 0;
+            if (receiverInv >= item.amount) {
+              receiverPlayer.progress.inventory[item.itemId] = receiverInv - item.amount;
+              initiatorPlayer.progress.inventory[item.itemId] = (initiatorPlayer.progress.inventory[item.itemId] || 0) + item.amount;
+            }
+          } else if (item.category === 'fish') {
+            const receiverBag = receiverPlayer.progress.fishBag[item.itemId] || 0;
+            if (receiverBag >= item.amount) {
+              if (receiverBag - item.amount > 0) {
+                receiverPlayer.progress.fishBag[item.itemId] = receiverBag - item.amount;
+              } else {
+                delete receiverPlayer.progress.fishBag[item.itemId];
+              }
+              receiverPlayer.progress.inventory.fish = clamp(computeTotalFishInBag(receiverPlayer.progress.fishBag), 0, 1_000_000);
+              initiatorPlayer.progress.fishBag[item.itemId] = (initiatorPlayer.progress.fishBag[item.itemId] || 0) + item.amount;
+              initiatorPlayer.progress.inventory.fish = clamp(computeTotalFishInBag(initiatorPlayer.progress.fishBag), 0, 1_000_000);
+            }
+          }
+        }
+
+        // Save updated profiles
+        persistPlayerProgress(initiatorPlayer, { immediate: true });
+        persistPlayerProgress(receiverPlayer, { immediate: true });
+
+        // Emit progress updates
+        emitProgress(io.to(initiatorPlayer.socketId), initiatorPlayer);
+        emitProgress(socket, receiverPlayer);
+      }
+
       io.emit('trade:completed', { tradeId: payload.tradeId, initiatorId: trade.initiator_id });
       if (typeof ack === 'function') ack({ ok: true });
     } catch (err) {
@@ -3943,6 +4029,17 @@ io.on('connection', (socket) => {
     socket.data.fishChallenge = null;
     removeAuthenticatedPlayer(socket);
   });
+});
+
+// Add global error handlers to prevent server crashes
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[unhandledRejection] Reason:', reason, 'Promise:', promise);
+  // In production, you might want to exit the process or send alerts
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('[uncaughtException] Error:', err);
+  // In production, you might want to exit the process or send alerts
 });
 
 server.listen(PORT, () => {

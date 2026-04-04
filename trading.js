@@ -107,29 +107,39 @@ export async function acceptTrade(tradeId, receiverId) {
     if (trade.receiver_id !== receiverId) throw new Error('Not authorized to accept this trade');
     if (trade.status !== 'pending') throw new Error('Trade is no longer pending');
 
-    const result = await dbClient.execute({
-      sql: `UPDATE trades
-            SET status = 'completed', completed_at = now()
-            WHERE id = ?
-            RETURNING *`,
-      args: [tradeId]
-    });
+    // Use transaction for atomicity
+    await dbClient.execute('BEGIN');
 
-    const completedTrade = result.rows[0];
+    try {
+      const result = await dbClient.execute({
+        sql: `UPDATE trades
+              SET status = 'completed', completed_at = now()
+              WHERE id = ?
+              RETURNING *`,
+        args: [tradeId]
+      });
 
-    await dbClient.execute({
-      sql: `INSERT INTO trade_history (trade_id, player1_id, player2_id, player1_items, player2_items)
-            VALUES (?, ?, ?, ?, ?)`,
-      args: [
-        tradeId,
-        trade.initiator_id,
-        trade.receiver_id,
-        trade.initiator_items,
-        trade.receiver_items
-      ]
-    });
+      const completedTrade = result.rows[0];
 
-    return { ...completedTrade, initiator_items: trade.initiator_items, receiver_items: trade.receiver_items };
+      await dbClient.execute({
+        sql: `INSERT INTO trade_history (trade_id, player1_id, player2_id, player1_items, player2_items)
+              VALUES (?, ?, ?, ?, ?)`,
+        args: [
+          tradeId,
+          trade.initiator_id,
+          trade.receiver_id,
+          JSON.stringify(trade.initiator_items),
+          JSON.stringify(trade.receiver_items)
+        ]
+      });
+
+      await dbClient.execute('COMMIT');
+
+      return { ...completedTrade, initiator_items: trade.initiator_items, receiver_items: trade.receiver_items };
+    } catch (innerErr) {
+      await dbClient.execute('ROLLBACK');
+      throw innerErr;
+    }
   } catch (err) {
     console.error('[trading] Error accepting trade:', err);
     throw err;
