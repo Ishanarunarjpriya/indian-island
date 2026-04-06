@@ -23,21 +23,30 @@ export function initPlayerMeshes({
 }
 
 export function makeExactBaconMesh() {
-  return null;
+  // TODO: Implement actual bacon mesh or remove if not used
+  // For now, return a simple cube as placeholder
+  const unit = 0.52;
+  const geometry = new THREE.BoxGeometry(unit * 0.8, unit * 0.4, unit * 0.3);
+  const material = new THREE.MeshStandardMaterial({ side: THREE.DoubleSide,
+    color: 0xff6b35,
+    roughness: 0.3,
+    metalness: 0.1
+  });
+  return new THREE.Mesh(geometry, material);
 }
 
 export function createHeldPickaxeMesh(unit) {
   const mesh = new THREE.Group();
   const handle = new THREE.Mesh(
     new THREE.CylinderGeometry(0.055 * unit, 0.055 * unit, 1.42 * unit, 8),
-    new THREE.MeshStandardMaterial({ color: 0x7c4a26, roughness: 0.8 })
+    new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, color: 0x7c4a26, roughness: 0.8 })
   );
   handle.rotation.z = Math.PI / 2;
   handle.castShadow = true;
 
   const head = new THREE.Mesh(
     new THREE.BoxGeometry(0.64 * unit, 0.22 * unit, 0.22 * unit),
-    new THREE.MeshStandardMaterial({ color: PICKAXE_HEAD_COLORS.wood, roughness: 0.45, metalness: 0.18 })
+    new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, color: PICKAXE_HEAD_COLORS.wood, roughness: 0.45, metalness: 0.18 })
   );
   head.position.set(0.58 * unit, 0, 0);
   head.castShadow = true;
@@ -51,7 +60,7 @@ export function createHeldFishingRodMesh(unit) {
   const rod = new THREE.Group();
   const grip = new THREE.Mesh(
     new THREE.CylinderGeometry(0.08 * unit, 0.09 * unit, 0.52 * unit, 10),
-    new THREE.MeshStandardMaterial({ color: 0x7c4a26, roughness: 0.84 })
+    new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, color: 0x7c4a26, roughness: 0.84 })
   );
   grip.rotation.z = Math.PI / 2;
   grip.position.x = -0.46 * unit;
@@ -59,7 +68,7 @@ export function createHeldFishingRodMesh(unit) {
 
   const shaft = new THREE.Mesh(
     new THREE.CylinderGeometry(0.028 * unit, 0.033 * unit, 2.25 * unit, 10),
-    new THREE.MeshStandardMaterial({ color: 0xdbeafe, roughness: 0.28, metalness: 0.52 })
+    new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, color: 0xdbeafe, roughness: 0.28, metalness: 0.52 })
   );
   shaft.rotation.z = Math.PI / 2;
   shaft.position.x = 0.36 * unit;
@@ -67,23 +76,23 @@ export function createHeldFishingRodMesh(unit) {
 
   const accent = new THREE.Mesh(
     new THREE.CylinderGeometry(0.11 * unit, 0.11 * unit, 0.14 * unit, 14),
-    new THREE.MeshStandardMaterial({ color: FISHING_ROD_ACCENT_COLORS.basic, roughness: 0.36, metalness: 0.58 })
+    new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, color: FISHING_ROD_ACCENT_COLORS.basic, roughness: 0.36, metalness: 0.58 })
   );
   accent.position.set(-0.2 * unit, -0.12 * unit, 0);
   accent.castShadow = true;
 
   const line = new THREE.Mesh(
     new THREE.CylinderGeometry(0.007 * unit, 0.007 * unit, 0.56 * unit, 6),
-    new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.22, metalness: 0.1 })
+    new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, color: 0xe2e8f0, roughness: 0.22, metalness: 0.1 })
   );
   line.position.set(1.44 * unit, -0.28 * unit, 0);
   line.castShadow = true;
 
   const hook = new THREE.Mesh(
     new THREE.SphereGeometry(0.03 * unit, 8, 8),
-    new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.32, metalness: 0.55 })
+    new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, color: 0x94a3b8, roughness: 0.32, metalness: 0.55 })
   );
-  hook.position.set(1.44 * unit, -0.58 * unit, 0);
+  hook.position.set(1.44 * unit, -0.58 * unit, -0.15 * unit);
   hook.castShadow = true;
 
   rod.add(grip, shaft, accent, line, hook);
@@ -95,22 +104,22 @@ export function createHeldTorchMesh(unit) {
   const torch = new THREE.Group();
   const handle = new THREE.Mesh(
     new THREE.CylinderGeometry(0.06 * unit, 0.07 * unit, 1.0 * unit, 8),
-    new THREE.MeshStandardMaterial({ color: 0x7c4a26, roughness: 0.85 })
+    new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, color: 0x7c4a26, roughness: 0.85 })
   );
   handle.castShadow = true;
 
   const band = new THREE.Mesh(
     new THREE.CylinderGeometry(0.08 * unit, 0.08 * unit, 0.14 * unit, 10),
-    new THREE.MeshStandardMaterial({ color: 0x9ca3af, roughness: 0.3, metalness: 0.6 })
+    new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, color: 0x9ca3af, roughness: 0.3, metalness: 0.6 })
   );
   band.position.y = 0.42 * unit;
   band.castShadow = true;
 
   const flame = new THREE.Mesh(
     new THREE.ConeGeometry(0.14 * unit, 0.36 * unit, 10),
-    new THREE.MeshStandardMaterial({ color: 0xf97316, emissive: 0xf59e0b, emissiveIntensity: 1.25, roughness: 0.28 })
+    new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, color: 0xf97316, emissive: 0xf59e0b, emissiveIntensity: 1.25, roughness: 0.28 })
   );
-  flame.position.y = 0.72 * unit;
+  flame.position.set(0, 0.72 * unit, 0.05 * unit);
   flame.castShadow = true;
 
   torch.add(handle, band, flame);
@@ -206,8 +215,8 @@ export function applyHeldGearVisual(player) {
   const parts = player?.mesh?.userData?.parts;
   if (!parts) return;
 
-  const tier = normalizePickaxeTier(player.heldPickaxe, 'wood');
-  const rodTier = normalizeRodTier(player.heldFishingRodTier, 'basic');
+  const tier = player && player.heldPickaxe != null ? normalizePickaxeTier(player.heldPickaxe, 'wood') : 'wood';
+  const rodTier = player && player.heldFishingRodTier != null ? normalizeRodTier(player.heldFishingRodTier, 'basic') : 'basic';
   const hasRod = player.hasFishingRod === true;
   const fishingActive = player.isLocal
     ? Boolean(fishingMiniGame.active || fishingMiniGame.starting)
@@ -250,61 +259,61 @@ export function makePlayerMesh(appearance) {
 
   const hips = new THREE.Mesh(
     new THREE.BoxGeometry(1.36 * UNIT, 0.86 * UNIT, 0.72 * UNIT),
-    new THREE.MeshStandardMaterial({ color: appearance.pants, roughness: 0.82 })
+    new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, color: appearance.pants, roughness: 0.82 })
   );
   hips.position.y = 1.08 * UNIT;
   hips.castShadow = true;
 
   const torso = new THREE.Mesh(
     new THREE.BoxGeometry(1.56 * UNIT, 1.62 * UNIT, 0.88 * UNIT),
-    new THREE.MeshStandardMaterial({ color: appearance.shirt, roughness: 0.68 })
+    new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, color: appearance.shirt, roughness: 0.68 })
   );
   torso.position.y = 2.46 * UNIT;
   torso.castShadow = true;
 
   const torsoStripe = new THREE.Mesh(
     new THREE.BoxGeometry(1.32 * UNIT, 0.3 * UNIT, 0.08 * UNIT),
-    new THREE.MeshStandardMaterial({ color: 0xe5e7eb, roughness: 0.7 })
+    new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, color: 0xe5e7eb, roughness: 0.7 })
   );
   torsoStripe.position.set(0, 2.4 * UNIT, 0.49 * UNIT);
   torsoStripe.castShadow = true;
 
   const jacket = new THREE.Mesh(
     new THREE.BoxGeometry(1.62 * UNIT, 1.66 * UNIT, 0.94 * UNIT),
-    new THREE.MeshStandardMaterial({ color: 0x14181e, roughness: 0.75 })
+    new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, color: 0x14181e, roughness: 0.75 })
   );
   jacket.position.copy(torso.position);
   jacket.castShadow = true;
 
   const belt = new THREE.Mesh(
     new THREE.BoxGeometry(1.4 * UNIT, 0.14 * UNIT, 0.82 * UNIT),
-    new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.72 })
+    new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, color: 0x1f2937, roughness: 0.72 })
   );
   belt.position.y = 1.76 * UNIT;
   belt.castShadow = true;
 
   const neck = new THREE.Mesh(
     new THREE.BoxGeometry(0.38 * UNIT, 0.2 * UNIT, 0.28 * UNIT),
-    new THREE.MeshStandardMaterial({ color: appearance.skin, roughness: 0.9 })
+    new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, color: appearance.skin, roughness: 0.9 })
   );
   neck.position.y = 3.52 * UNIT;
   neck.castShadow = true;
 
   const neckConnector = new THREE.Mesh(
     new THREE.BoxGeometry(0.44 * UNIT, 0.18 * UNIT, 0.34 * UNIT),
-    new THREE.MeshStandardMaterial({ color: appearance.skin, roughness: 0.88 })
+    new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, color: appearance.skin, roughness: 0.88 })
   );
   neckConnector.position.y = 3.72 * UNIT;
   neckConnector.castShadow = true;
 
   const head = new THREE.Mesh(
     new THREE.BoxGeometry(1.12 * UNIT, 1.08 * UNIT, 1.02 * UNIT),
-    new THREE.MeshStandardMaterial({ color: appearance.skin, roughness: 0.88 })
+    new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, color: appearance.skin, roughness: 0.88 })
   );
   head.position.y = 4.42 * UNIT;
   head.castShadow = true;
 
-  const eyeMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.2 });
+  const eyeMat = new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, color: 0x0f172a, roughness: 0.2 });
   const leftEye = new THREE.Mesh(new THREE.SphereGeometry(0.06 * UNIT, 8, 8), eyeMat);
   leftEye.position.set(-0.23 * UNIT, 4.56 * UNIT, 0.56 * UNIT);
   const rightEye = leftEye.clone();
@@ -326,7 +335,7 @@ export function makePlayerMesh(appearance) {
 
   const leftEyeWink = new THREE.Mesh(new THREE.BoxGeometry(0.13 * UNIT, 0.03 * UNIT, 0.02 * UNIT), eyeMat);
   leftEyeWink.position.set(-0.23 * UNIT, 4.56 * UNIT, 0.56 * UNIT);
-  const lashMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.25 });
+  const lashMat = new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, color: 0x111827, roughness: 0.25 });
   const leftLashes = new THREE.Mesh(new THREE.BoxGeometry(0.16 * UNIT, 0.025 * UNIT, 0.02 * UNIT), lashMat);
   leftLashes.position.set(-0.23 * UNIT, 4.65 * UNIT, 0.56 * UNIT);
   const rightLashes = leftLashes.clone();
@@ -336,21 +345,21 @@ export function makePlayerMesh(appearance) {
   leftArmPivot.position.set(-0.86 * UNIT, 3.0 * UNIT, 0);
   const leftArm = new THREE.Mesh(
     new THREE.BoxGeometry(0.46 * UNIT, 1.4 * UNIT, 0.46 * UNIT),
-    new THREE.MeshStandardMaterial({ color: appearance.skin, roughness: 0.9 })
+    new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, color: appearance.skin, roughness: 0.9 })
   );
   leftArm.position.y = -0.8 * UNIT;
   leftArm.castShadow = true;
   leftArmPivot.add(leftArm);
   const leftSleeve = new THREE.Mesh(
     new THREE.BoxGeometry(0.5 * UNIT, 0.42 * UNIT, 0.5 * UNIT),
-    new THREE.MeshStandardMaterial({ color: 0x14181e, roughness: 0.76 })
+    new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, color: 0x14181e, roughness: 0.76 })
   );
   leftSleeve.position.y = -0.2 * UNIT;
   leftArmPivot.add(leftSleeve);
 
   const leftHand = new THREE.Mesh(
     new THREE.BoxGeometry(0.36 * UNIT, 0.34 * UNIT, 0.32 * UNIT),
-    new THREE.MeshStandardMaterial({ color: appearance.skin, roughness: 0.88 })
+    new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, color: appearance.skin, roughness: 0.88 })
   );
   leftHand.position.y = -1.7 * UNIT;
   leftHand.castShadow = true;
@@ -387,7 +396,7 @@ export function makePlayerMesh(appearance) {
   leftLegPivot.position.set(-0.38 * UNIT, 1.02 * UNIT, 0);
   const leftLeg = new THREE.Mesh(
     new THREE.BoxGeometry(0.52 * UNIT, 1.8 * UNIT, 0.56 * UNIT),
-    new THREE.MeshStandardMaterial({ color: appearance.pants, roughness: 0.84 })
+    new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, color: appearance.pants, roughness: 0.84 })
   );
   leftLeg.position.y = -1.02 * UNIT;
   leftLeg.castShadow = true;
@@ -395,7 +404,7 @@ export function makePlayerMesh(appearance) {
 
   const leftKnee = new THREE.Mesh(
     new THREE.BoxGeometry(0.53 * UNIT, 0.2 * UNIT, 0.58 * UNIT),
-    new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.7 })
+    new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, color: 0x1e293b, roughness: 0.7 })
   );
   leftKnee.position.y = -0.94 * UNIT;
   leftKnee.castShadow = true;
@@ -403,7 +412,7 @@ export function makePlayerMesh(appearance) {
 
   const leftBoot = new THREE.Mesh(
     new THREE.BoxGeometry(0.58 * UNIT, 0.4 * UNIT, 0.88 * UNIT),
-    new THREE.MeshStandardMaterial({ color: appearance.shoes, roughness: 0.68 })
+    new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, color: appearance.shoes, roughness: 0.68 })
   );
   leftBoot.position.set(0, -1.96 * UNIT, 0.14 * UNIT);
   leftBoot.castShadow = true;
@@ -419,8 +428,8 @@ export function makePlayerMesh(appearance) {
   const rightBoot = leftBoot.clone();
   rightLegPivot.add(rightBoot);
 
-  const hairMat = new THREE.MeshStandardMaterial({ color: appearance.hairColor, roughness: 0.6 });
-  const hairMatSoft = new THREE.MeshStandardMaterial({ color: appearance.hairColor, roughness: 0.72 });
+  const hairMat = new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, color: appearance.hairColor, roughness: 0.6 });
+  const hairMatSoft = new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, color: appearance.hairColor, roughness: 0.72 });
 
   const hairShort = new THREE.Group();
   const shortCrown = new THREE.Mesh(new THREE.SphereGeometry(0.66 * UNIT, 18, 12), hairMat);
@@ -443,7 +452,7 @@ export function makePlayerMesh(appearance) {
   sideCrown.scale.set(1.0, 0.6, 0.96);
   sideCrown.position.set(0.04 * UNIT, 5.07 * UNIT, 0);
   sideCrown.castShadow = true;
-  const partLine = new THREE.Mesh(new THREE.BoxGeometry(0.1 * UNIT, 0.02 * UNIT, 0.82 * UNIT), new THREE.MeshStandardMaterial({ color: 0xd1d5db, roughness: 0.3 }));
+  const partLine = new THREE.Mesh(new THREE.BoxGeometry(0.1 * UNIT, 0.02 * UNIT, 0.82 * UNIT), new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, color: 0xd1d5db, roughness: 0.3 }));
   partLine.position.set(0.1 * UNIT, 5.26 * UNIT, -0.02 * UNIT);
   const sideSweep = new THREE.Mesh(new THREE.BoxGeometry(0.44 * UNIT, 0.28 * UNIT, 0.2 * UNIT), hairMatSoft);
   sideSweep.position.set(0.31 * UNIT, 4.93 * UNIT, 0.49 * UNIT);
@@ -489,7 +498,7 @@ export function makePlayerMesh(appearance) {
   ponyCap.scale.set(1.0, 0.58, 0.95);
   ponyCap.position.set(0, 5.08 * UNIT, 0);
   ponyCap.castShadow = true;
-  const ponyBand = new THREE.Mesh(new THREE.TorusGeometry(0.14 * UNIT, 0.03 * UNIT, 8, 16), new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.5 }));
+  const ponyBand = new THREE.Mesh(new THREE.TorusGeometry(0.14 * UNIT, 0.03 * UNIT, 8, 16), new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, color: 0x111827, roughness: 0.5 }));
   ponyBand.position.set(0, 4.9 * UNIT, -0.5 * UNIT);
   ponyBand.rotation.x = Math.PI / 2;
   const ponyTailTop = new THREE.Mesh(new THREE.CylinderGeometry(0.16 * UNIT, 0.13 * UNIT, 0.42 * UNIT, 10), hairMatSoft);
@@ -545,13 +554,13 @@ export function makePlayerMesh(appearance) {
 
   const hat = new THREE.Mesh(
     new THREE.CylinderGeometry(0.52 * UNIT, 0.52 * UNIT, 0.3 * UNIT, 16),
-    new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.6 })
+    new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, color: 0x111827, roughness: 0.6 })
   );
   hat.position.set(0, 5.38 * UNIT, 0);
   hat.castShadow = true;
 
   const glasses = new THREE.Group();
-  const glassMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.2 });
+  const glassMat = new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, color: 0x0f172a, roughness: 0.2 });
   const glassLeft = new THREE.Mesh(new THREE.TorusGeometry(0.13 * UNIT, 0.02 * UNIT, 8, 12), glassMat);
   glassLeft.position.set(-0.22 * UNIT, 4.56 * UNIT, 0.57 * UNIT);
   const glassRight = glassLeft.clone();
@@ -562,7 +571,7 @@ export function makePlayerMesh(appearance) {
 
   const backpack = new THREE.Mesh(
     new THREE.BoxGeometry(1.0 * UNIT, 1.2 * UNIT, 0.35 * UNIT),
-    new THREE.MeshStandardMaterial({ color: 0x374151, roughness: 0.82 })
+    new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, color: 0x374151, roughness: 0.82 })
   );
   backpack.position.set(0, 2.5 * UNIT, -0.64 * UNIT);
   backpack.castShadow = true;
