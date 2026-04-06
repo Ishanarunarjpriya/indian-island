@@ -1593,6 +1593,131 @@
         letter-spacing: 0.3px;
       }
 
+      #leaderboard-overlay,
+      #trade-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 30;
+        background: rgba(2, 8, 20, 0.6);
+        backdrop-filter: blur(4px);
+        display: grid;
+        place-items: center;
+      }
+
+      #leaderboard-panel,
+      #trade-panel {
+        width: min(560px, calc(100vw - 28px));
+        max-height: min(86vh, 760px);
+        overflow-y: auto;
+        padding: 16px;
+        display: grid;
+        gap: 12px;
+      }
+
+      #leaderboard-panel h2,
+      #trade-panel h2 {
+        margin: 0;
+        font-size: 17px;
+      }
+
+      #leaderboard-tabs {
+        display: flex;
+        gap: 6px;
+      }
+
+      .leaderboard-tab {
+        flex: 1;
+        padding: 6px 8px;
+        font-size: 12px;
+        border-radius: 8px;
+        border: 1px solid rgba(255,255,255,0.16);
+        background: rgba(0,0,0,0.2);
+        color: #cbd5e1;
+        cursor: pointer;
+      }
+
+      .leaderboard-tab.active {
+        background: rgba(56,189,248,0.2);
+        border-color: rgba(56,189,248,0.4);
+        color: #f8fafc;
+      }
+
+      #leaderboard-content {
+        display: grid;
+        gap: 6px;
+      }
+
+      .lb-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 10px;
+        border-radius: 8px;
+        background: rgba(0,0,0,0.2);
+        font-size: 13px;
+      }
+
+      .lb-rank {
+        font-weight: 800;
+        color: #facc15;
+        min-width: 24px;
+        text-align: center;
+      }
+
+      .lb-name {
+        flex: 1;
+        color: #f8fafc;
+      }
+
+      .lb-value {
+        color: #7dd3fc;
+        font-weight: 700;
+      }
+
+      #trade-offer-controls {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+
+      #trade-offer-controls select,
+      #trade-offer-controls input {
+        padding: 6px 8px;
+        border-radius: 8px;
+        border: 1px solid rgba(255,255,255,0.18);
+        background: rgba(15,23,42,0.7);
+        color: #f8fafc;
+        font-size: 13px;
+      }
+
+      #trade-send-offer,
+      #trade-accept,
+      #trade-decline {
+        padding: 8px 16px;
+        border-radius: 8px;
+        border: none;
+        font-weight: 700;
+        cursor: pointer;
+        font-size: 13px;
+      }
+
+      #trade-send-offer,
+      #trade-accept {
+        background: #22c55e;
+        color: #052e16;
+      }
+
+      #trade-decline {
+        background: #ef4444;
+        color: #fff;
+      }
+
+      #trade-status {
+        font-size: 12px;
+        color: #cbd5e1;
+      }
+
       #debug-panel select,
       #debug-panel input {
         width: 100%;
@@ -2263,9 +2388,9 @@
         position: absolute;
         left: 50%;
         top: 50%;
-        width: 88px;
-        height: 88px;
-        border-radius: 28px;
+        width: 74px;
+        height: 74px;
+        border-radius: 24px;
         padding: 0;
         display: flex;
         flex-direction: column;
@@ -2324,7 +2449,7 @@
       }
 
       #btn-use.is-contextual {
-        transform: translate(-50%, -118%);
+        transform: translate(-50%, -132%);
       }
 
       #btn-use.is-contextual::after {
@@ -2335,7 +2460,7 @@
         left: auto;
         top: auto;
         right: max(10px, env(safe-area-inset-right));
-        bottom: calc(88px + env(safe-area-inset-bottom));
+        bottom: calc(82px + env(safe-area-inset-bottom));
         transform: none;
       }
 
@@ -2371,20 +2496,21 @@
       body.mobile-ui #top-left-toolbar {
         left: max(8px, env(safe-area-inset-left));
         top: calc(8px + env(safe-area-inset-top));
-        gap: 3px;
-        padding: 3px;
+        gap: 2px;
+        padding: 3px 4px;
       }
 
       body.mobile-ui .toolbar-btn {
-        width: 32px;
-        height: 32px;
-        font-size: 13px;
+        width: 30px;
+        height: 30px;
+        font-size: 12px;
       }
 
       body.mobile-ui #world-state {
         top: calc(8px + env(safe-area-inset-top));
         padding: 4px 6px;
         font-size: 9px;
+        width: min(34vw, 150px);
       }
 
       body.mobile-ui #chat-panel {
@@ -2458,16 +2584,16 @@
       body.mobile-ui #mini-panel {
         left: auto;
         right: max(8px, env(safe-area-inset-right));
-        top: calc(188px + env(safe-area-inset-top));
+        top: calc(168px + env(safe-area-inset-top));
         bottom: auto;
-        width: 100px;
-        padding: 5px;
+        width: 92px;
+        padding: 4px;
         z-index: 12;
       }
 
       body.mobile-ui #mini-map {
-        width: 90px;
-        height: 90px;
+        width: 82px;
+        height: 82px;
       }
 
       body.mobile-ui #mini-panel.expanded {
@@ -2866,6 +2992,18 @@
           </div>
         </section>
         <section class="menu-section">
+          <h3>Pickaxe Enchantments</h3>
+          <p id="enchantment-slots-info" style="font-size:12px;color:#cbd5e1;margin:0 0 8px;">Slots: 0/3</p>
+          <div id="enchantment-list" style="display:grid;gap:6px;"></div>
+          <div id="enchantment-buy-list" style="display:grid;gap:6px;margin-top:8px;"></div>
+        </section>
+        <section class="menu-section">
+          <h3>Market</h3>
+          <div class="menu-actions">
+            <button id="buy-stamina-stew" type="button">Buy Stamina Stew (45c)</button>
+          </div>
+        </section>
+        <section class="menu-section">
           <h3>Settings</h3>
           <div class="menu-actions">
             <button id="minimap-toggle" type="button">Minimap: On</button>
@@ -2876,6 +3014,60 @@
           <h3>Account</h3>
           <button id="save-quit" type="button">Save and Quit</button>
         </section>
+        <section class="menu-section">
+          <h3>Social</h3>
+          <div class="menu-actions">
+            <button id="leaderboard-open" type="button">Leaderboards</button>
+          </div>
+        </section>
+      </section>
+    </div>
+
+    <div id="leaderboard-overlay" class="hidden">
+      <section id="leaderboard-panel" class="panel">
+        <div class="modal-head">
+          <h2>Leaderboards</h2>
+          <button class="modal-close" id="leaderboard-close" type="button">&times;</button>
+        </div>
+        <div id="leaderboard-tabs">
+          <button class="leaderboard-tab active" data-tab="level">Top Level</button>
+          <button class="leaderboard-tab" data-tab="rarestFish">Rarest Fish</button>
+          <button class="leaderboard-tab" data-tab="oresMined">Most Ores</button>
+        </div>
+        <div id="leaderboard-content"></div>
+      </section>
+    </div>
+
+    <div id="trade-overlay" class="hidden">
+      <section id="trade-panel" class="panel">
+        <div class="modal-head">
+          <h2 id="trade-title">Trade</h2>
+          <button class="modal-close" id="trade-close" type="button">&times;</button>
+        </div>
+        <div id="trade-body">
+          <div id="trade-offer-section" class="hidden">
+            <h3>Your Offer</h3>
+            <div id="trade-offer-controls">
+              <select id="trade-offer-category">
+                <option value="ore">Ore</option>
+                <option value="fish">Fish</option>
+              </select>
+              <select id="trade-offer-item"></select>
+              <input id="trade-offer-amount" type="number" min="1" max="1000" value="1" />
+            </div>
+            <button id="trade-send-offer" type="button">Send Offer</button>
+          </div>
+          <div id="trade-incoming-section" class="hidden">
+            <h3>Incoming Trade</h3>
+            <p id="trade-incoming-info"></p>
+            <div id="trade-incoming-offer"></div>
+            <div class="menu-actions">
+              <button id="trade-accept" type="button">Accept</button>
+              <button id="trade-decline" type="button">Decline</button>
+            </div>
+          </div>
+          <p id="trade-status"></p>
+        </div>
       </section>
     </div>
 

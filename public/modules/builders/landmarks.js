@@ -12,6 +12,7 @@ let dockWalkZones = null;
 let fishingSpots = null;
 let getBoatState = null;
 let setLighthouseTopPortal = null;
+let setLighthouseLight = null;
 let leaderboardState = null;
 let layout = null;
 
@@ -28,6 +29,7 @@ export function initLandmarkBuilders({
   fishingSpotsRef = null,
   getBoatStateRef = null,
   setLighthouseTopPortalRef = null,
+  setLighthouseLightRef = null,
   leaderboardStateRef = null,
   layoutRef = null
 } = {}) {
@@ -43,6 +45,7 @@ export function initLandmarkBuilders({
   fishingSpots = fishingSpotsRef;
   getBoatState = getBoatStateRef;
   setLighthouseTopPortal = setLighthouseTopPortalRef;
+  setLighthouseLight = setLighthouseLightRef;
   leaderboardState = leaderboardStateRef;
   layout = layoutRef;
 }
@@ -368,6 +371,28 @@ export function addLighthouseIsland() {
     wallLampL, wallLampR
   );
   lighthouse.add(lighthouseTopPortal);
+
+  const lighthouseBeam = new THREE.Mesh(
+    new THREE.ConeGeometry(4.5, 18, 16, 1, true),
+    new THREE.MeshBasicMaterial({
+      color: 0xfde68a,
+      transparent: true,
+      opacity: 0.0,
+      side: THREE.DoubleSide,
+      depthWrite: false
+    })
+  );
+  lighthouseBeam.position.y = 22;
+  lighthouse.add(lighthouseBeam);
+
+  const lighthouseBeamLight = new THREE.PointLight(0xfde68a, 0, 60, 1.5);
+  lighthouseBeamLight.position.y = 14.5;
+  lighthouse.add(lighthouseBeamLight);
+
+  if (typeof setLighthouseLight === 'function') {
+    setLighthouseLight({ beam: lighthouseBeam, light: lighthouseBeamLight });
+  }
+
   lighthouse.position.set(layout.LIGHTHOUSE_POS.x, 0, layout.LIGHTHOUSE_POS.z);
   scene.add(lighthouse);
   setLighthouseTopPortal(lighthouseTopPortal);

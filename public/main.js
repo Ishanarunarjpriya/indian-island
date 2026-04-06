@@ -64,7 +64,13 @@ import {
   WORLD_TIME_PRESETS,
   FISHING_ROD_TIERS,
   FISHING_ROD_TIER_LABEL,
-  SELLABLE_ORE_ORDER
+  SELLABLE_ORE_ORDER,
+  ENCHANTMENT_TYPES,
+  ENCHANTMENT_MAX_SLOTS,
+  STAMINA_MINE_COST,
+  STAMINA_LOW_THRESHOLD,
+  STAMINA_STEW_PRICE,
+  STAMINA_STEW_RESTORE
 } from './modules/config/gameData.js';
 import {
   initWorldLayout,
@@ -194,6 +200,9 @@ const pendingLeaveMessages = new Map();
 const pendingJoinMessages = new Map();
 let lastMineAt = 0;
 let torchEquipped = false;
+let tradeTargetId = null;
+let leaderboardData = null;
+let playerStamina = 100;
 const questState = createDefaultQuestState();
 let HOUSE_ROOM_SLOT_COUNT = 6;
 let HOUSE_ROOM_IDS = Array.from({ length: HOUSE_ROOM_SLOT_COUNT }, (_, i) => `room-${i + 1}`);
@@ -467,6 +476,24 @@ const debugBansRefreshEl = document.getElementById('debug-bans-refresh');
 const debugBannedUnbanEl = document.getElementById('debug-banned-unban');
 const debugStatusEl = document.getElementById('debug-status');
 const saveQuitEl = document.getElementById('save-quit');
+const leaderboardOpenEl = document.getElementById('leaderboard-open');
+const leaderboardOverlayEl = document.getElementById('leaderboard-overlay');
+const leaderboardCloseEl = document.getElementById('leaderboard-close');
+const leaderboardContentEl = document.getElementById('leaderboard-content');
+const tradeOverlayEl = document.getElementById('trade-overlay');
+const tradeCloseEl = document.getElementById('trade-close');
+const tradeTitleEl = document.getElementById('trade-title');
+const tradeOfferSectionEl = document.getElementById('trade-offer-section');
+const tradeOfferCategoryEl = document.getElementById('trade-offer-category');
+const tradeOfferItemEl = document.getElementById('trade-offer-item');
+const tradeOfferAmountEl = document.getElementById('trade-offer-amount');
+const tradeSendOfferEl = document.getElementById('trade-send-offer');
+const tradeIncomingSectionEl = document.getElementById('trade-incoming-section');
+const tradeIncomingInfoEl = document.getElementById('trade-incoming-info');
+const tradeIncomingOfferEl = document.getElementById('trade-incoming-offer');
+const tradeAcceptEl = document.getElementById('trade-accept');
+const tradeDeclineEl = document.getElementById('trade-decline');
+const tradeStatusEl = document.getElementById('trade-status');
 const authModalEl = document.getElementById('auth-modal');
 const authUsernameEl = document.getElementById('auth-username');
 const authPasswordEl = document.getElementById('auth-password');
@@ -1356,8 +1383,163 @@ function setMenuOpen(open) {
     closeCommerceModals();
     resetMiningAccuracyGame();
     resetFishingMiniGame();
+    updateEnchantmentUI();
   }
   menuOverlayEl?.classList.toggle('hidden', !open);
+}
+
+function updateEnchantmentUI() {
+  const slotsInfoEl = document.getElementById('enchantment-slots-info');
+  const listEl = document.getElementById('enchantment-list');
+  const buyListEl = document.getElementById('enchantment-buy-list');
+  if (!slotsInfoEl || !listEl || !buyListEl) return;
+  const current = questState.enchantments || [];
+  slotsInfoEl.textContent = `Slots: ${current.length}/${ENCHANTMENT_MAX_SLOTS}`;
+  listEl.innerHTML = current.map(id => {
+    const def = ENCHANTMENT_TYPES[id];
+    return def ? `<div style="padding:6px 8px;border-radius:6px;background:rgba(34,197,94,0.15);font-size:12px;color:#86efac;">${def.label}: ${def.description}</div>` : '';
+  }).join('');
+  if (current.length >= ENCHANTMENT_MAX_SLOTS) {
+    buyListEl.innerHTML = '<p style="font-size:11px;color:#94a3b8;">All slots filled.</p>';
+    return;
+  }
+  buyListEl.innerHTML = Object.entries(ENCHANTMENT_TYPES).map(([id, def]) => {
+    if (current.includes(id)) return '';
+    return `<button class="enchantment-buy-btn" data-enchant="${id}" style="padding:6px 8px;border-radius:6px;border:1px solid rgba(255,255,255,0.16);background:rgba(0,0,0,0.2);color:#f8fafc;font-size:12px;cursor:pointer;text-align:left;">${def.label} - ${def.price} coins (Lv ${def.levelReq})</button>`;
+  }).join('');
+  buyListEl.querySelectorAll('.enchantment-buy-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (!socket) return;
+      socket.emit('shop:buyEnchantment', { enchantment: btn.dataset.enchant }, (resp) => {
+        if (resp.ok) {
+          Object.assign(questState, resp.progress);
+          updateEnchantmentUI();
+        } else {
+          alert(resp.error || 'Failed');
+        }
+      });
+    });
+  });
+}
+
+document.getElementById('buy-stamina-stew')?.addEventListener('click', () => {
+  if (!socket) return;
+  socket.emit('shop:buyStaminaStew', {}, (resp) => {
+    if (resp.ok) {
+      Object.assign(questState, resp.progress);
+    } else {
+      alert(resp.error || 'Failed');
+    }
+  });
+});
+
+let cachedLeaderboardData = null;
+
+async function fetchAndShowLeaderboard() {
+  try {
+    const resp = await fetch('/leaderboard');
+    const data = await resp.json();
+    if (data.ok) {
+      cachedLeaderboardData = data;
+      renderLeaderboardTab('level');
+      leaderboardOverlayEl?.classList.remove('hidden');
+    }
+  } catch {}
+}
+
+function renderLeaderboardTab(tab) {
+  if (!leaderboardContentEl || !cachedLeaderboardData) return;
+  const rows = cachedLeaderboardData[tab] || [];
+  if (!rows.length) {
+    leaderboardContentEl.innerHTML = '<p style="color:#94a3b8;font-size:13px;">No data yet.</p>';
+    return;
+  }
+  leaderboardContentEl.innerHTML = rows.map((row) => {
+    if (tab === 'level') {
+      return `<div class="lb-row"><span class="lb-rank">#${row.rank}</span><span class="lb-name">${escapeHtml(row.name)}</span><span class="lb-value">Lv ${row.level} (${row.xp} XP)</span></div>`;
+    }
+    if (tab === 'rarestFish') {
+      return `<div class="lb-row"><span class="lb-rank">#${row.rank}</span><span class="lb-name">${escapeHtml(row.name)}</span><span class="lb-value">${escapeHtml(row.fishName)} (${row.rarity})</span></div>`;
+    }
+    return `<div class="lb-row"><span class="lb-rank">#${row.rank}</span><span class="lb-name">${escapeHtml(row.name)}</span><span class="lb-value">${row.totalOres} ores</span></div>`;
+  }).join('');
+}
+
+function escapeHtml(str) {
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function openTradePanel(targetId, targetName) {
+  tradeTargetId = targetId;
+  if (tradeTitleEl) tradeTitleEl.textContent = `Trade with ${targetName}`;
+  tradeOfferSectionEl?.classList.remove('hidden');
+  tradeIncomingSectionEl?.classList.add('hidden');
+  if (tradeStatusEl) tradeStatusEl.textContent = '';
+  populateTradeOfferItems();
+  tradeOverlayEl?.classList.remove('hidden');
+}
+
+function openTradeIncoming(fromId, fromName) {
+  tradeTargetId = fromId;
+  if (tradeTitleEl) tradeTitleEl.textContent = `${fromName} wants to trade`;
+  tradeOfferSectionEl?.classList.add('hidden');
+  tradeIncomingSectionEl?.classList.remove('hidden');
+  if (tradeIncomingInfoEl) tradeIncomingInfoEl.textContent = `${fromName} is offering:`;
+  if (tradeIncomingOfferEl) tradeIncomingOfferEl.textContent = 'Waiting for offer...';
+  if (tradeStatusEl) tradeStatusEl.textContent = '';
+  tradeOverlayEl?.classList.remove('hidden');
+}
+
+function populateTradeOfferItems() {
+  if (!tradeOfferItemEl) return;
+  const category = tradeOfferCategoryEl?.value || 'ore';
+  tradeOfferItemEl.innerHTML = '';
+  if (category === 'ore') {
+    SELLABLE_ORE_ORDER.forEach(ore => {
+      const opt = document.createElement('option');
+      opt.value = ore;
+      opt.textContent = ore.charAt(0).toUpperCase() + ore.slice(1);
+      tradeOfferItemEl.appendChild(opt);
+    });
+  } else {
+    const fishBag = questState.fishBag || {};
+    Object.keys(fishBag).forEach(fishId => {
+      if ((fishBag[fishId] || 0) <= 0) return;
+      const fish = FISH_BY_ID.get(fishId);
+      const opt = document.createElement('option');
+      opt.value = fishId;
+      opt.textContent = fish ? fish.name : fishId;
+      tradeOfferItemEl.appendChild(opt);
+    });
+  }
+}
+
+function sendTradeOffer() {
+  if (!socket || !tradeTargetId) return;
+  const category = tradeOfferCategoryEl?.value || 'ore';
+  const itemId = tradeOfferItemEl?.value || '';
+  const amount = parseInt(tradeOfferAmountEl?.value, 10) || 1;
+  if (!itemId) return;
+  socket.emit('trade:offer', { targetId: tradeTargetId, category, itemId, amount }, (resp) => {
+    if (tradeStatusEl) tradeStatusEl.textContent = resp.ok ? 'Offer sent!' : (resp.error || 'Failed');
+  });
+}
+
+function acceptTrade() {
+  if (!socket || !tradeTargetId) return;
+  socket.emit('trade:accept', { fromId: tradeTargetId }, (resp) => {
+    if (tradeStatusEl) tradeStatusEl.textContent = resp.ok ? 'Trade complete!' : (resp.error || 'Failed');
+    if (resp.ok) {
+      setTimeout(() => tradeOverlayEl?.classList.add('hidden'), 1500);
+    }
+  });
+}
+
+function declineTrade() {
+  if (!socket || !tradeTargetId) return;
+  socket.emit('trade:decline', { fromId: tradeTargetId });
+  tradeOverlayEl?.classList.add('hidden');
+  tradeTargetId = null;
 }
 
 function isCreatorAccount() {
@@ -1780,8 +1962,7 @@ async function toggleFullscreenPointerLock() {
   if (!isAuthenticated) return;
   if (!getFullscreenElement()) {
     try {
-      const target = isMobileLayout() ? document.documentElement : renderer.domElement;
-      const fsResult = requestFullscreenFor(target) || requestFullscreenFor(document.documentElement);
+      const fsResult = requestFullscreenFor(document.documentElement);
       if (fsResult?.catch) await fsResult;
     } catch {
       return;
@@ -2090,6 +2271,7 @@ const SWIM_SINK_Y = -6.4;
 let lighthouseInteriorGroup = null;
 let lighthouseInteriorPortal = null;
 let lighthouseTopPortal = null;
+let lighthouseLight = null;
 initInteriorBuilders({
   sceneRef: scene,
   addWorldColliderRef: addWorldCollider,
@@ -2271,6 +2453,9 @@ initLandmarkBuilders({
   setLighthouseTopPortalRef: (value) => {
     lighthouseTopPortal = value;
   },
+  setLighthouseLightRef: (value) => {
+    lighthouseLight = value;
+  },
   leaderboardStateRef: leaderboardBoardStateRef,
   layoutRef: landmarkLayout
 });
@@ -2338,7 +2523,7 @@ socket.on('home:roomUpdate', (payload) => {
 function addLandmarks() {
   addDock(ISLAND_DOCK_POS, ISLAND_DOCK_YAW, { segments: 17, plankLength: 3.2, plankWidth: 3.2, spacing: 1.2 });
   addLighthouseIsland();
-  addDock(LIGHTHOUSE_DOCK_POS, LIGHTHOUSE_DOCK_YAW, { segments: 12, plankLength: 2.8, plankWidth: 2.2, spacing: 1.1 });
+  addDock(LIGHTHOUSE_DOCK_POS, LIGHTHOUSE_DOCK_YAW, { segments: 12, plankLength: 2.8, plankWidth: 3.6, spacing: 1.1 });
   addMineEntryIsland();
   addDock(MINE_ENTRY_DOCK_POS, MINE_ENTRY_DOCK_YAW, { segments: 11, plankLength: 2.7, plankWidth: 2.1, spacing: 1.1 });
   addFishingIsland();
@@ -3478,10 +3663,25 @@ function setBeaconVisual(active) {
   }
 }
 
+function setLighthouseLightVisual(active) {
+  if (!lighthouseLight) return;
+  if (active) {
+    lighthouseLight.beam.material.opacity = 0.12;
+    lighthouseLight.light.intensity = 2.5;
+  } else {
+    lighthouseLight.beam.material.opacity = 0.0;
+    lighthouseLight.light.intensity = 0;
+  }
+}
+
 function updateBeaconState(payload) {
-  if (!payload || payload.id !== 'beacon') return;
+  if (!payload) return;
   interactables.set(payload.id, payload);
-  setBeaconVisual(Boolean(payload.active));
+  if (payload.id === 'beacon') {
+    setBeaconVisual(Boolean(payload.active));
+  } else if (payload.id === 'lighthouse-light') {
+    setLighthouseLightVisual(Boolean(payload.active));
+  }
 }
 
 function applyPlayerCustomization(id, name, color, appearancePayload) {
@@ -4379,7 +4579,10 @@ function startMiningAccuracyGame(node) {
   const profile = mineTimingProfile(node.resource);
   const pickaxeTier = normalizePickaxeTier(questState.pickaxe, 'wood');
   const zoneMultiplier = PICKAXE_ACCURACY_ZONE_MULTIPLIER[pickaxeTier] || 1;
-  const zoneWidth = THREE.MathUtils.clamp(profile.zoneWidth * zoneMultiplier, 0.08, 0.46);
+  let zoneWidth = THREE.MathUtils.clamp(profile.zoneWidth * zoneMultiplier, 0.08, 0.46);
+  if (playerStamina < STAMINA_LOW_THRESHOLD) {
+    zoneWidth = Math.min(zoneWidth + STAMINA_LOW_MISS_ZONE_WIDEN, 0.52);
+  }
   const zoneCenter = randomMiningZoneCenter(zoneWidth);
   const requiredHits = mineRequiredHits(node.resource);
   const pickaxeHead = PICKAXE_HEAD_COLORS[pickaxeTier] || PICKAXE_HEAD_COLORS.wood;
@@ -4521,6 +4724,9 @@ function attemptMiningAccuracyHit(local) {
     }
     if (resp.progress) {
       applyProgressState(resp.progress);
+    }
+    if (typeof resp.stamina === 'number') {
+      playerStamina = resp.stamina;
     }
     const questMsg = resp.questProgressed ? ' Quest progress updated.' : '';
     updateQuestPanel(`Mined ${amount} ${node.resource}.${questMsg}`);
@@ -6417,6 +6623,11 @@ function getManualInteractTarget(local) {
   if (!inLighthouseInterior && !local.onBoat && distance2D(local, LIGHTHOUSE_TOP_POS) < 1.25 && local.y > 11.6) {
     return { mode: 'world', label: 'Enter', caption: 'Tap', worldPos: LIGHTHOUSE_TOP_POS, offsetY: 0.8 };
   }
+  if (inLighthouseInterior && distance2D(local, LIGHTHOUSE_TOP_POS) < 3 && local.y > 11.6) {
+    const lightState = interactables.get('lighthouse-light');
+    const label = lightState?.active ? 'Dim Light' : 'Light';
+    return { mode: 'world', label, caption: 'Tap', worldPos: LIGHTHOUSE_TOP_POS, offsetY: 0.8 };
+  }
 
   if (boatState.onboard) {
     return { mode: 'docked', label: 'Leave', caption: 'Tap' };
@@ -6434,11 +6645,27 @@ function getManualInteractTarget(local) {
   }
 
   const beacon = interactables.get('beacon');
-  if (!beacon || Math.hypot(local.x - beacon.x, local.z - beacon.z) > 4.2) {
-    return null;
+  if (beacon && Math.hypot(local.x - beacon.x, local.z - beacon.z) <= 4.2) {
+    beaconCore.getWorldPosition(_mobileUseWorldPos);
+    return { mode: 'world', label: 'Toggle', caption: 'Tap', worldPos: _mobileUseWorldPos, offsetY: 0.4 };
   }
-  beaconCore.getWorldPosition(_mobileUseWorldPos);
-  return { mode: 'world', label: 'Toggle', caption: 'Tap', worldPos: _mobileUseWorldPos, offsetY: 0.4 };
+
+  for (const [id, other] of players) {
+    if (id === localPlayerId) continue;
+    if (distance2D(local, other) <= 4) {
+      return {
+        mode: 'world',
+        label: 'Trade',
+        caption: 'Tap',
+        worldPos: new THREE.Vector3(other.x, (other.y || 0) + 0.6, other.z),
+        offsetY: 0.6,
+        tradeTargetId: id,
+        tradeTargetName: other.name || 'Player'
+      };
+    }
+  }
+
+  return null;
 }
 
 function updateMobileUseButtonPlacement(target) {
@@ -6645,6 +6872,25 @@ function tryInteract() {
     });
     lastInteractAt = now;
     return;
+  }
+
+  if (inLighthouseInterior && distance2D(local, LIGHTHOUSE_TOP_POS) < 3 && local.y > 11.6) {
+    socket.emit('interact', { id: 'lighthouse-light' });
+    lastInteractAt = now;
+    return;
+  }
+
+  for (const [id, other] of players) {
+    if (id === localPlayerId) continue;
+    if (distance2D(local, other) <= 4) {
+      socket.emit('trade:request', { targetId: id }, (resp) => {
+        if (resp.ok) {
+          openTradePanel(id, other.name || 'player');
+        }
+      });
+      lastInteractAt = now;
+      return;
+    }
   }
 
   if (boatState.onboard) {
@@ -7480,6 +7726,40 @@ debugCoinsRemoveEl?.addEventListener('click', () => sendDebugProgressUpdate('coi
 debugXpAddEl?.addEventListener('click', () => sendDebugProgressUpdate('xp', 'add'));
 debugXpRemoveEl?.addEventListener('click', () => sendDebugProgressUpdate('xp', 'remove'));
 debugLevelSetEl?.addEventListener('click', () => sendDebugProgressUpdate('level', 'set'));
+
+leaderboardOpenEl?.addEventListener('click', () => {
+  setMenuOpen(false);
+  fetchAndShowLeaderboard();
+});
+leaderboardCloseEl?.addEventListener('click', () => {
+  leaderboardOverlayEl?.classList.add('hidden');
+});
+leaderboardOverlayEl?.addEventListener('click', (e) => {
+  if (e.target === leaderboardOverlayEl) leaderboardOverlayEl.classList.add('hidden');
+});
+document.querySelectorAll('.leaderboard-tab').forEach((tab) => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.leaderboard-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    renderLeaderboardTab(tab.dataset.tab);
+  });
+});
+
+tradeCloseEl?.addEventListener('click', () => {
+  tradeOverlayEl?.classList.add('hidden');
+  tradeTargetId = null;
+});
+tradeOverlayEl?.addEventListener('click', (e) => {
+  if (e.target === tradeOverlayEl) {
+    tradeOverlayEl.classList.add('hidden');
+    tradeTargetId = null;
+  }
+});
+tradeSendOfferEl?.addEventListener('click', sendTradeOffer);
+tradeAcceptEl?.addEventListener('click', acceptTrade);
+tradeDeclineEl?.addEventListener('click', declineTrade);
+tradeOfferCategoryEl?.addEventListener('change', populateTradeOfferItems);
+
 chatToggleEl?.addEventListener('click', () => {
   if (!isAuthenticated) return;
   setChatPanelOpen(!chatPanelOpen);
@@ -7986,7 +8266,7 @@ const SEND_EVERY_MS = 45;
 const TURN_SPEED = 14;
 const REMOTE_TURN_SPEED = 10;
 const STAMINA_DRAIN = 25;
-const STAMINA_REGEN = 18;
+const STAMINA_REGEN = 6;
 const SLIDE_DURATION = 0.42;
 const SLIDE_SPEED = 20;
 let stamina = STAMINA_BASE_MAX;
@@ -8636,6 +8916,11 @@ function updateInteractionHint() {
       interactHintEl.textContent = 'Press E at the glowing marker to go to lighthouse top';
       return;
     }
+    if (distance2D(local, LIGHTHOUSE_TOP_POS) < 3 && local.y > 11.6) {
+      const lightState = interactables.get('lighthouse-light');
+      interactHintEl.textContent = lightState?.active ? 'Press E to dim the lighthouse light' : 'Press E to light the lighthouse';
+      return;
+    }
     interactHintEl.textContent = 'Climb the stairs to the glowing marker at the top';
     return;
   }
@@ -8675,6 +8960,14 @@ function updateInteractionHint() {
   if (beacon && Math.hypot(local.x - beacon.x, local.z - beacon.z) <= 4.2) {
     interactHintEl.textContent = 'Press E to toggle beacon';
     return;
+  }
+  for (const [id, other] of players) {
+    if (id === localPlayerId) continue;
+    const dist = distance2D(local, other);
+    if (dist <= 4) {
+      interactHintEl.textContent = `Press E to trade with ${other.name || 'player'}`;
+      return;
+    }
   }
   interactHintEl.textContent = 'Use the dock boat to reach islands';
 }
